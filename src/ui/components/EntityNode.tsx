@@ -15,7 +15,8 @@ export function EntityNode({ data }: NodeProps<EntityFlowNode>) {
   const usdRate = useBoardStore((s) => s.usdRate);
   // dragging a connection between two handles only makes sense where edges are actually shown —
   // in the bucketed views the same drag gesture already means "reorder within this category".
-  const canConnect = useBoardStore((s) => s.layoutMode === 'free');
+  const isFreeMode = useBoardStore((s) => s.layoutMode === 'free');
+  const canConnect = isFreeMode;
   const color = HEALTH_COLORS[getDisplayHealthOverride(entity) ?? health];
   const secondary = size >= SECONDARY_MIN_SIZE ? getSecondaryDetail(entity) : null;
   const isFlow = isFlowCategory(entity);
@@ -28,10 +29,17 @@ export function EntityNode({ data }: NodeProps<EntityFlowNode>) {
   const showAmount = weight !== 0 && !hideAmounts;
   const showSecondaryAmount = secondary?.amount !== undefined && !hideAmounts;
 
+  // bucketed views pack nodes into fixed-size grid cells, so their shape has to stay square —
+  // only 'free' mode has room to widen nodes into rectangles. Width isn't a fixed multiplier of
+  // the weight-based size — it's `width: max-content` in CSS, so the box hugs the actual name
+  // text (short names stay compact, long ones get exactly the room they need), with the
+  // weight-based size kept as a `minWidth` floor so small-weight entities don't shrink below it.
+  const rectStyle = isFreeMode ? { minWidth: size, width: 'max-content' as const } : { width: size };
+
   return (
     <div
-      className={`${styles.node} ${isFlow ? styles.flowShape : ''}`}
-      style={{ width: size, height: size, ['--node-color' as string]: color }}
+      className={`${styles.node} ${isFlow ? styles.flowShape : ''} ${isFreeMode ? styles.rect : ''}`}
+      style={{ ...rectStyle, height: size, ['--node-color' as string]: color }}
       onClick={() => onOpen(entity.id)}
       title={showAmount ? `${entity.name} · ${money(weight)}` : entity.name}
     >

@@ -32,6 +32,25 @@
   border-radius: 22%;
 }
 
+/* free mode only — hugs the actual name text (width: max-content, set inline) instead of a fixed
+   circular/diamond shape, with a plain rounded-rect corner. The name/amount/secondary spans below
+   get fixed-px max-widths here instead of the base %-of-parent ones, since a percentage of a
+   max-content parent is a circular dependency the box would rather not resolve. */
+.rect {
+  border-radius: var(--radius-md);
+  padding: 10px 16px;
+  max-width: 320px;
+}
+
+.rect .name {
+  max-width: 288px;
+}
+
+.rect .amount,
+.rect .secondary {
+  max-width: 280px;
+}
+
 .icon {
   font-size: 1.6em;
   line-height: 1;
