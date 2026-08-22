@@ -1,6 +1,6 @@
 import type { EntityCategory, FinancialEntity } from './entity';
 
-export const HEALTH_STATUSES = ['good', 'warning', 'risk', 'unknown', 'donation', 'debt'] as const;
+export const HEALTH_STATUSES = ['good', 'warning', 'risk', 'unknown', 'donation', 'debt', 'checking', 'insurance'] as const;
 export type HealthStatus = (typeof HEALTH_STATUSES)[number];
 
 export const HEALTH_COLORS: Record<HealthStatus, string> = {
@@ -17,6 +17,14 @@ export const HEALTH_COLORS: Record<HealthStatus, string> = {
   // fade into gray) once the 2D board's node dilutes it against the dark surface, that only
   // escalates to real 'risk' red once the burden actually gets dangerous.
   debt: '#4a7fc9',
+  // everyday cash isn't a growth asset — it shouldn't share the same orange every actual
+  // investment/savings/pension/study-fund category owns. A clean teal, distinct from every other
+  // hue in the app (debt's blue leans purple, the lake is a brighter cyan-blue).
+  checking: '#2fb0a0',
+  // "well covered" isn't "money in" either — insurance being adequate is its own kind of good
+  // news, not income's. A violet distinct from the pension water-ring's lavender (that's a
+  // decorative city feature, not a health color, so no entity ever actually shows both at once).
+  insurance: '#7c6fd1',
 };
 
 /**
@@ -35,6 +43,7 @@ export function getDisplayHealthOverride(entity: FinancialEntity): HealthStatus 
     case 'donation':
       return 'donation';
     case 'checking':
+      return 'checking';
     case 'savings':
     case 'investment':
     case 'pension':
@@ -86,15 +95,17 @@ export function computeHealth(entity: FinancialEntity, ctx: HealthContext): Heal
       return 'debt';
     }
     case 'insurance': {
+      // never 'good'/green (income's color) — being well insured is its own kind of fine, not
+      // "money in", so it gets its own color even at its best.
       if (d.insuranceType === 'life' || d.insuranceType === 'disability') {
         if (ctx.totalMonthlyIncome <= 0) return 'unknown';
         const annualIncome = ctx.totalMonthlyIncome * 12;
         const coverageYears = annualIncome > 0 ? d.coverageAmount / annualIncome : 0;
-        if (coverageYears >= 5) return 'good';
+        if (coverageYears >= 5) return 'insurance';
         if (coverageYears >= 2) return 'warning';
         return 'risk';
       }
-      return 'good';
+      return 'insurance';
     }
     case 'investment':
     case 'pension':
