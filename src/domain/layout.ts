@@ -29,6 +29,7 @@ export function getHorizonBucket(entity: FinancialEntity): HorizonBucket {
     case 'income':
     case 'expense':
     case 'donation':
+    case 'checking':
     case 'source':
       return 'current';
     case 'savings':

@@ -22,6 +22,21 @@ const PersistedBoardStateSchema = z.object({
 
 export type PersistedBoardState = z.infer<typeof PersistedBoardStateSchema>;
 
+/** A genuinely new account's starting board — no demo data. The seed entities only make sense as
+ * an in-browser first-run demo; a real new user signing up has their own real board to build, not
+ * ours. */
+export const EMPTY_BOARD_STATE: PersistedBoardState = {
+  familyMembers: [],
+  entities: [],
+  layoutMode: 'free',
+  freePositions: {},
+  entityOrder: {},
+  hideAmounts: false,
+  usdRate: 3.7,
+  usdRateUpdatedAt: null,
+  autoUpdateUsdRate: false,
+};
+
 /** Pulls just the persisted fields out of the live store — same shape the JSON file holds. */
 export function getPersistedBoardState(): PersistedBoardState {
   const state = useBoardStore.getState();

@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from './firebase';
 import { useBoardStore } from './boardStore';
-import { getPersistedBoardState, type PersistedBoardState } from './boardTransfer';
+import { EMPTY_BOARD_STATE, getPersistedBoardState, type PersistedBoardState } from './boardTransfer';
 
 // The key zustand's `persist` middleware used to write to before it was replaced by this Firestore
 // sync — still worth reading once for a first-login migration, since real board data already
@@ -77,8 +77,10 @@ export function useBoardSync(uid: string | null): void {
         if (remote) {
           useBoardStore.setState(remote);
         } else {
+          // brand-new account: carry forward this browser's pre-login local data if there is any,
+          // otherwise start genuinely empty — not the seed/demo board.
           const legacy = readLegacyLocalStorageBoard();
-          if (legacy) useBoardStore.setState(legacy);
+          useBoardStore.setState(legacy ?? EMPTY_BOARD_STATE);
           await saveBoardState(uid, getPersistedBoardState());
         }
       } catch (err) {

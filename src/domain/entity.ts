@@ -19,6 +19,14 @@ const ExpenseDetails = z.object({
 // cost to minimize the way rent or groceries are, so it shouldn't inherit expense's "risk" color
 // or get grouped into the same total when judging spending.
 const DonationDetails = z.object({ kind: z.literal('donation'), monthlyAmount: z.number().nonnegative() });
+// the everyday operating cash account — always immediately liquid by nature (like pension is
+// always locked), with one extra number beyond its balance: how much of it is actually free to
+// move into savings/investment rather than needed for day-to-day spending.
+const CheckingDetails = z.object({
+  kind: z.literal('checking'),
+  balance: z.number().nonnegative(),
+  availableForInvestment: z.number().nonnegative().default(0),
+});
 const SavingsDetails = z.object({
   kind: z.literal('savings'),
   balance: z.number().nonnegative(),
@@ -41,8 +49,16 @@ const StudyFundDetails = z.object({
   balance: z.number().nonnegative(),
   monthlyContribution: z.number().nonnegative().default(0),
 });
-export const INSURANCE_TYPES = ['life', 'health', 'mortgage', 'disability', 'other'] as const;
+export const INSURANCE_TYPES = ['life', 'health', 'mortgage', 'disability', 'vehicle', 'other'] as const;
 export type InsuranceType = (typeof INSURANCE_TYPES)[number];
+export const INSURANCE_TYPE_LABELS: Record<InsuranceType, string> = {
+  life: 'ביטוח חיים',
+  health: 'ביטוח בריאות',
+  mortgage: 'ביטוח משכנתא',
+  disability: 'אובדן כושר עבודה',
+  vehicle: 'ביטוח רכב',
+  other: 'אחר',
+};
 const InsuranceDetails = z.object({
   kind: z.literal('insurance'),
   coverageAmount: z.number().nonnegative(),
@@ -70,6 +86,7 @@ export const EntityDetailsSchema = z.discriminatedUnion('kind', [
   IncomeDetails,
   ExpenseDetails,
   DonationDetails,
+  CheckingDetails,
   SavingsDetails,
   InvestmentDetails,
   PensionDetails,
@@ -88,6 +105,7 @@ export const ENTITY_CATEGORIES: readonly EntityCategory[] = [
   'income',
   'expense',
   'donation',
+  'checking',
   'savings',
   'investment',
   'pension',
@@ -103,6 +121,7 @@ export const CATEGORY_LABELS: Record<EntityCategory, string> = {
   income: 'הכנסה',
   expense: 'הוצאה',
   donation: 'תרומה',
+  checking: 'עו״ש',
   savings: 'חיסכון',
   investment: 'השקעה',
   pension: 'פנסיה',
@@ -152,9 +171,12 @@ export function isLiquidityRelevant(category: EntityCategory): boolean {
   return category === 'savings' || category === 'investment' || category === 'studyFund';
 }
 
-/** Pension is always locked by nature — no need to ask, just set it. */
+/** Pension is always locked and a checking account is always immediately liquid, by nature — no
+ * need to ask, just set them. */
 export function getAutomaticLiquidity(category: EntityCategory): Liquidity | null {
-  return category === 'pension' ? 'locked' : null;
+  if (category === 'pension') return 'locked';
+  if (category === 'checking') return 'immediate';
+  return null;
 }
 
 /** The liquidity actually stored for an entity: automatic where the category dictates it, user-chosen where it's meaningful, absent otherwise. */
@@ -182,6 +204,8 @@ export function getSecondaryDetail(entity: FinancialEntity): SecondaryDetail | n
     case 'pension':
     case 'studyFund':
       return d.monthlyContribution > 0 ? { label: 'הפקדה חודשית', amount: d.monthlyContribution } : null;
+    case 'checking':
+      return d.availableForInvestment > 0 ? { label: 'פנוי להשקעה', amount: d.availableForInvestment } : null;
     case 'insurance':
       return { label: 'פרמיה חודשית', amount: d.monthlyPremium };
     case 'debt':
@@ -206,6 +230,7 @@ export function getWeight(entity: FinancialEntity): number {
     case 'expense':
     case 'donation':
       return d.monthlyAmount;
+    case 'checking':
     case 'savings':
     case 'investment':
     case 'pension':

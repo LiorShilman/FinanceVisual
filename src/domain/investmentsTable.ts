@@ -3,7 +3,13 @@ import { getWeight, isLiquidityRelevant, type EntityCategory, type FinancialEnti
 
 /** "Growing assets" — everything that accumulates value over time, as opposed to flows
  * (income/expense/donation) or one-off/contractual items (insurance, debt, goal, realEstate). */
-export const INVESTMENT_TABLE_CATEGORIES: readonly EntityCategory[] = ['savings', 'investment', 'pension', 'studyFund'];
+export const INVESTMENT_TABLE_CATEGORIES: readonly EntityCategory[] = [
+  'checking',
+  'savings',
+  'investment',
+  'pension',
+  'studyFund',
+];
 
 export interface DataGap {
   key: string;

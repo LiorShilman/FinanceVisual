@@ -34,6 +34,7 @@ export function getDisplayHealthOverride(entity: FinancialEntity): HealthStatus 
       return 'risk';
     case 'donation':
       return 'donation';
+    case 'checking':
     case 'savings':
     case 'investment':
     case 'pension':
@@ -108,6 +109,7 @@ export function computeHealth(entity: FinancialEntity, ctx: HealthContext): Heal
     case 'income':
     case 'expense':
     case 'donation':
+    case 'checking':
     case 'realEstate':
     case 'source':
       return 'unknown';

@@ -5,6 +5,7 @@ import {
   ENTITY_CATEGORIES,
   FinancialEntitySchema,
   INSURANCE_TYPES,
+  INSURANCE_TYPE_LABELS,
   LIQUIDITY_LABELS,
   LIQUIDITY_LEVELS,
   isLiquidityRelevant,
@@ -28,6 +29,8 @@ function defaultDetails(category: EntityCategory): EntityDetails {
       return { kind: 'expense', monthlyAmount: 0, essential: true };
     case 'donation':
       return { kind: 'donation', monthlyAmount: 0 };
+    case 'checking':
+      return { kind: 'checking', balance: 0, availableForInvestment: 0 };
     case 'savings':
       return { kind: 'savings', balance: 0, isEmergencyFund: false };
     case 'investment':
@@ -276,6 +279,27 @@ export function EntityFormPanel({ entityId, presetCategory, presetDetailOverride
           </label>
         )}
 
+        {d.kind === 'checking' && (
+          <div className={styles.row}>
+            <label className={styles.field}>
+              <span className={styles.label}>יתרה ({currencySymbol})</span>
+              <NumberField
+                className={styles.input}
+                value={toDisplay(d.balance)}
+                onChange={(v) => updateDetail({ balance: fromDisplay(v) })}
+              />
+            </label>
+            <label className={styles.field}>
+              <span className={styles.label}>פנוי להשקעה ({currencySymbol})</span>
+              <NumberField
+                className={styles.input}
+                value={toDisplay(d.availableForInvestment)}
+                onChange={(v) => updateDetail({ availableForInvestment: fromDisplay(v) })}
+              />
+            </label>
+          </div>
+        )}
+
         {d.kind === 'savings' && (
           <>
             <label className={styles.field}>
@@ -329,7 +353,7 @@ export function EntityFormPanel({ entityId, presetCategory, presetDetailOverride
               >
                 {INSURANCE_TYPES.map((t) => (
                   <option key={t} value={t}>
-                    {t}
+                    {INSURANCE_TYPE_LABELS[t]}
                   </option>
                 ))}
               </select>

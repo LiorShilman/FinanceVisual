@@ -5,6 +5,7 @@ export const CATEGORY_ICONS: Record<EntityCategory, string> = {
   income: '💰',
   expense: '🧾',
   donation: '🎁',
+  checking: '🏦',
   savings: '🐷',
   investment: '📈',
   pension: '🏛️',
