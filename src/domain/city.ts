@@ -23,7 +23,9 @@ const MIN_HEIGHT = 0.6;
 const MAX_HEIGHT = 9;
 const MIN_FOOTPRINT = 0.75;
 const MAX_FOOTPRINT = 1.7;
-const LOT_SIZE = 1.7;
+// bigger than MAX_FOOTPRINT on purpose — equal values meant the biggest buildings in a district
+// touched edge-to-edge with zero gap between them.
+const LOT_SIZE = 2.6;
 
 /**
  * Z-depth — liquidity where the category has one (savings/investment/pension), the time horizon

@@ -1,15 +1,18 @@
 import { useMemo } from 'react';
+import * as THREE from 'three';
 import { Canvas } from '@react-three/fiber';
 import { Billboard, OrbitControls, Text } from '@react-three/drei';
 import { useBoardStore } from '../../app/boardStore';
 import { computeCityLayout, DISTRICT_SPACING, DEPTH_SPACING } from '../../domain/city';
 import { computeGroundBounds, type CircularExtent } from '../../domain/cityGrid';
 import { CATEGORY_LABELS, ENTITY_CATEGORIES, getWeight, type FinancialEntity } from '../../domain/entity';
+import { computeNetWorthBreakdown } from '../../domain/netWorth';
 import { computeValleyFeature } from '../../domain/valley';
 import { computeWaterFeature } from '../../domain/water';
 import { formatCurrency } from '../format';
 import { CityBuildingMesh } from './CityBuildingMesh';
 import { CityGround } from './CityGround';
+import { CitySun } from './CitySun';
 
 interface Props {
   entities: FinancialEntity[];
@@ -26,6 +29,7 @@ export function CityView({ entities, onOpen }: Props) {
   const buildings = useMemo(() => computeCityLayout(entities), [entities]);
   const water = useMemo(() => computeWaterFeature(buildings), [buildings]);
   const valley = useMemo(() => computeValleyFeature(buildings), [buildings]);
+  const netWorth = useMemo(() => computeNetWorthBreakdown(buildings), [buildings]);
   // an empty category still owns a column of ground, but labeling a district that holds nothing
   // just reads as clutter — the pyramid already skips empty tiers the same way.
   const populatedCategories = useMemo(() => new Set(buildings.map((b) => b.category)), [buildings]);
@@ -57,6 +61,10 @@ export function CityView({ entities, onOpen }: Props) {
         position={[bounds.center[0], 0, bounds.center[1]]}
         frustumCulled={false}
       />
+      {/* lower and off to one side (near the valley, not dead-center) — high above the district
+          center made it nearly invisible from the default camera angle; this stays in frame from
+          a side view without sitting deep enough in z to dim into the fog. */}
+      <CitySun x={valley.center[0] + 4} y={10} z={-4} breakdown={hideAmounts ? null : netWorth} />
 
       {ENTITY_CATEGORIES.filter((cat) => populatedCategories.has(cat)).map((cat) => (
         <Billboard
@@ -70,6 +78,7 @@ export function CityView({ entities, onOpen }: Props) {
             anchorY="middle"
             outlineWidth={0.02}
             outlineColor="#0a0c11"
+            fontWeight="bold"
             frustumCulled={false}
           >
             {CATEGORY_LABELS[cat]}
@@ -117,6 +126,10 @@ export function CityView({ entities, onOpen }: Props) {
         enablePan
         enableZoom
         enableRotate
+        // primary drag pans freely across the ground instead of orbiting the fixed target —
+        // rotate moves to the right button, scroll stays the only way to zoom.
+        mouseButtons={{ LEFT: THREE.MOUSE.PAN, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.ROTATE }}
+        screenSpacePanning
         minDistance={10}
         maxDistance={90}
         maxPolarAngle={Math.PI / 2.15}

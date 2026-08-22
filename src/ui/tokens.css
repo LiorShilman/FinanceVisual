@@ -8,6 +8,8 @@
   --text-dim: #99a1b3;
   --accent: #6c8dff;
   --accent-dim: #3d4c85;
+  /* same warm gold used for the amount labels in the 3D city, kept consistent across every view. */
+  --amount-accent: #ffd166;
 
   --health-good: #34b06b;
   --health-warning: #e2a33d;
