@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from './firebase';
 import { useBoardStore } from './boardStore';
@@ -60,10 +60,20 @@ function readLegacyLocalStorageBoard(): PersistedBoardState | null {
  * every subsequent local change on a short debounce. Deliberately not a zustand-`persist`
  * storage-engine swap (see the plan doc) — an explicit load-then-subscribe is easier to reason
  * about than fighting persist's rehydration lifecycle across login/logout.
+ *
+ * Returns `loading` so the caller can hold off rendering the board until the real data has
+ * arrived — without this, the board briefly renders whatever the store's default state happens
+ * to be (the free-mode tab) before snapping to the user's actual saved layout, on every hard
+ * refresh.
  */
-export function useBoardSync(uid: string | null): void {
+export function useBoardSync(uid: string | null): { loading: boolean } {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const readyRef = useRef(false);
+  // undefined = nothing loaded yet this session. Comparing against the current uid (rather than a
+  // plain boolean flipped inside the effect) derives `loading` during render instead of needing a
+  // synchronous setState at the top of the effect.
+  const [loadedUid, setLoadedUid] = useState<string | null | undefined>(undefined);
+  const loading = uid !== null && loadedUid !== uid;
 
   useEffect(() => {
     if (!uid) return;
@@ -86,7 +96,10 @@ export function useBoardSync(uid: string | null): void {
       } catch (err) {
         console.error('Failed to load/initialize board from Firestore:', err);
       }
-      if (!cancelled) readyRef.current = true;
+      if (!cancelled) {
+        readyRef.current = true;
+        setLoadedUid(uid);
+      }
     })();
 
     const unsubscribe = useBoardStore.subscribe(() => {
@@ -106,4 +119,6 @@ export function useBoardSync(uid: string | null): void {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
   }, [uid]);
+
+  return { loading };
 }
