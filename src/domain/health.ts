@@ -26,6 +26,7 @@ export function getDisplayHealthOverride(entity: FinancialEntity): HealthStatus 
     case 'savings':
     case 'investment':
     case 'pension':
+    case 'studyFund':
       return 'warning';
     default:
       return null;
@@ -83,6 +84,7 @@ export function computeHealth(entity: FinancialEntity, ctx: HealthContext): Heal
     }
     case 'investment':
     case 'pension':
+    case 'studyFund':
       return d.monthlyContribution > 0 ? 'good' : 'warning';
     case 'goal': {
       const progress = d.targetAmount > 0 ? d.currentAmount / d.targetAmount : 0;
@@ -93,6 +95,7 @@ export function computeHealth(entity: FinancialEntity, ctx: HealthContext): Heal
     case 'income':
     case 'expense':
     case 'realEstate':
+    case 'source':
       return 'unknown';
   }
 }

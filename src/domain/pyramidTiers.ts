@@ -39,6 +39,7 @@ export function getEntityTier(entity: FinancialEntity): PyramidTier | null {
     case 'pension':
       return 'retirement';
     case 'investment':
+    case 'studyFund':
       return 'growth';
     case 'realEstate':
       return 'peak';

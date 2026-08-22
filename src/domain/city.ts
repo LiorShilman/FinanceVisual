@@ -17,7 +17,7 @@ export interface CityBuilding {
   weight: number;
 }
 
-export const DISTRICT_SPACING = 5.5;
+export const DISTRICT_SPACING = 6.5;
 export const DEPTH_SPACING = 7;
 const MIN_HEIGHT = 0.6;
 const MAX_HEIGHT = 9;

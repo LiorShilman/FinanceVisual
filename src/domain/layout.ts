@@ -28,6 +28,7 @@ export function getHorizonBucket(entity: FinancialEntity): HorizonBucket {
   switch (entity.details.kind) {
     case 'income':
     case 'expense':
+    case 'source':
       return 'current';
     case 'savings':
       return entity.details.isEmergencyFund ? 'current' : 'shortTerm';
@@ -36,6 +37,7 @@ export function getHorizonBucket(entity: FinancialEntity): HorizonBucket {
       return 'shortTerm';
     case 'investment':
     case 'pension':
+    case 'studyFund':
     case 'realEstate':
     case 'insurance':
       return 'longTerm';

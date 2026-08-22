@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Background, Controls, MiniMap, ReactFlow, useNodesState, useReactFlow, type Edge } from '@xyflow/react';
+import { Background, Controls, MiniMap, ReactFlow, useNodesState, useReactFlow, type Connection, type Edge } from '@xyflow/react';
 import { useBoardStore, useBoardLayout } from '../../app/boardStore';
 import { getWeight, type EntityCategory, type EntityDetails, type FinancialEntity } from '../../domain/entity';
 import { computeHealth, buildHealthContext, getMissingEssentials } from '../../domain/health';
@@ -16,6 +16,7 @@ import { TierBandNode } from '../components/TierBandNode';
 import { EntityFormPanel } from '../components/EntityFormPanel';
 import { FamilyPanel } from '../components/FamilyPanel';
 import { CityView } from '../components/CityView';
+import { CurrencyControl } from '../components/CurrencyControl';
 import type { EntityFlowNode, GhostFlowNode } from '../nodeTypes';
 import type { LabelFlowNode } from '../components/LabelNode';
 import type { TierBandFlowNode } from '../components/TierBandNode';
@@ -30,7 +31,8 @@ function edgeColor(a: FinancialEntity, b: FinancialEntity): string {
   // funds it — an expense link is still red, a savings/investment link is still orange, and
   // "income" only wins when nothing more specific is on the other end.
   if (kinds.includes('expense')) return 'var(--health-risk)';
-  if (kinds.includes('savings') || kinds.includes('investment')) return 'var(--health-warning)';
+  if (kinds.includes('savings') || kinds.includes('investment') || kinds.includes('pension') || kinds.includes('studyFund'))
+    return 'var(--health-warning)';
   if (kinds.includes('income')) return 'var(--health-good)';
   return 'var(--text-dim)';
 }
@@ -54,6 +56,7 @@ function BoardCanvas() {
   const layoutMode = useBoardStore((s) => s.layoutMode);
   const setLayoutMode = useBoardStore((s) => s.setLayoutMode);
   const setFreePosition = useBoardStore((s) => s.setFreePosition);
+  const updateEntity = useBoardStore((s) => s.updateEntity);
   const entityOrder = useBoardStore((s) => s.entityOrder);
   const reorderWithinBucket = useBoardStore((s) => s.reorderWithinBucket);
   const hideAmounts = useBoardStore((s) => s.hideAmounts);
@@ -223,6 +226,26 @@ function BoardCanvas() {
     [layoutMode, setFreePosition, entities, regions, entityOrder, reorderWithinBucket, positions, setNodes],
   );
 
+  // records the link on BOTH entities (matching how the seed's mortgage↔insurance↔home links are
+  // set up) — edge rendering only needs one side to list the other, but keeping both sides in sync
+  // means the link still shows up correctly however either entity is edited afterward.
+  const handleConnect = useCallback(
+    (connection: Connection) => {
+      const { source, target } = connection;
+      if (!source || !target || source === target) return;
+      const sourceEntity = entities.find((e) => e.id === source);
+      const targetEntity = entities.find((e) => e.id === target);
+      if (!sourceEntity || !targetEntity) return;
+      if (!sourceEntity.linkedEntityIds.includes(target)) {
+        updateEntity(source, { linkedEntityIds: [...sourceEntity.linkedEntityIds, target] });
+      }
+      if (!targetEntity.linkedEntityIds.includes(source)) {
+        updateEntity(target, { linkedEntityIds: [...targetEntity.linkedEntityIds, source] });
+      }
+    },
+    [entities, updateEntity],
+  );
+
   return (
     <div className={styles.screen}>
       <header className={styles.header}>
@@ -233,6 +256,7 @@ function BoardCanvas() {
         <LayoutSwitcher value={layoutMode} onChange={(m: LayoutMode) => setLayoutMode(m)} />
         <div className={styles.headerActions}>
           <PyramidBadge entities={entities} onClick={() => setLayoutMode('byPyramid')} />
+          <CurrencyControl />
           <button
             type="button"
             className={`${styles.btn} ${hideAmounts ? styles.btnActive : ''}`}
@@ -263,6 +287,7 @@ function BoardCanvas() {
             edges={edges}
             onNodesChange={onNodesChange}
             onNodeDragStop={handleNodeDragStop}
+            onConnect={handleConnect}
             nodeTypes={nodeTypes}
             proOptions={{ hideAttribution: true }}
             minZoom={0.45}

@@ -18,6 +18,11 @@ interface Props {
 // swapping entities never re-uploads GPU textures on every render. A fixed repeat means window
 // size isn't perfectly proportional to each building's footprint, which is a fine trade for never
 // cloning/re-uploading a texture per instance.
+//
+// Structure first, randomness second: solid floor plates and mullions are drawn as a deliberate
+// grid, and only the window fill itself varies — a handful of muted brightness levels, not a coin
+// flip between "off" and "blazing" for every cell — so it reads as an actual façade with visible
+// floors, not a scattered, noisy speckle pattern.
 let sharedFacadeTexture: THREE.CanvasTexture | null = null;
 function getFacadeTexture(): THREE.CanvasTexture {
   if (sharedFacadeTexture) return sharedFacadeTexture;
@@ -26,28 +31,45 @@ function getFacadeTexture(): THREE.CanvasTexture {
   canvas.width = size;
   canvas.height = size;
   const ctx = canvas.getContext('2d')!;
-  ctx.fillStyle = '#14161f';
+  ctx.fillStyle = '#333849';
   ctx.fillRect(0, 0, size, size);
 
-  const cols = 6;
-  const rows = 10;
+  const cols = 4;
+  const rows = 5;
   const cellW = size / cols;
   const cellH = size / rows;
+  const windowLevels = ['rgba(190,205,225,0.28)', 'rgba(180,205,235,0.55)', 'rgba(220,232,250,0.8)', 'rgba(255,214,150,0.9)'];
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
-      const lit = Math.random() > 0.32;
-      const warm = Math.random() > 0.5;
-      ctx.fillStyle = lit ? (warm ? 'rgba(255,212,140,0.95)' : 'rgba(196,222,255,0.9)') : 'rgba(255,255,255,0.05)';
-      const padX = cellW * 0.2;
-      const padY = cellH * 0.22;
+      const level = windowLevels[Math.floor(Math.random() * windowLevels.length)];
+      ctx.fillStyle = level;
+      const padX = cellW * 0.16;
+      const padY = cellH * 0.24;
       ctx.fillRect(c * cellW + padX, r * cellH + padY, cellW - padX * 2, cellH - padY * 2);
     }
+  }
+
+  // mullions/floor plates drawn on top, as solid lines — the structure that keeps the whole thing
+  // from reading as scribble even when the window fill underneath is busy.
+  ctx.strokeStyle = 'rgba(10,12,17,0.85)';
+  ctx.lineWidth = 2;
+  for (let r = 0; r <= rows; r++) {
+    ctx.beginPath();
+    ctx.moveTo(0, r * cellH);
+    ctx.lineTo(size, r * cellH);
+    ctx.stroke();
+  }
+  for (let c = 0; c <= cols; c++) {
+    ctx.beginPath();
+    ctx.moveTo(c * cellW, 0);
+    ctx.lineTo(c * cellW, size);
+    ctx.stroke();
   }
 
   const texture = new THREE.CanvasTexture(canvas);
   texture.wrapS = THREE.RepeatWrapping;
   texture.wrapT = THREE.RepeatWrapping;
-  texture.repeat.set(2, 4);
+  texture.repeat.set(1, 2);
   texture.colorSpace = THREE.SRGBColorSpace;
   sharedFacadeTexture = texture;
   return texture;
@@ -86,20 +108,31 @@ export function CityBuildingMesh({ x, z, height, footprint, color, name, amount,
   };
 
   const tierTops = tiers.reduce<number[]>((acc, tier) => [...acc, (acc[acc.length - 1] ?? 0) + tier.h], []);
+  const ledgeHeight = 0.05;
   const tierMeshes = tiers.map((tier, i) => {
     const y = tierTops[i] - tier.h / 2;
     return (
-      <mesh key={i} position={[0, y, 0]} frustumCulled={false} onClick={handleClick}>
-        <boxGeometry args={[tier.fp, tier.h, tier.fp]} />
-        <meshStandardMaterial
-          color="#3a3f4c"
-          map={facadeTexture}
-          emissive={color}
-          emissiveMap={facadeTexture}
-          emissiveIntensity={0.9}
-          roughness={0.55}
-        />
-      </mesh>
+      <group key={i}>
+        <mesh position={[0, y, 0]} frustumCulled={false} onClick={handleClick}>
+          <boxGeometry args={[tier.fp, tier.h, tier.fp]} />
+          <meshStandardMaterial
+            color="#4a5162"
+            map={facadeTexture}
+            emissive={color}
+            emissiveMap={facadeTexture}
+            emissiveIntensity={0.95}
+            roughness={0.55}
+          />
+        </mesh>
+        {/* a solid ledge at the top of every tier but the last — makes each setback read as a
+            distinct storey break, not just a texture seam. */}
+        {i < tiers.length - 1 && (
+          <mesh position={[0, tierTops[i] + ledgeHeight / 2, 0]} frustumCulled={false} onClick={handleClick}>
+            <boxGeometry args={[tier.fp * 1.06, ledgeHeight, tier.fp * 1.06]} />
+            <meshStandardMaterial color="#171a22" roughness={0.8} />
+          </mesh>
+        )}
+      </group>
     );
   });
 
@@ -114,8 +147,22 @@ export function CityBuildingMesh({ x, z, height, footprint, color, name, amount,
         <meshStandardMaterial color="#20242e" emissive={color} emissiveIntensity={0.25} roughness={0.6} />
       </mesh>
       <Billboard position={[0, height + roofHeight + 0.55, 0]}>
+        {amount !== '' && (
+          <Text
+            position={[0, 0.62, 0]}
+            fontSize={0.42}
+            color="#ffd166"
+            anchorX="center"
+            anchorY="bottom"
+            outlineWidth={0.022}
+            outlineColor="#7a4a00"
+            outlineBlur={0.03}
+            frustumCulled={false}
+          >
+            {amount}
+          </Text>
+        )}
         <Text
-          position={[0, 0.36, 0]}
           fontSize={0.46}
           color="#f1f3f8"
           anchorX="center"
@@ -125,17 +172,6 @@ export function CityBuildingMesh({ x, z, height, footprint, color, name, amount,
           frustumCulled={false}
         >
           {name}
-        </Text>
-        <Text
-          fontSize={0.36}
-          color="#c3cadb"
-          anchorX="center"
-          anchorY="bottom"
-          outlineWidth={0.015}
-          outlineColor="#0a0c11"
-          frustumCulled={false}
-        >
-          {amount}
         </Text>
       </Billboard>
     </group>

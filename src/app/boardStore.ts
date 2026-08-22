@@ -28,9 +28,18 @@ interface BoardState {
   entityOrder: Record<string, number>;
   /** Mask displayed currency figures — for screen-sharing the board's shape without the exact numbers. */
   hideAmounts: boolean;
+  /** ₪ per $1 — user-editable, and optionally refreshed automatically from a live source. Every
+   * entity is stored in ₪ regardless of its own display currency; this rate is what converts. */
+  usdRate: number;
+  /** ISO timestamp of the last successful rate refresh, or null if never fetched. */
+  usdRateUpdatedAt: string | null;
+  /** When true, the board fetches a fresh rate once per session on load — opt-in, never forced. */
+  autoUpdateUsdRate: boolean;
 
   setLayoutMode: (mode: LayoutMode) => void;
   toggleHideAmounts: () => void;
+  setUsdRate: (rate: number, updatedAt?: string) => void;
+  toggleAutoUpdateUsdRate: () => void;
 
   addFamilyMember: (member: Omit<FamilyMember, 'id'>) => void;
   updateFamilyMember: (id: string, patch: Partial<Omit<FamilyMember, 'id'>>) => void;
@@ -54,9 +63,14 @@ export const useBoardStore = create<BoardState>()(
       freePositions: {},
       entityOrder: {},
       hideAmounts: false,
+      usdRate: 3.7,
+      usdRateUpdatedAt: null,
+      autoUpdateUsdRate: false,
 
       setLayoutMode: (mode) => set({ layoutMode: mode }),
       toggleHideAmounts: () => set((state) => ({ hideAmounts: !state.hideAmounts })),
+      setUsdRate: (rate, updatedAt) => set({ usdRate: rate, usdRateUpdatedAt: updatedAt ?? new Date().toISOString() }),
+      toggleAutoUpdateUsdRate: () => set((state) => ({ autoUpdateUsdRate: !state.autoUpdateUsdRate })),
 
       addFamilyMember: (member) =>
         set((state) => ({

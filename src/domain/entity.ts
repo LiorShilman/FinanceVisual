@@ -30,6 +30,13 @@ const PensionDetails = z.object({
   balance: z.number().nonnegative(),
   monthlyContribution: z.number().nonnegative().default(0),
 });
+// same shape as pension — a keren hishtalmut is employer-linked and locked the same way, but
+// tracked separately since it isn't legally a pension and shouldn't be counted as one.
+const StudyFundDetails = z.object({
+  kind: z.literal('studyFund'),
+  balance: z.number().nonnegative(),
+  monthlyContribution: z.number().nonnegative().default(0),
+});
 export const INSURANCE_TYPES = ['life', 'health', 'mortgage', 'disability', 'other'] as const;
 export type InsuranceType = (typeof INSURANCE_TYPES)[number];
 const InsuranceDetails = z.object({
@@ -50,6 +57,10 @@ const GoalDetails = z.object({
   currentAmount: z.number().nonnegative(),
 });
 const RealEstateDetails = z.object({ kind: z.literal('realEstate'), currentValue: z.number().nonnegative() });
+// a pure link anchor — "המעסיק שלי", "עבודה" — with no financial fields at all, so it can't distort
+// any total or health calculation. Exists only to be a node that salary/pension/study-fund entities
+// can link to, to represent where the money actually comes from.
+const SourceDetails = z.object({ kind: z.literal('source') });
 
 export const EntityDetailsSchema = z.discriminatedUnion('kind', [
   IncomeDetails,
@@ -57,20 +68,24 @@ export const EntityDetailsSchema = z.discriminatedUnion('kind', [
   SavingsDetails,
   InvestmentDetails,
   PensionDetails,
+  StudyFundDetails,
   InsuranceDetails,
   DebtDetails,
   GoalDetails,
   RealEstateDetails,
+  SourceDetails,
 ]);
 export type EntityDetails = z.infer<typeof EntityDetailsSchema>;
 export type EntityCategory = EntityDetails['kind'];
 
 export const ENTITY_CATEGORIES: readonly EntityCategory[] = [
+  'source',
   'income',
   'expense',
   'savings',
   'investment',
   'pension',
+  'studyFund',
   'insurance',
   'debt',
   'goal',
@@ -78,16 +93,21 @@ export const ENTITY_CATEGORIES: readonly EntityCategory[] = [
 ];
 
 export const CATEGORY_LABELS: Record<EntityCategory, string> = {
+  source: 'מקור',
   income: 'הכנסה',
   expense: 'הוצאה',
   savings: 'חיסכון',
   investment: 'השקעה',
   pension: 'פנסיה',
+  studyFund: 'קרן השתלמות',
   insurance: 'ביטוח',
   debt: 'חוב',
   goal: 'יעד',
   realEstate: 'נדל"ן',
 };
+
+export const DISPLAY_CURRENCIES = ['ils', 'usd'] as const;
+export type DisplayCurrency = (typeof DISPLAY_CURRENCIES)[number];
 
 export const FinancialEntitySchema = z.object({
   id: z.string(),
@@ -99,6 +119,10 @@ export const FinancialEntitySchema = z.object({
   linkedEntityIds: z.array(z.string()).default([]),
   notes: z.string().optional(),
   details: EntityDetailsSchema,
+  // every amount is still stored in ₪ (so totals/sizing/health stay simple, single-currency math)
+  // — this only remembers which currency the entity was actually entered/should be shown in, per
+  // entity, not as a global "view everything in $" toggle.
+  currency: z.enum(DISPLAY_CURRENCIES).default('ils'),
 });
 export type FinancialEntity = z.infer<typeof FinancialEntitySchema>;
 
@@ -114,9 +138,11 @@ export function isFlowCategory(entity: FinancialEntity): boolean {
   return entity.details.kind === 'income' || entity.details.kind === 'expense';
 }
 
-/** Only money that's actually held somewhere has a liquidity — everything else doesn't ask. */
+/** Only money that's actually held somewhere has a liquidity — everything else doesn't ask.
+ * Study funds (unlike pension) can actually be withdrawn — after 6 years tax-free, or earlier
+ * with a tax hit — so it's a real user choice, not a fixed fact like pension's lock. */
 export function isLiquidityRelevant(category: EntityCategory): boolean {
-  return category === 'savings' || category === 'investment';
+  return category === 'savings' || category === 'investment' || category === 'studyFund';
 }
 
 /** Pension is always locked by nature — no need to ask, just set it. */
@@ -147,6 +173,7 @@ export function getSecondaryDetail(entity: FinancialEntity): SecondaryDetail | n
       return d.isEmergencyFund ? { label: 'קרן חירום', text: 'קרן חירום' } : null;
     case 'investment':
     case 'pension':
+    case 'studyFund':
       return d.monthlyContribution > 0 ? { label: 'הפקדה חודשית', amount: d.monthlyContribution } : null;
     case 'insurance':
       return { label: 'פרמיה חודשית', amount: d.monthlyPremium };
@@ -158,6 +185,7 @@ export function getSecondaryDetail(entity: FinancialEntity): SecondaryDetail | n
     }
     case 'income':
     case 'realEstate':
+    case 'source':
       return null;
   }
 }
@@ -172,6 +200,7 @@ export function getWeight(entity: FinancialEntity): number {
     case 'savings':
     case 'investment':
     case 'pension':
+    case 'studyFund':
       return d.balance;
     case 'insurance':
       return d.coverageAmount;
@@ -181,5 +210,7 @@ export function getWeight(entity: FinancialEntity): number {
       return d.targetAmount;
     case 'realEstate':
       return d.currentValue;
+    case 'source':
+      return 0;
   }
 }

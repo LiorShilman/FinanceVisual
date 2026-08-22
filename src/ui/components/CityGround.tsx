@@ -1,12 +1,15 @@
 import { useMemo } from 'react';
 import * as THREE from 'three';
 import { Line } from '@react-three/drei';
-import { computeGroundBounds, type WaterFeature } from '../../domain/water';
+import { computeGroundBounds, type CircularExtent } from '../../domain/cityGrid';
+import type { ValleyFeature } from '../../domain/valley';
+import type { WaterFeature } from '../../domain/water';
 
 interface Props {
   groundCenter: [number, number];
   groundSize: number;
   water: WaterFeature;
+  valley: ValleyFeature;
 }
 
 // Richly blended greens, no dry/dirt patches mixed in — a lawn of varying tone rather than a
@@ -139,7 +142,18 @@ function buildMeanderPoints(sx: number, sz: number, ex: number, ez: number): THR
   return new THREE.CatmullRomCurve3(controlPoints).getPoints(40);
 }
 
-export function CityGround({ groundCenter, groundSize, water }: Props) {
+/** Straight-line-to-source direction decides where on the target circle's boundary a stream
+ * arrives, so multiple streams converging on one pool still fan out instead of overlapping. */
+function buildInflowPoints(targetX: number, targetZ: number, targetRadius: number, sx: number, sz: number): THREE.Vector3[] {
+  const dx = targetX - sx;
+  const dz = targetZ - sz;
+  const dist = Math.hypot(dx, dz) || 1;
+  const edgeX = targetX - (dx / dist) * targetRadius * 0.92;
+  const edgeZ = targetZ - (dz / dist) * targetRadius * 0.92;
+  return buildMeanderPoints(sx, sz, edgeX, edgeZ);
+}
+
+export function CityGround({ groundCenter, groundSize, water, valley }: Props) {
   const groundTexture = useMemo(() => createGroundTexture(), []);
   const lakeTexture = useMemo(
     () =>
@@ -170,30 +184,50 @@ export function CityGround({ groundCenter, groundSize, water }: Props) {
       ),
     [],
   );
+  // a canyon, not a pool — glowing embers rather than gentle ripples, but still bright enough at
+  // the edges (most of the visible area, since area grows with r²) to read as alive, not a black
+  // hole. Kept in the same red family as the expense buildings' own health-risk color (#e05a5a),
+  // not orange/amber — that hue is already claimed by every warning-status savings/investment/
+  // pension building, and an orange valley next to them read as ambiguous.
+  const valleyTexture = useMemo(
+    () =>
+      createWaterTexture(
+        [
+          [0, '#ff8a7a'],
+          [0.35, '#e05a5a'],
+          [0.7, '#a02f38'],
+          [1, '#4a1218'],
+        ],
+        'rgba(255,140,130,0.4)',
+      ),
+    [],
+  );
 
   const [lakeX, lakeZ] = water.lakeCenter;
+  const [valleyX, valleyZ] = valley.center;
 
   const pensionRingGeometry = useMemo(() => buildBlobGeometry(water.outerRingRadius), [water.outerRingRadius]);
   const lakeGeometry = useMemo(() => buildBlobGeometry(water.lakeRadius), [water.lakeRadius]);
+  const valleyGeometry = useMemo(() => buildBlobGeometry(valley.radius), [valley.radius]);
 
-  // liquid money pools in the inner circle; pension money pools in the ring around it — each
-  // stream's own straight-line direction to the corner decides where along its target circle it
-  // arrives, so multiple streams of the same kind still fan out naturally instead of overlapping.
-  const streamPaths = useMemo(
+  // liquid money pools in the inner circle; pension money pools in the ring around it.
+  const waterStreamPaths = useMemo(
     () =>
       water.streams.map((s) => {
-        const targetRadius = s.kind === 'pension' ? water.outerRingRadius : water.lakeRadius;
-        const dx = lakeX - s.x;
-        const dz = lakeZ - s.z;
-        const dist = Math.hypot(dx, dz) || 1;
-        const edgeX = lakeX - (dx / dist) * targetRadius * 0.92;
-        const edgeZ = lakeZ - (dz / dist) * targetRadius * 0.92;
-        return { kind: s.kind, points: buildMeanderPoints(s.x, s.z, edgeX, edgeZ) };
+        const targetRadius = s.kind === 'liquid' ? water.lakeRadius : water.outerRingRadius;
+        return { kind: s.kind, points: buildInflowPoints(lakeX, lakeZ, targetRadius, s.x, s.z) };
       }),
     [water.streams, lakeX, lakeZ, water.lakeRadius, water.outerRingRadius],
   );
+  const valleyStreamPaths = useMemo(
+    () => valley.streams.map((s) => buildInflowPoints(valleyX, valleyZ, valley.radius, s.x, s.z)),
+    [valley.streams, valleyX, valleyZ, valley.radius],
+  );
 
-  const bounds = computeGroundBounds(groundCenter, groundSize, water);
+  const bounds = computeGroundBounds(groundCenter, groundSize, [
+    { center: water.lakeCenter, radius: water.outerRingRadius } satisfies CircularExtent,
+    { center: valley.center, radius: valley.radius } satisfies CircularExtent,
+  ]);
 
   return (
     <group>
@@ -206,19 +240,28 @@ export function CityGround({ groundCenter, groundSize, water }: Props) {
         <meshStandardMaterial map={ringTexture} emissive="#7457d6" emissiveIntensity={0.45} roughness={0.15} metalness={0.12} side={THREE.DoubleSide} />
       </mesh>
 
-      {streamPaths.map(({ kind, points }, i) => (
+      {waterStreamPaths.map(({ kind, points }, i) => (
         <Line
           key={i}
           points={points}
           color={kind === 'pension' ? '#a397e8' : '#5aa8e0'}
-          lineWidth={4}
-          transparent={false}
+          lineWidth={2.5}
+          transparent
+          opacity={0.75}
           frustumCulled={false}
         />
       ))}
 
       <mesh geometry={lakeGeometry} rotation-x={-Math.PI / 2} position={[lakeX, 0.018, lakeZ]} frustumCulled={false}>
         <meshStandardMaterial map={lakeTexture} emissive="#1467c9" emissiveIntensity={0.4} roughness={0.12} metalness={0.15} side={THREE.DoubleSide} />
+      </mesh>
+
+      {valleyStreamPaths.map((points, i) => (
+        <Line key={i} points={points} color="#e05a5a" lineWidth={2.5} transparent opacity={0.75} frustumCulled={false} />
+      ))}
+
+      <mesh geometry={valleyGeometry} rotation-x={-Math.PI / 2} position={[valleyX, 0.014, valleyZ]} frustumCulled={false}>
+        <meshStandardMaterial map={valleyTexture} emissive="#e05a5a" emissiveIntensity={0.65} roughness={0.3} metalness={0.05} side={THREE.DoubleSide} />
       </mesh>
     </group>
   );

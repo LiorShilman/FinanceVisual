@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import {
   CATEGORY_LABELS,
+  DISPLAY_CURRENCIES,
   ENTITY_CATEGORIES,
   FinancialEntitySchema,
   INSURANCE_TYPES,
@@ -8,6 +9,7 @@ import {
   LIQUIDITY_LEVELS,
   isLiquidityRelevant,
   resolveLiquidity,
+  type DisplayCurrency,
   type EntityCategory,
   type EntityDetails,
   type FinancialEntity,
@@ -30,6 +32,8 @@ function defaultDetails(category: EntityCategory): EntityDetails {
       return { kind: 'investment', balance: 0, monthlyContribution: 0 };
     case 'pension':
       return { kind: 'pension', balance: 0, monthlyContribution: 0 };
+    case 'studyFund':
+      return { kind: 'studyFund', balance: 0, monthlyContribution: 0 };
     case 'insurance':
       return { kind: 'insurance', coverageAmount: 0, monthlyPremium: 0, insuranceType: 'life' };
     case 'debt':
@@ -38,6 +42,8 @@ function defaultDetails(category: EntityCategory): EntityDetails {
       return { kind: 'goal', targetAmount: 1, currentAmount: 0 };
     case 'realEstate':
       return { kind: 'realEstate', currentValue: 0 };
+    case 'source':
+      return { kind: 'source' };
   }
 }
 
@@ -48,7 +54,10 @@ interface Draft {
   linkedEntityIds: string[];
   notes: string;
   details: EntityDetails;
+  currency: DisplayCurrency;
 }
+
+const CURRENCY_SYMBOLS: Record<DisplayCurrency, string> = { ils: '₪', usd: '$' };
 
 interface Props {
   entityId: string | null;
@@ -63,6 +72,7 @@ export function EntityFormPanel({ entityId, presetCategory, presetDetailOverride
   const addEntity = useBoardStore((s) => s.addEntity);
   const updateEntity = useBoardStore((s) => s.updateEntity);
   const removeEntity = useBoardStore((s) => s.removeEntity);
+  const usdRate = useBoardStore((s) => s.usdRate);
 
   const existing = entityId ? entities.find((e) => e.id === entityId) ?? null : null;
 
@@ -75,6 +85,7 @@ export function EntityFormPanel({ entityId, presetCategory, presetDetailOverride
         linkedEntityIds: existing.linkedEntityIds,
         notes: existing.notes ?? '',
         details: existing.details,
+        currency: existing.currency ?? 'ils',
       };
     }
     const category = presetCategory ?? 'savings';
@@ -85,9 +96,17 @@ export function EntityFormPanel({ entityId, presetCategory, presetDetailOverride
       linkedEntityIds: [],
       notes: '',
       details: { ...defaultDetails(category), ...presetDetailOverrides } as EntityDetails,
+      currency: 'ils',
     };
   });
   const [error, setError] = useState<string | null>(null);
+
+  // every amount is always stored in ₪ — these just convert what the number fields show/accept
+  // to/from the entity's own chosen currency, so switching the toggle re-labels without silently
+  // changing the underlying value.
+  const toDisplay = (ils: number) => (draft.currency === 'usd' ? ils / usdRate : ils);
+  const fromDisplay = (displayValue: number) => (draft.currency === 'usd' ? displayValue * usdRate : displayValue);
+  const currencySymbol = CURRENCY_SYMBOLS[draft.currency];
 
   const linkableEntities = useMemo(() => entities.filter((e) => e.id !== entityId), [entities, entityId]);
 
@@ -141,6 +160,7 @@ export function EntityFormPanel({ entityId, presetCategory, presetDetailOverride
       linkedEntityIds: draft.linkedEntityIds,
       notes: draft.notes.trim() || undefined,
       details: draft.details,
+      currency: draft.currency,
     };
     const result = FinancialEntitySchema.omit({ id: true }).safeParse(payload);
     if (!result.success) {
@@ -195,13 +215,29 @@ export function EntityFormPanel({ entityId, presetCategory, presetDetailOverride
           />
         </label>
 
+        <div className={styles.field}>
+          <span className={styles.label}>מטבע</span>
+          <div className={styles.chipList}>
+            {DISPLAY_CURRENCIES.map((c) => (
+              <button
+                key={c}
+                type="button"
+                className={`${styles.chip} ${draft.currency === c ? styles.chipActive : ''}`}
+                onClick={() => setDraft((s) => ({ ...s, currency: c }))}
+              >
+                {CURRENCY_SYMBOLS[c]} {c === 'ils' ? 'שקל' : 'דולר'}
+              </button>
+            ))}
+          </div>
+        </div>
+
         {d.kind === 'income' && (
           <label className={styles.field}>
-            <span className={styles.label}>סכום חודשי (₪)</span>
+            <span className={styles.label}>סכום חודשי ({currencySymbol})</span>
             <NumberField
               className={styles.input}
-              value={d.monthlyAmount}
-              onChange={(v) => updateDetail({ monthlyAmount: v })}
+              value={toDisplay(d.monthlyAmount)}
+              onChange={(v) => updateDetail({ monthlyAmount: fromDisplay(v) })}
             />
           </label>
         )}
@@ -209,11 +245,11 @@ export function EntityFormPanel({ entityId, presetCategory, presetDetailOverride
         {d.kind === 'expense' && (
           <>
             <label className={styles.field}>
-              <span className={styles.label}>סכום חודשי (₪)</span>
+              <span className={styles.label}>סכום חודשי ({currencySymbol})</span>
               <NumberField
                 className={styles.input}
-                value={d.monthlyAmount}
-                onChange={(v) => updateDetail({ monthlyAmount: v })}
+                value={toDisplay(d.monthlyAmount)}
+                onChange={(v) => updateDetail({ monthlyAmount: fromDisplay(v) })}
               />
             </label>
             <div className={styles.checkboxRow}>
@@ -230,8 +266,12 @@ export function EntityFormPanel({ entityId, presetCategory, presetDetailOverride
         {d.kind === 'savings' && (
           <>
             <label className={styles.field}>
-              <span className={styles.label}>יתרה (₪)</span>
-              <NumberField className={styles.input} value={d.balance} onChange={(v) => updateDetail({ balance: v })} />
+              <span className={styles.label}>יתרה ({currencySymbol})</span>
+              <NumberField
+                className={styles.input}
+                value={toDisplay(d.balance)}
+                onChange={(v) => updateDetail({ balance: fromDisplay(v) })}
+              />
             </label>
             <div className={styles.checkboxRow}>
               <input
@@ -244,18 +284,22 @@ export function EntityFormPanel({ entityId, presetCategory, presetDetailOverride
           </>
         )}
 
-        {(d.kind === 'investment' || d.kind === 'pension') && (
+        {(d.kind === 'investment' || d.kind === 'pension' || d.kind === 'studyFund') && (
           <div className={styles.row}>
             <label className={styles.field}>
-              <span className={styles.label}>יתרה (₪)</span>
-              <NumberField className={styles.input} value={d.balance} onChange={(v) => updateDetail({ balance: v })} />
-            </label>
-            <label className={styles.field}>
-              <span className={styles.label}>הפקדה חודשית (₪)</span>
+              <span className={styles.label}>יתרה ({currencySymbol})</span>
               <NumberField
                 className={styles.input}
-                value={d.monthlyContribution}
-                onChange={(v) => updateDetail({ monthlyContribution: v })}
+                value={toDisplay(d.balance)}
+                onChange={(v) => updateDetail({ balance: fromDisplay(v) })}
+              />
+            </label>
+            <label className={styles.field}>
+              <span className={styles.label}>הפקדה חודשית ({currencySymbol})</span>
+              <NumberField
+                className={styles.input}
+                value={toDisplay(d.monthlyContribution)}
+                onChange={(v) => updateDetail({ monthlyContribution: fromDisplay(v) })}
               />
             </label>
           </div>
@@ -279,19 +323,19 @@ export function EntityFormPanel({ entityId, presetCategory, presetDetailOverride
             </label>
             <div className={styles.row}>
               <label className={styles.field}>
-                <span className={styles.label}>סכום כיסוי (₪)</span>
+                <span className={styles.label}>סכום כיסוי ({currencySymbol})</span>
                 <NumberField
                   className={styles.input}
-                  value={d.coverageAmount}
-                  onChange={(v) => updateDetail({ coverageAmount: v })}
+                  value={toDisplay(d.coverageAmount)}
+                  onChange={(v) => updateDetail({ coverageAmount: fromDisplay(v) })}
                 />
               </label>
               <label className={styles.field}>
-                <span className={styles.label}>פרמיה חודשית (₪)</span>
+                <span className={styles.label}>פרמיה חודשית ({currencySymbol})</span>
                 <NumberField
                   className={styles.input}
-                  value={d.monthlyPremium}
-                  onChange={(v) => updateDetail({ monthlyPremium: v })}
+                  value={toDisplay(d.monthlyPremium)}
+                  onChange={(v) => updateDetail({ monthlyPremium: fromDisplay(v) })}
                 />
               </label>
             </div>
@@ -302,19 +346,19 @@ export function EntityFormPanel({ entityId, presetCategory, presetDetailOverride
           <>
             <div className={styles.row}>
               <label className={styles.field}>
-                <span className={styles.label}>יתרת חוב (₪)</span>
+                <span className={styles.label}>יתרת חוב ({currencySymbol})</span>
                 <NumberField
                   className={styles.input}
-                  value={d.outstandingBalance}
-                  onChange={(v) => updateDetail({ outstandingBalance: v })}
+                  value={toDisplay(d.outstandingBalance)}
+                  onChange={(v) => updateDetail({ outstandingBalance: fromDisplay(v) })}
                 />
               </label>
               <label className={styles.field}>
-                <span className={styles.label}>תשלום חודשי (₪)</span>
+                <span className={styles.label}>תשלום חודשי ({currencySymbol})</span>
                 <NumberField
                   className={styles.input}
-                  value={d.monthlyPayment}
-                  onChange={(v) => updateDetail({ monthlyPayment: v })}
+                  value={toDisplay(d.monthlyPayment)}
+                  onChange={(v) => updateDetail({ monthlyPayment: fromDisplay(v) })}
                 />
               </label>
             </div>
@@ -333,19 +377,19 @@ export function EntityFormPanel({ entityId, presetCategory, presetDetailOverride
         {d.kind === 'goal' && (
           <div className={styles.row}>
             <label className={styles.field}>
-              <span className={styles.label}>סכום יעד (₪)</span>
+              <span className={styles.label}>סכום יעד ({currencySymbol})</span>
               <NumberField
                 className={styles.input}
-                value={d.targetAmount}
-                onChange={(v) => updateDetail({ targetAmount: v })}
+                value={toDisplay(d.targetAmount)}
+                onChange={(v) => updateDetail({ targetAmount: fromDisplay(v) })}
               />
             </label>
             <label className={styles.field}>
-              <span className={styles.label}>נצבר עד כה (₪)</span>
+              <span className={styles.label}>נצבר עד כה ({currencySymbol})</span>
               <NumberField
                 className={styles.input}
-                value={d.currentAmount}
-                onChange={(v) => updateDetail({ currentAmount: v })}
+                value={toDisplay(d.currentAmount)}
+                onChange={(v) => updateDetail({ currentAmount: fromDisplay(v) })}
               />
             </label>
           </div>
@@ -353,11 +397,11 @@ export function EntityFormPanel({ entityId, presetCategory, presetDetailOverride
 
         {d.kind === 'realEstate' && (
           <label className={styles.field}>
-            <span className={styles.label}>שווי נוכחי (₪)</span>
+            <span className={styles.label}>שווי נוכחי ({currencySymbol})</span>
             <NumberField
               className={styles.input}
-              value={d.currentValue}
-              onChange={(v) => updateDetail({ currentValue: v })}
+              value={toDisplay(d.currentValue)}
+              onChange={(v) => updateDetail({ currentValue: fromDisplay(v) })}
             />
           </label>
         )}

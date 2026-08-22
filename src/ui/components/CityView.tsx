@@ -3,9 +3,11 @@ import { Canvas } from '@react-three/fiber';
 import { Billboard, OrbitControls, Text } from '@react-three/drei';
 import { useBoardStore } from '../../app/boardStore';
 import { computeCityLayout, DISTRICT_SPACING, DEPTH_SPACING } from '../../domain/city';
+import { computeGroundBounds, type CircularExtent } from '../../domain/cityGrid';
 import { CATEGORY_LABELS, ENTITY_CATEGORIES, getWeight, type FinancialEntity } from '../../domain/entity';
-import { computeGroundBounds, computeWaterFeature } from '../../domain/water';
-import { formatCurrencyMasked } from '../format';
+import { computeValleyFeature } from '../../domain/valley';
+import { computeWaterFeature } from '../../domain/water';
+import { formatCurrency } from '../format';
 import { CityBuildingMesh } from './CityBuildingMesh';
 import { CityGround } from './CityGround';
 
@@ -20,27 +22,35 @@ const DEPTH_LABELS = ['נעול / טווח ארוך', 'טווח קצר', 'נזי
 
 export function CityView({ entities, onOpen }: Props) {
   const hideAmounts = useBoardStore((s) => s.hideAmounts);
+  const usdRate = useBoardStore((s) => s.usdRate);
   const buildings = useMemo(() => computeCityLayout(entities), [entities]);
   const water = useMemo(() => computeWaterFeature(buildings), [buildings]);
+  const valley = useMemo(() => computeValleyFeature(buildings), [buildings]);
+  // an empty category still owns a column of ground, but labeling a district that holds nothing
+  // just reads as clutter — the pyramid already skips empty tiers the same way.
+  const populatedCategories = useMemo(() => new Set(buildings.map((b) => b.category)), [buildings]);
   const width = (ENTITY_CATEGORIES.length - 1) * DISTRICT_SPACING;
   const depth = 2 * DEPTH_SPACING;
   const groundSize = Math.max(width, depth) + 20;
   const groundCenter: [number, number] = [width / 2, depth / 2];
-  // the grid has to cover exactly what the textured ground plane covers — the lake now sits
-  // right at (and past) the district square's own corner, so a grid sized to the district alone
-  // would stop short of it, leaving a chunk of ground with no grid over it.
-  const bounds = computeGroundBounds(groundCenter, groundSize, water);
+  // the grid has to cover exactly what the textured ground plane covers — the lake and the valley
+  // both sit right at (and past) the district square's own corners, so a grid sized to the
+  // district alone would stop short of them.
+  const bounds = computeGroundBounds(groundCenter, groundSize, [
+    { center: water.lakeCenter, radius: water.outerRingRadius } satisfies CircularExtent,
+    { center: valley.center, radius: valley.radius } satisfies CircularExtent,
+  ]);
   const gridDivisions = Math.round(Math.max(bounds.width, bounds.depth) / 1.6);
 
   return (
     <Canvas camera={{ position: [width * 0.25, 36, depth + 46], fov: 32 }} dir="rtl">
       <color attach="background" args={['#0a0c11']} />
       <fog attach="fog" args={['#0a0c11', 60, 160]} />
-      <ambientLight intensity={0.75} />
-      <directionalLight position={[width * 0.4, 26, 14]} intensity={1.5} />
-      <directionalLight position={[-10, 14, -10]} intensity={0.45} color="#6c8dff" />
+      <ambientLight intensity={1.05} />
+      <directionalLight position={[width * 0.4, 26, 14]} intensity={2} />
+      <directionalLight position={[-10, 14, -10]} intensity={0.6} color="#6c8dff" />
 
-      <CityGround groundCenter={groundCenter} groundSize={groundSize} water={water} />
+      <CityGround groundCenter={groundCenter} groundSize={groundSize} water={water} valley={valley} />
       <gridHelper
         args={[1, gridDivisions, '#4a5a7a', '#2e3648']}
         scale={[bounds.width, 1, bounds.depth]}
@@ -48,10 +58,10 @@ export function CityView({ entities, onOpen }: Props) {
         frustumCulled={false}
       />
 
-      {ENTITY_CATEGORIES.map((cat, i) => (
+      {ENTITY_CATEGORIES.filter((cat) => populatedCategories.has(cat)).map((cat) => (
         <Billboard
           key={cat}
-          position={[(ENTITY_CATEGORIES.length - 1 - i) * DISTRICT_SPACING, 1.5, depth + 6.5]}
+          position={[(ENTITY_CATEGORIES.length - 1 - ENTITY_CATEGORIES.indexOf(cat)) * DISTRICT_SPACING, 1.5, depth + 6.5]}
         >
           <Text
             fontSize={0.72}
@@ -83,19 +93,23 @@ export function CityView({ entities, onOpen }: Props) {
         </Billboard>
       ))}
 
-      {buildings.map((b) => (
-        <CityBuildingMesh
-          key={b.id}
-          x={b.x}
-          z={b.z}
-          height={b.height}
-          footprint={b.footprint}
-          color={b.color}
-          name={b.name}
-          amount={formatCurrencyMasked(getWeight(entities.find((e) => e.id === b.id)!), hideAmounts)}
-          onOpen={() => onOpen(b.id)}
-        />
-      ))}
+      {buildings.map((b) => {
+        const entity = entities.find((e) => e.id === b.id)!;
+        const weight = getWeight(entity);
+        return (
+          <CityBuildingMesh
+            key={b.id}
+            x={b.x}
+            z={b.z}
+            height={b.height}
+            footprint={b.footprint}
+            color={b.color}
+            name={b.name}
+            amount={weight === 0 || hideAmounts ? '' : formatCurrency(weight, entity.currency, usdRate)}
+            onOpen={() => onOpen(b.id)}
+          />
+        );
+      })}
 
       <OrbitControls
         makeDefault
