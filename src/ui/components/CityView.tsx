@@ -33,7 +33,7 @@ export function CityView({ entities, onOpen }: Props) {
   const buildings = useMemo(() => computeCityLayout(entities), [entities]);
   const water = useMemo(() => computeWaterFeature(buildings), [buildings]);
   const valley = useMemo(() => computeValleyFeature(buildings), [buildings]);
-  const netWorth = useMemo(() => computeNetWorthBreakdown(buildings), [buildings]);
+  const netWorth = useMemo(() => computeNetWorthBreakdown(entities), [entities]);
   const incomeLinkPaths = useMemo(() => computeIncomeLinkPaths(buildings, entities), [buildings, entities]);
   const incomeFaucetTarget = useMemo(() => {
     const incomeBuildings = buildings.filter((b) => b.category === 'income');

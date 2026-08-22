@@ -1,4 +1,4 @@
-import type { CityBuilding } from './city';
+import { getCategory, getWeight, type EntityCategory, type FinancialEntity } from './entity';
 
 export interface NetWorthBreakdown {
   /** Investments + savings + study funds + pension, minus debt — the full headline figure. */
@@ -9,10 +9,12 @@ export interface NetWorthBreakdown {
 }
 
 /** Still not full balance-sheet net worth (real estate isn't counted as an asset here), by
- * explicit request — just the growth categories minus debt, split with/without pension. */
-export function computeNetWorthBreakdown(buildings: CityBuilding[]): NetWorthBreakdown {
-  const sumOf = (category: CityBuilding['category']) =>
-    buildings.filter((b) => b.category === category).reduce((sum, b) => sum + b.weight, 0);
+ * explicit request — just the growth categories minus debt, split with/without pension. Works
+ * directly off entities (not city buildings) so it's reusable anywhere — the 3D sun and the
+ * investments table both need the exact same figure. */
+export function computeNetWorthBreakdown(entities: FinancialEntity[]): NetWorthBreakdown {
+  const sumOf = (category: EntityCategory) =>
+    entities.filter((e) => getCategory(e) === category).reduce((sum, e) => sum + getWeight(e), 0);
 
   const liquidAssets = sumOf('savings') + sumOf('investment') + sumOf('studyFund');
   const pension = sumOf('pension');

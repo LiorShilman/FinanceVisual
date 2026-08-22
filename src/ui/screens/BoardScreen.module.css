@@ -63,3 +63,33 @@
   flex: 1;
   min-height: 0;
 }
+
+.investmentsFab {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  padding: 10px 16px;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  box-shadow: var(--shadow-panel);
+}
+
+.investmentsFab:hover {
+  border-color: var(--amount-accent);
+  color: var(--amount-accent);
+}
+
+.investmentsFabIcon {
+  width: 19px;
+  height: 19px;
+  color: var(--amount-accent);
+  flex-shrink: 0;
+}

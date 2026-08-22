@@ -17,6 +17,7 @@ import { EntityFormPanel } from '../components/EntityFormPanel';
 import { FamilyPanel } from '../components/FamilyPanel';
 import { CityView } from '../components/CityView';
 import { CurrencyControl } from '../components/CurrencyControl';
+import { InvestmentsTablePanel } from '../components/InvestmentsTablePanel';
 import type { EntityFlowNode, GhostFlowNode } from '../nodeTypes';
 import type { LabelFlowNode } from '../components/LabelNode';
 import type { TierBandFlowNode } from '../components/TierBandNode';
@@ -72,6 +73,7 @@ function BoardCanvas() {
     null,
   );
   const [showFamilyPanel, setShowFamilyPanel] = useState(false);
+  const [showInvestmentsTable, setShowInvestmentsTable] = useState(false);
 
   const openEditor = useCallback((id: string) => setEditingId(id), []);
   const openCreate = useCallback((category: EntityCategory, presetKey?: string) => {
@@ -279,6 +281,21 @@ function BoardCanvas() {
       </header>
 
       <div className={styles.canvasWrap}>
+        <button
+          type="button"
+          className={styles.investmentsFab}
+          onClick={() => setShowInvestmentsTable(true)}
+          title="טבלת נכסים צומחים מפורטת"
+        >
+          <svg className={styles.investmentsFabIcon} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <rect x="3" y="13.5" width="4.2" height="7.5" rx="1.2" fill="currentColor" opacity="0.5" />
+            <rect x="9.9" y="8.5" width="4.2" height="12.5" rx="1.2" fill="currentColor" opacity="0.78" />
+            <rect x="16.8" y="3" width="4.2" height="18" rx="1.2" fill="currentColor" />
+            <path d="M3 10.5 9 6l3.5 2.8L21 2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" opacity="0.9" />
+            <path d="M16.5 2h4.5v4.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" opacity="0.9" />
+          </svg>
+          טבלת נכסים
+        </button>
         {layoutMode === 'city' ? (
           <CityView entities={entities} onOpen={openEditor} />
         ) : (
@@ -313,6 +330,16 @@ function BoardCanvas() {
       )}
 
       {showFamilyPanel && <FamilyPanel onClose={() => setShowFamilyPanel(false)} />}
+
+      {showInvestmentsTable && (
+        <InvestmentsTablePanel
+          onClose={() => setShowInvestmentsTable(false)}
+          onOpenEntity={(id) => {
+            setShowInvestmentsTable(false);
+            openEditor(id);
+          }}
+        />
+      )}
     </div>
   );
 }
