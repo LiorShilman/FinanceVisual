@@ -5,6 +5,7 @@ import { Billboard, OrbitControls, Text } from '@react-three/drei';
 import { useBoardStore } from '../../app/boardStore';
 import { computeCityLayout, DISTRICT_SPACING, DEPTH_SPACING } from '../../domain/city';
 import { computeGroundBounds, type CircularExtent } from '../../domain/cityGrid';
+import { computeDebtLinkPaths } from '../../domain/debtLinks';
 import { CATEGORY_LABELS, ENTITY_CATEGORIES, getWeight, type FinancialEntity } from '../../domain/entity';
 import { computeIncomeLinkPaths } from '../../domain/incomeLinks';
 import { computeNetWorthBreakdown } from '../../domain/netWorth';
@@ -12,6 +13,7 @@ import { computeValleyFeature } from '../../domain/valley';
 import { computeWaterFeature } from '../../domain/water';
 import { formatCurrency } from '../format';
 import { CityBuildingMesh } from './CityBuildingMesh';
+import { CityDebtChains } from './CityDebtChains';
 import { CityGiftMesh } from './CityGiftMesh';
 import { CityGround } from './CityGround';
 import { CityIncomeFaucet } from './CityIncomeFaucet';
@@ -32,9 +34,14 @@ export function CityView({ entities, onOpen }: Props) {
   const usdRate = useBoardStore((s) => s.usdRate);
   const buildings = useMemo(() => computeCityLayout(entities), [entities]);
   const water = useMemo(() => computeWaterFeature(buildings), [buildings]);
-  const valley = useMemo(() => computeValleyFeature(buildings), [buildings]);
+  const valley = useMemo(() => computeValleyFeature(buildings, entities), [buildings, entities]);
   const netWorth = useMemo(() => computeNetWorthBreakdown(entities), [entities]);
   const incomeLinkPaths = useMemo(() => computeIncomeLinkPaths(buildings, entities), [buildings, entities]);
+  const debtLinkPaths = useMemo(() => computeDebtLinkPaths(buildings, entities), [buildings, entities]);
+  const debtPositions = useMemo(
+    () => buildings.filter((b) => b.category === 'debt').map((b): [number, number] => [b.x, b.z]),
+    [buildings],
+  );
   const incomeFaucetTarget = useMemo(() => {
     const incomeBuildings = buildings.filter((b) => b.category === 'income');
     if (incomeBuildings.length === 0) return null;
@@ -82,6 +89,7 @@ export function CityView({ entities, onOpen }: Props) {
           a side view without sitting deep enough in z to dim into the fog. */}
       <CitySun x={valley.center[0] + 4} y={10} z={-4} breakdown={hideAmounts ? null : netWorth} />
       <CityIncomeLinks paths={incomeLinkPaths} />
+      <CityDebtChains debtPositions={debtPositions} linkPaths={debtLinkPaths} />
       {incomeFaucetTarget && (
         <CityIncomeFaucet targetX={incomeFaucetTarget.x} targetZ={incomeFaucetTarget.z} targetY={incomeFaucetTarget.y} />
       )}

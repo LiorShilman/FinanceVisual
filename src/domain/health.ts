@@ -1,6 +1,6 @@
 import type { EntityCategory, FinancialEntity } from './entity';
 
-export const HEALTH_STATUSES = ['good', 'warning', 'risk', 'unknown', 'donation'] as const;
+export const HEALTH_STATUSES = ['good', 'warning', 'risk', 'unknown', 'donation', 'debt'] as const;
 export type HealthStatus = (typeof HEALTH_STATUSES)[number];
 
 export const HEALTH_COLORS: Record<HealthStatus, string> = {
@@ -12,6 +12,11 @@ export const HEALTH_COLORS: Record<HealthStatus, string> = {
   // magenta hue, deliberately unused anywhere else in the city (blue lake, violet pension ring,
   // red valley, gold flow-links), so it reads as a genuinely separate kind of thing.
   donation: '#e0508f',
+  // a manageable debt still isn't "good" (income's green) or "warning" (the same orange every
+  // growth asset already owns) — a distinct blue, saturated enough to still read as blue (not
+  // fade into gray) once the 2D board's node dilutes it against the dark surface, that only
+  // escalates to real 'risk' red once the burden actually gets dangerous.
+  debt: '#4a7fc9',
 };
 
 /**
@@ -73,9 +78,11 @@ export function computeHealth(entity: FinancialEntity, ctx: HealthContext): Heal
       if (ctx.totalMonthlyIncome <= 0) return 'unknown';
       const burden = d.monthlyPayment / ctx.totalMonthlyIncome;
       const highInterest = d.interestRatePct >= 8;
+      // never 'good'/green (income's color) or 'warning'/orange (every growth asset's color) even
+      // at its best — a debt is a liability regardless of how manageable it is, so its own
+      // baseline color applies until the burden actually escalates to real risk.
       if (burden >= 0.4 || (highInterest && burden >= 0.15)) return 'risk';
-      if (burden >= 0.2 || highInterest) return 'warning';
-      return 'good';
+      return 'debt';
     }
     case 'insurance': {
       if (d.insuranceType === 'life' || d.insuranceType === 'disability') {

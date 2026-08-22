@@ -29,11 +29,13 @@ const NEUTRAL_REGION_COLOR = '#5b6b8c';
 function edgeColor(a: FinancialEntity, b: FinancialEntity): string {
   const kinds = [a.details.kind, b.details.kind];
   // the destination of the money wins the color, even when the other side is the income that
-  // funds it — an expense link is still red, a savings/investment link is still orange, and
-  // "income" only wins when nothing more specific is on the other end.
+  // funds it — an expense link is still red, a savings/investment link is still orange, a debt
+  // link is still its own blue (not income's green, which it fell through to before this had an
+  // explicit case), and "income" only wins when nothing more specific is on the other end.
   if (kinds.includes('expense')) return 'var(--health-risk)';
   if (kinds.includes('savings') || kinds.includes('investment') || kinds.includes('pension') || kinds.includes('studyFund'))
     return 'var(--health-warning)';
+  if (kinds.includes('debt')) return 'var(--health-debt)';
   if (kinds.includes('income')) return 'var(--health-good)';
   return 'var(--text-dim)';
 }
