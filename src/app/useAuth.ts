@@ -23,6 +23,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   'auth/popup-closed-by-user': 'החלון נסגר לפני שהושלמה ההתחברות',
   'auth/network-request-failed': 'בעיית רשת — נסה/י שוב',
   'auth/operation-not-allowed': 'שיטת ההתחברות הזו לא מופעלת בפרויקט — יש להפעיל אותה תחת Authentication → Sign-in method בקונסולת Firebase',
+  'auth/unauthorized-domain': 'הדומיין הזה לא מאושר בפרויקט — יש להוסיף אותו תחת Authentication → Settings → Authorized domains בקונסולת Firebase',
 };
 
 function friendlyAuthError(err: unknown): string {
