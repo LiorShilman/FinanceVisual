@@ -1,0 +1,10 @@
+.label {
+  padding: 9px 20px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 1.05rem;
+  font-weight: 700;
+  white-space: nowrap;
+}

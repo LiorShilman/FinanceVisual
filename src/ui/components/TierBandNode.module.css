@@ -1,0 +1,26 @@
+.band {
+  border-radius: 32px;
+  border: 1px solid color-mix(in srgb, var(--band-color) 30%, transparent);
+  background: radial-gradient(
+    ellipse at 50% 30%,
+    color-mix(in srgb, var(--band-color) var(--fill-pct), transparent),
+    transparent 75%
+  );
+  box-shadow: 0 0 60px color-mix(in srgb, var(--band-color) 22%, transparent);
+  pointer-events: none;
+  transition: box-shadow 0.6s ease;
+}
+
+.pulse {
+  animation: tierPulse 2.6s ease-in-out infinite;
+}
+
+@keyframes tierPulse {
+  0%,
+  100% {
+    box-shadow: 0 0 60px color-mix(in srgb, var(--band-color) 22%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 90px color-mix(in srgb, var(--band-color) 45%, transparent);
+  }
+}

@@ -1,0 +1,72 @@
+@import './ui/tokens.css';
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-family);
+  direction: rtl;
+  overflow: hidden;
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+.react-flow__node {
+  transition: transform 0.5s ease;
+}
+
+.react-flow__node.dragging {
+  transition: none;
+}
+
+.react-flow__attribution {
+  display: none;
+}
+
+.react-flow.react-flow .react-flow__controls {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  box-shadow: none;
+}
+
+.react-flow.react-flow .react-flow__controls-button {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+}
+
+.react-flow.react-flow .react-flow__controls-button:hover {
+  background: var(--surface-2);
+}
+
+.react-flow.react-flow .react-flow__controls-button svg {
+  fill: var(--text);
+}
+
+.react-flow__minimap {
+  background: var(--surface) !important;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}

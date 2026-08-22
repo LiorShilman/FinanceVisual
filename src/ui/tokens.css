@@ -1,0 +1,24 @@
+:root {
+  --bg: #0a0c11;
+  --surface: #141822;
+  --surface-2: #1b202c;
+  --surface-3: #232a39;
+  --border: #2a3040;
+  --text: #f1f3f8;
+  --text-dim: #99a1b3;
+  --accent: #6c8dff;
+  --accent-dim: #3d4c85;
+
+  --health-good: #34b06b;
+  --health-warning: #e2a33d;
+  --health-risk: #e05a5a;
+  --health-unknown: #6b7385;
+
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 22px;
+
+  --font-family: 'Segoe UI', 'Arial Hebrew', Arial, sans-serif;
+
+  --shadow-panel: 0 12px 32px rgba(0, 0, 0, 0.45);
+}

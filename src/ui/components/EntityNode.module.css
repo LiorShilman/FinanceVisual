@@ -1,0 +1,101 @@
+.node {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  border-radius: 50%;
+  border: 2px solid var(--node-color);
+  background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--node-color) 35%, var(--surface)), var(--surface-2));
+  box-shadow:
+    0 0 18px color-mix(in srgb, var(--node-color) 55%, transparent),
+    inset 0 0 12px color-mix(in srgb, var(--node-color) 20%, transparent);
+  cursor: pointer;
+  padding: 8px;
+  text-align: center;
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.node:hover {
+  transform: scale(1.04);
+  box-shadow:
+    0 0 26px color-mix(in srgb, var(--node-color) 70%, transparent),
+    inset 0 0 12px color-mix(in srgb, var(--node-color) 25%, transparent);
+}
+
+/* flows (income/expense) are movements, not held value — a rounded square reads differently
+   from the circular "stored asset" shape used everywhere else. */
+.flowShape {
+  border-radius: 22%;
+}
+
+.icon {
+  font-size: 1.6em;
+  line-height: 1;
+}
+
+.name {
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: var(--text);
+  max-width: 92%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.amount {
+  font-size: 0.76rem;
+  color: var(--text-dim);
+  max-width: 90%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: ltr;
+}
+
+.secondary {
+  font-size: 0.66rem;
+  color: var(--text-dim);
+  opacity: 0.85;
+  max-width: 88%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: ltr;
+}
+
+.handle {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.ghost {
+  border-style: dashed;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-dim);
+}
+
+.ghost:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+.ghostIcon {
+  font-size: 1.3em;
+  opacity: 0.6;
+}
+
+.ghostLabel {
+  font-size: 0.68rem;
+  font-weight: 600;
+}
+
+.ghostHint {
+  font-size: 0.58rem;
+  opacity: 0.7;
+}
