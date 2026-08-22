@@ -146,7 +146,7 @@ export function CityBuildingMesh({ x, z, height, footprint, color, name, amount,
         <boxGeometry args={[roofFootprint, roofHeight, roofFootprint]} />
         <meshStandardMaterial color="#20242e" emissive={color} emissiveIntensity={0.25} roughness={0.6} />
       </mesh>
-      <Billboard position={[0, height + roofHeight + 0.55, 0]}>
+      <Billboard position={[0, height + roofHeight + 0.85, 0]}>
         {amount !== '' && (
           <Text
             position={[0, 0.62, 0]}
@@ -157,6 +157,7 @@ export function CityBuildingMesh({ x, z, height, footprint, color, name, amount,
             outlineWidth={0.022}
             outlineColor="#7a4a00"
             outlineBlur={0.03}
+            fontWeight="bold"
             frustumCulled={false}
           >
             {amount}
@@ -169,6 +170,7 @@ export function CityBuildingMesh({ x, z, height, footprint, color, name, amount,
           anchorY="bottom"
           outlineWidth={0.02}
           outlineColor="#0a0c11"
+          fontWeight="bold"
           frustumCulled={false}
         >
           {name}

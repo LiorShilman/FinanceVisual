@@ -26,6 +26,8 @@ function defaultDetails(category: EntityCategory): EntityDetails {
       return { kind: 'income', monthlyAmount: 0 };
     case 'expense':
       return { kind: 'expense', monthlyAmount: 0, essential: true };
+    case 'donation':
+      return { kind: 'donation', monthlyAmount: 0 };
     case 'savings':
       return { kind: 'savings', balance: 0, isEmergencyFund: false };
     case 'investment':
@@ -261,6 +263,17 @@ export function EntityFormPanel({ entityId, presetCategory, presetDetailOverride
               <span>הוצאה קבועה/הכרחית</span>
             </div>
           </>
+        )}
+
+        {d.kind === 'donation' && (
+          <label className={styles.field}>
+            <span className={styles.label}>סכום חודשי ({currencySymbol})</span>
+            <NumberField
+              className={styles.input}
+              value={toDisplay(d.monthlyAmount)}
+              onChange={(v) => updateDetail({ monthlyAmount: fromDisplay(v) })}
+            />
+          </label>
         )}
 
         {d.kind === 'savings' && (

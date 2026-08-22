@@ -12,6 +12,8 @@ export interface StreamSource {
   x: number;
   z: number;
   kind: StreamKind;
+  /** Raw amount — drives the stream's visual thickness. */
+  weight: number;
 }
 
 export interface WaterFeature {
@@ -43,6 +45,7 @@ export function computeWaterFeature(buildings: CityBuilding[]): WaterFeature {
     x: b.x,
     z: b.z,
     kind: (b.category === 'pension' ? 'pension' : 'liquid') as StreamKind,
+    weight: b.weight,
   }));
 
   const liquidTotal = relevant.filter((b) => b.category !== 'pension').reduce((sum, b) => sum + b.weight, 0);

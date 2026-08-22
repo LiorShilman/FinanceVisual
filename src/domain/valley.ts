@@ -5,6 +5,8 @@ import { computeMagnitudeShare } from './sizing';
 export interface ValleyStreamSource {
   x: number;
   z: number;
+  /** Raw amount — drives the stream's visual thickness. */
+  weight: number;
 }
 
 export interface ValleyFeature {
@@ -25,6 +27,6 @@ export function computeValleyFeature(buildings: CityBuilding[]): ValleyFeature {
   const radius = MIN_RADIUS + computeMagnitudeShare(total) * (MAX_RADIUS - MIN_RADIUS);
   // mirrors the lake's corner-tangent placement, just on the opposite (positive-x) edge.
   const center: [number, number] = [GRID_CORNER_FAR_RIGHT[0] - radius, GRID_CORNER_FAR_RIGHT[1] + radius];
-  const streams = expenseBuildings.map((b) => ({ x: b.x, z: b.z }));
+  const streams = expenseBuildings.map((b) => ({ x: b.x, z: b.z, weight: b.weight }));
   return { center, radius, streams };
 }

@@ -1,6 +1,6 @@
 import type { EntityCategory, FinancialEntity } from './entity';
 
-export const HEALTH_STATUSES = ['good', 'warning', 'risk', 'unknown'] as const;
+export const HEALTH_STATUSES = ['good', 'warning', 'risk', 'unknown', 'donation'] as const;
 export type HealthStatus = (typeof HEALTH_STATUSES)[number];
 
 export const HEALTH_COLORS: Record<HealthStatus, string> = {
@@ -8,6 +8,10 @@ export const HEALTH_COLORS: Record<HealthStatus, string> = {
   warning: '#e2a33d',
   risk: '#d64545',
   unknown: '#8a8f98',
+  // giving isn't "money in" (income's green) or "money at risk" (expense's red) — its own rose/
+  // magenta hue, deliberately unused anywhere else in the city (blue lake, violet pension ring,
+  // red valley, gold flow-links), so it reads as a genuinely separate kind of thing.
+  donation: '#e0508f',
 };
 
 /**
@@ -23,6 +27,8 @@ export function getDisplayHealthOverride(entity: FinancialEntity): HealthStatus 
       return 'good';
     case 'expense':
       return 'risk';
+    case 'donation':
+      return 'donation';
     case 'savings':
     case 'investment':
     case 'pension':
@@ -94,6 +100,7 @@ export function computeHealth(entity: FinancialEntity, ctx: HealthContext): Heal
     }
     case 'income':
     case 'expense':
+    case 'donation':
     case 'realEstate':
     case 'source':
       return 'unknown';

@@ -15,6 +15,10 @@ const ExpenseDetails = z.object({
   monthlyAmount: z.number().nonnegative(),
   essential: z.boolean().default(true),
 });
+// same shape as expense (a recurring monthly outflow) but tracked separately — giving isn't a
+// cost to minimize the way rent or groceries are, so it shouldn't inherit expense's "risk" color
+// or get grouped into the same total when judging spending.
+const DonationDetails = z.object({ kind: z.literal('donation'), monthlyAmount: z.number().nonnegative() });
 const SavingsDetails = z.object({
   kind: z.literal('savings'),
   balance: z.number().nonnegative(),
@@ -65,6 +69,7 @@ const SourceDetails = z.object({ kind: z.literal('source') });
 export const EntityDetailsSchema = z.discriminatedUnion('kind', [
   IncomeDetails,
   ExpenseDetails,
+  DonationDetails,
   SavingsDetails,
   InvestmentDetails,
   PensionDetails,
@@ -82,6 +87,7 @@ export const ENTITY_CATEGORIES: readonly EntityCategory[] = [
   'source',
   'income',
   'expense',
+  'donation',
   'savings',
   'investment',
   'pension',
@@ -96,6 +102,7 @@ export const CATEGORY_LABELS: Record<EntityCategory, string> = {
   source: 'מקור',
   income: 'הכנסה',
   expense: 'הוצאה',
+  donation: 'תרומה',
   savings: 'חיסכון',
   investment: 'השקעה',
   pension: 'פנסיה',
@@ -135,7 +142,7 @@ export function getCategory(entity: FinancialEntity): EntityCategory {
  * shouldn't read the same as a held asset like an investment or a piggy-bank savings pot.
  */
 export function isFlowCategory(entity: FinancialEntity): boolean {
-  return entity.details.kind === 'income' || entity.details.kind === 'expense';
+  return entity.details.kind === 'income' || entity.details.kind === 'expense' || entity.details.kind === 'donation';
 }
 
 /** Only money that's actually held somewhere has a liquidity — everything else doesn't ask.
@@ -186,6 +193,7 @@ export function getSecondaryDetail(entity: FinancialEntity): SecondaryDetail | n
     case 'income':
     case 'realEstate':
     case 'source':
+    case 'donation':
       return null;
   }
 }
@@ -196,6 +204,7 @@ export function getWeight(entity: FinancialEntity): number {
   switch (d.kind) {
     case 'income':
     case 'expense':
+    case 'donation':
       return d.monthlyAmount;
     case 'savings':
     case 'investment':

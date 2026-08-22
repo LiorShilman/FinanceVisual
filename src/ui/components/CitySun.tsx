@@ -77,7 +77,13 @@ export function CitySun({ x, y, z, breakdown }: Props) {
           what let the text drift off the sun's true x-center; sharing one transform keeps them
           locked together. */}
       <Billboard>
-        <mesh frustumCulled={false}>
+        {/* explicit renderOrder on the glow and every text label below — without it, three.js
+            falls back to sorting these (all transparent, all roughly the same distance from
+            camera within one Billboard) by distance each frame, and that sort is unstable enough
+            to occasionally flip their draw order — which, since the glow is additive and the text
+            isn't, made the text visibly flash/wash out as if it were re-rendering. Pinning the
+            order removes the ambiguity entirely. */}
+        <mesh frustumCulled={false} renderOrder={0}>
           <planeGeometry args={[radius * 4.5, radius * 4.5]} />
           <meshBasicMaterial
             map={glowTexture}
@@ -103,6 +109,7 @@ export function CitySun({ x, y, z, breakdown }: Props) {
               outlineBlur={0.02}
               fontWeight="bold"
               frustumCulled={false}
+              renderOrder={1}
             >
               {formatCurrency(total)}
             </Text>
@@ -117,6 +124,7 @@ export function CitySun({ x, y, z, breakdown }: Props) {
               outlineBlur={0.015}
               fontWeight="bold"
               frustumCulled={false}
+              renderOrder={1}
             >
               {`נזיל ללא פנסיה: ${formatCurrency(breakdown.liquidOnly)}`}
             </Text>
@@ -132,6 +140,7 @@ export function CitySun({ x, y, z, breakdown }: Props) {
           outlineColor="#0a0c11"
           fontWeight="bold"
           frustumCulled={false}
+          renderOrder={1}
         >
           הון עצמי — חיסכון + השקעות + פנסיה, פחות חובות
         </Text>

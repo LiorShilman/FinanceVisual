@@ -18,7 +18,7 @@ export interface CityBuilding {
 }
 
 export const DISTRICT_SPACING = 6.5;
-export const DEPTH_SPACING = 7;
+export const DEPTH_SPACING = 10.5;
 const MIN_HEIGHT = 0.6;
 const MAX_HEIGHT = 9;
 const MIN_FOOTPRINT = 0.75;
@@ -33,6 +33,10 @@ const LOT_SIZE = 2.6;
  * locked/long-term recedes into the distance, liquid/current stays up close.
  */
 function depthIndex(entity: FinancialEntity): number {
+  // donations get their own row, one step closer to the camera than every other category's
+  // nearest ("immediate"/"current") row — a dedicated foreground lane, not folded into the
+  // shared liquidity/horizon axis the rest of the city uses.
+  if (entity.details.kind === 'donation') return 3;
   if (entity.liquidity === 'immediate') return 2;
   if (entity.liquidity === 'shortTerm') return 1;
   if (entity.liquidity === 'locked') return 0;
@@ -86,7 +90,11 @@ export function computeCityLayout(entities: FinancialEntity[]): CityBuilding[] {
         name: entity.name,
         category: cat,
         x: baseX + (col - (cols - 1) / 2) * LOT_SIZE,
-        z: baseZ + row * LOT_SIZE,
+        // row 0 sits exactly on the tier's own line (the nearest-camera edge) and extra rows
+        // recede backward, away from the camera — not forward toward the next, nearer tier. That
+        // way a tier with many entities grows into its own depth instead of encroaching on the
+        // gap meant to separate it from its neighbor.
+        z: baseZ - row * LOT_SIZE,
         height: heightByEntity.get(entity.id)!,
         footprint: footprintByEntity.get(entity.id)!,
         color: HEALTH_COLORS[health],

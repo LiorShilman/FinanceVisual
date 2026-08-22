@@ -6,12 +6,16 @@ import { useBoardStore } from '../../app/boardStore';
 import { computeCityLayout, DISTRICT_SPACING, DEPTH_SPACING } from '../../domain/city';
 import { computeGroundBounds, type CircularExtent } from '../../domain/cityGrid';
 import { CATEGORY_LABELS, ENTITY_CATEGORIES, getWeight, type FinancialEntity } from '../../domain/entity';
+import { computeIncomeLinkPaths } from '../../domain/incomeLinks';
 import { computeNetWorthBreakdown } from '../../domain/netWorth';
 import { computeValleyFeature } from '../../domain/valley';
 import { computeWaterFeature } from '../../domain/water';
 import { formatCurrency } from '../format';
 import { CityBuildingMesh } from './CityBuildingMesh';
+import { CityGiftMesh } from './CityGiftMesh';
 import { CityGround } from './CityGround';
+import { CityIncomeFaucet } from './CityIncomeFaucet';
+import { CityIncomeLinks } from './CityIncomeLinks';
 import { CitySun } from './CitySun';
 
 interface Props {
@@ -30,11 +34,23 @@ export function CityView({ entities, onOpen }: Props) {
   const water = useMemo(() => computeWaterFeature(buildings), [buildings]);
   const valley = useMemo(() => computeValleyFeature(buildings), [buildings]);
   const netWorth = useMemo(() => computeNetWorthBreakdown(buildings), [buildings]);
+  const incomeLinkPaths = useMemo(() => computeIncomeLinkPaths(buildings, entities), [buildings, entities]);
+  const incomeFaucetTarget = useMemo(() => {
+    const incomeBuildings = buildings.filter((b) => b.category === 'income');
+    if (incomeBuildings.length === 0) return null;
+    const x = incomeBuildings.reduce((sum, b) => sum + b.x, 0) / incomeBuildings.length;
+    const z = incomeBuildings.reduce((sum, b) => sum + b.z, 0) / incomeBuildings.length;
+    const y = Math.max(...incomeBuildings.map((b) => b.height));
+    return { x, z, y };
+  }, [buildings]);
   // an empty category still owns a column of ground, but labeling a district that holds nothing
   // just reads as clutter — the pyramid already skips empty tiers the same way.
   const populatedCategories = useMemo(() => new Set(buildings.map((b) => b.category)), [buildings]);
+  const hasDonations = populatedCategories.has('donation');
   const width = (ENTITY_CATEGORIES.length - 1) * DISTRICT_SPACING;
-  const depth = 2 * DEPTH_SPACING;
+  // one extra row of depth when donations exist — their dedicated foreground lane past every
+  // other category's nearest row (see domain/city.ts's depthIndex).
+  const depth = (hasDonations ? 3 : 2) * DEPTH_SPACING;
   const groundSize = Math.max(width, depth) + 20;
   const groundCenter: [number, number] = [width / 2, depth / 2];
   // the grid has to cover exactly what the textured ground plane covers — the lake and the valley
@@ -65,6 +81,10 @@ export function CityView({ entities, onOpen }: Props) {
           center made it nearly invisible from the default camera angle; this stays in frame from
           a side view without sitting deep enough in z to dim into the fog. */}
       <CitySun x={valley.center[0] + 4} y={10} z={-4} breakdown={hideAmounts ? null : netWorth} />
+      <CityIncomeLinks paths={incomeLinkPaths} />
+      {incomeFaucetTarget && (
+        <CityIncomeFaucet targetX={incomeFaucetTarget.x} targetZ={incomeFaucetTarget.z} targetY={incomeFaucetTarget.y} />
+      )}
 
       {ENTITY_CATEGORIES.filter((cat) => populatedCategories.has(cat)).map((cat) => (
         <Billboard
@@ -101,10 +121,25 @@ export function CityView({ entities, onOpen }: Props) {
           </Text>
         </Billboard>
       ))}
-
       {buildings.map((b) => {
         const entity = entities.find((e) => e.id === b.id)!;
         const weight = getWeight(entity);
+        const amount = weight === 0 || hideAmounts ? '' : formatCurrency(weight, entity.currency, usdRate);
+        if (b.category === 'donation') {
+          return (
+            <CityGiftMesh
+              key={b.id}
+              x={b.x}
+              z={b.z}
+              height={b.height}
+              footprint={b.footprint}
+              color={b.color}
+              name={b.name}
+              amount={amount}
+              onOpen={() => onOpen(b.id)}
+            />
+          );
+        }
         return (
           <CityBuildingMesh
             key={b.id}
@@ -114,7 +149,7 @@ export function CityView({ entities, onOpen }: Props) {
             footprint={b.footprint}
             color={b.color}
             name={b.name}
-            amount={weight === 0 || hideAmounts ? '' : formatCurrency(weight, entity.currency, usdRate)}
+            amount={amount}
             onOpen={() => onOpen(b.id)}
           />
         );

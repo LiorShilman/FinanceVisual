@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import * as THREE from 'three';
-import { Line } from '@react-three/drei';
 import { computeGroundBounds, type CircularExtent } from '../../domain/cityGrid';
+import { computeMagnitudeShare } from '../../domain/sizing';
 import type { ValleyFeature } from '../../domain/valley';
 import type { WaterFeature } from '../../domain/water';
 
@@ -125,7 +125,7 @@ function buildBlobGeometry(radius: number, points = 32): THREE.BufferGeometry {
 // A gentle S-curve, not a single kinked line: the perpendicular offset is zero at both ends
 // (so it still meets the building and the shoreline exactly) and swells in the middle via a
 // sine envelope, with alternating per-segment jitter so the river actually winds back and forth.
-function buildMeanderPoints(sx: number, sz: number, ex: number, ez: number): THREE.Vector3[] {
+function buildMeanderCurve(sx: number, sz: number, ex: number, ez: number): THREE.CatmullRomCurve3 {
   const dx = ex - sx;
   const dz = ez - sz;
   const len = Math.hypot(dx, dz) || 1;
@@ -139,18 +139,56 @@ function buildMeanderPoints(sx: number, sz: number, ex: number, ez: number): THR
     const wobble = pseudoJitter(sx + i * 11.7, sz + i * 5.3) * envelope * Math.min(len * 0.16, 3.5);
     controlPoints.push(new THREE.Vector3(sx + dx * t + nx * wobble, 0.02, sz + dz * t + nz * wobble));
   }
-  return new THREE.CatmullRomCurve3(controlPoints).getPoints(40);
+  return new THREE.CatmullRomCurve3(controlPoints);
 }
 
 /** Straight-line-to-source direction decides where on the target circle's boundary a stream
  * arrives, so multiple streams converging on one pool still fan out instead of overlapping. */
-function buildInflowPoints(targetX: number, targetZ: number, targetRadius: number, sx: number, sz: number): THREE.Vector3[] {
+function buildInflowCurve(targetX: number, targetZ: number, targetRadius: number, sx: number, sz: number): THREE.CatmullRomCurve3 {
   const dx = targetX - sx;
   const dz = targetZ - sz;
   const dist = Math.hypot(dx, dz) || 1;
   const edgeX = targetX - (dx / dist) * targetRadius * 0.92;
   const edgeZ = targetZ - (dz / dist) * targetRadius * 0.92;
-  return buildMeanderPoints(sx, sz, edgeX, edgeZ);
+  return buildMeanderCurve(sx, sz, edgeX, edgeZ);
+}
+
+// Real geometry, not a flat screen-space line — a tube has actual width in 3D, so it reads as a
+// river with volume/depth instead of a wire, and (unlike Line) its radius can vary per-stream to
+// reflect the amount. frustumCulled is disabled explicitly: this project hit a render-loop crash
+// once from a custom geometry whose bounding sphere never got excluded from the culling check —
+// cheap insurance against the same class of bug recurring.
+const MIN_STREAM_RADIUS = 0.09;
+const MAX_STREAM_RADIUS = 0.42;
+
+// Direct magnitude, not rank — rank-based sizing (used for buildings/pyramid) deliberately
+// guarantees every item looks different even when two values are nearly equal, which is exactly
+// wrong for a pipe: ₪3,900 and ₪3,700 are basically the same amount and should look like basically
+// the same pipe, not "thread" vs "river" just because they happen to be neighbors in a short list.
+function radiusForWeight(weight: number): number {
+  return MIN_STREAM_RADIUS + computeMagnitudeShare(weight) * (MAX_STREAM_RADIUS - MIN_STREAM_RADIUS);
+}
+
+function buildStreamTubeGeometry(curve: THREE.CatmullRomCurve3, radius: number): THREE.TubeGeometry {
+  return new THREE.TubeGeometry(curve, 48, radius, 8, false);
+}
+
+// Sunk below grade and flattened (via the mesh's own scale-y/position-y, not the geometry
+// itself) so streams read as water sitting inside a dug channel rather than a pipe laid on top of
+// the lawn — no separate dark "bank" layer (that read as solid black, swallowing the water color
+// entirely), just the same bright water tube, lower and flatter.
+//
+// The exposed sliver's height is a fixed *fraction* of each stream's own radius, not a flat
+// offset — a flat offset made every stream (thin or thick) show the exact same absolute sliver,
+// which erased the width-reflects-amount cue the streams exist to show. Scaling the sink with
+// radius keeps the visible cap's width proportional to the full tube width (near the top of an
+// ellipse a small height reveals most of its width), so a thick stream still visibly reads as
+// thicker than a thin one, while most of every tube's bulk still sits below the grass line.
+const WATER_SQUASH = 0.4;
+const GROUND_Y = -0.02;
+const EXPOSED_RADIUS_FRACTION = 0.16;
+function sinkYForRadius(radius: number): number {
+  return GROUND_Y + radius * (EXPOSED_RADIUS_FRACTION - WATER_SQUASH);
 }
 
 export function CityGround({ groundCenter, groundSize, water, valley }: Props) {
@@ -211,16 +249,24 @@ export function CityGround({ groundCenter, groundSize, water, valley }: Props) {
   const valleyGeometry = useMemo(() => buildBlobGeometry(valley.radius), [valley.radius]);
 
   // liquid money pools in the inner circle; pension money pools in the ring around it.
-  const waterStreamPaths = useMemo(
+  const waterStreamGeometries = useMemo(
     () =>
       water.streams.map((s) => {
         const targetRadius = s.kind === 'liquid' ? water.lakeRadius : water.outerRingRadius;
-        return { kind: s.kind, points: buildInflowPoints(lakeX, lakeZ, targetRadius, s.x, s.z) };
+        const curve = buildInflowCurve(lakeX, lakeZ, targetRadius, s.x, s.z);
+        const radius = radiusForWeight(s.weight);
+        return { kind: s.kind, radius, geometry: buildStreamTubeGeometry(curve, radius) };
       }),
     [water.streams, lakeX, lakeZ, water.lakeRadius, water.outerRingRadius],
   );
-  const valleyStreamPaths = useMemo(
-    () => valley.streams.map((s) => buildInflowPoints(valleyX, valleyZ, valley.radius, s.x, s.z)),
+
+  const valleyStreamGeometries = useMemo(
+    () =>
+      valley.streams.map((s) => {
+        const curve = buildInflowCurve(valleyX, valleyZ, valley.radius, s.x, s.z);
+        const radius = radiusForWeight(s.weight);
+        return { radius, geometry: buildStreamTubeGeometry(curve, radius) };
+      }),
     [valley.streams, valleyX, valleyZ, valley.radius],
   );
 
@@ -240,24 +286,38 @@ export function CityGround({ groundCenter, groundSize, water, valley }: Props) {
         <meshStandardMaterial map={ringTexture} emissive="#7457d6" emissiveIntensity={0.45} roughness={0.15} metalness={0.12} side={THREE.DoubleSide} />
       </mesh>
 
-      {waterStreamPaths.map(({ kind, points }, i) => (
-        <Line
+      {waterStreamGeometries.map(({ kind, radius, geometry }, i) => (
+        <mesh
           key={i}
-          points={points}
-          color={kind === 'pension' ? '#a397e8' : '#5aa8e0'}
-          lineWidth={2.5}
-          transparent
-          opacity={0.75}
+          geometry={geometry}
+          position={[0, sinkYForRadius(radius), 0]}
+          scale={[1, WATER_SQUASH, 1]}
           frustumCulled={false}
-        />
+        >
+          <meshStandardMaterial
+            color={kind === 'pension' ? '#a397e8' : '#5aa8e0'}
+            emissive={kind === 'pension' ? '#a397e8' : '#5aa8e0'}
+            emissiveIntensity={0.5}
+            roughness={0.25}
+            metalness={0.1}
+          />
+        </mesh>
       ))}
 
       <mesh geometry={lakeGeometry} rotation-x={-Math.PI / 2} position={[lakeX, 0.018, lakeZ]} frustumCulled={false}>
         <meshStandardMaterial map={lakeTexture} emissive="#1467c9" emissiveIntensity={0.4} roughness={0.12} metalness={0.15} side={THREE.DoubleSide} />
       </mesh>
 
-      {valleyStreamPaths.map((points, i) => (
-        <Line key={i} points={points} color="#e05a5a" lineWidth={2.5} transparent opacity={0.75} frustumCulled={false} />
+      {valleyStreamGeometries.map(({ radius, geometry }, i) => (
+        <mesh
+          key={i}
+          geometry={geometry}
+          position={[0, sinkYForRadius(radius), 0]}
+          scale={[1, WATER_SQUASH, 1]}
+          frustumCulled={false}
+        >
+          <meshStandardMaterial color="#e05a5a" emissive="#e05a5a" emissiveIntensity={0.5} roughness={0.25} metalness={0.1} />
+        </mesh>
       ))}
 
       <mesh geometry={valleyGeometry} rotation-x={-Math.PI / 2} position={[valleyX, 0.014, valleyZ]} frustumCulled={false}>

@@ -28,6 +28,7 @@ export function getHorizonBucket(entity: FinancialEntity): HorizonBucket {
   switch (entity.details.kind) {
     case 'income':
     case 'expense':
+    case 'donation':
     case 'source':
       return 'current';
     case 'savings':
