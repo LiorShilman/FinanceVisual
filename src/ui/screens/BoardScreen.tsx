@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import { Background, Controls, MiniMap, ReactFlow, useNodesState, useReactFlow, type Connection, type Edge } from '@xyflow/react';
 import { useBoardStore, useBoardLayout } from '../../app/boardStore';
+import { exportBoardToFile, importBoardFromFile } from '../../app/boardTransfer';
+import { signOutUser } from '../../app/useAuth';
 import { getWeight, type EntityCategory, type EntityDetails, type FinancialEntity } from '../../domain/entity';
 import { computeHealth, buildHealthContext, getMissingEssentials } from '../../domain/health';
 import { computeNodeSize, computeTotalWeight } from '../../domain/sizing';
@@ -76,6 +78,16 @@ function BoardCanvas() {
   );
   const [showFamilyPanel, setShowFamilyPanel] = useState(false);
   const [showInvestmentsTable, setShowInvestmentsTable] = useState(false);
+  const importInputRef = useRef<HTMLInputElement>(null);
+
+  const handleImportFile = useCallback(async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // allow re-selecting the same file next time
+    if (!file) return;
+    if (!window.confirm('ייבוא יחליף את כל הנתונים הנוכחיים בלוח. להמשיך?')) return;
+    const result = await importBoardFromFile(file);
+    if (!result.success) window.alert(result.error);
+  }, []);
 
   const openEditor = useCallback((id: string) => setEditingId(id), []);
   const openCreate = useCallback((category: EntityCategory, presetKey?: string) => {
@@ -272,12 +284,27 @@ function BoardCanvas() {
           <button type="button" className={styles.btn} onClick={() => setShowFamilyPanel(true)}>
             משפחה ({familyMembers.length})
           </button>
+          <button type="button" className={styles.btn} onClick={exportBoardToFile} title="הורדת כל נתוני הלוח כקובץ JSON">
+            ⬇️ ייצוא נתונים
+          </button>
+          <button
+            type="button"
+            className={styles.btn}
+            onClick={() => importInputRef.current?.click()}
+            title="טעינת קובץ JSON שיוצא מכאן — מחליף את כל נתוני הלוח הנוכחיים"
+          >
+            ⬆️ ייבוא נתונים
+          </button>
+          <input ref={importInputRef} type="file" accept="application/json" hidden onChange={handleImportFile} />
           <button
             type="button"
             className={`${styles.btn} ${styles.btnPrimary}`}
             onClick={() => setCreating({ category: 'savings' })}
           >
             + ישות
+          </button>
+          <button type="button" className={styles.btn} onClick={() => void signOutUser()} title="התנתקות מהחשבון">
+            התנתקות
           </button>
         </div>
       </header>
