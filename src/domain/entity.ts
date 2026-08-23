@@ -23,8 +23,10 @@ const ExpenseDetails = z.object({
   monthlyAmount: z.number().nonnegative(),
   essential: z.boolean().default(true),
   // drives which silhouette accent the city building gets — stays the same shared expense-red
-  // health color regardless, only the shape varies (see CityExpenseMesh).
-  expenseType: z.enum(EXPENSE_TYPES).default('other'),
+  // health color regardless, only the shape varies (see CityExpenseMesh). `.catch` (not just
+  // `.default`) so an entity saved under a since-removed enum value still loads as 'other'
+  // instead of failing validation outright.
+  expenseType: z.enum(EXPENSE_TYPES).catch('other'),
 });
 // same shape as expense (a recurring monthly outflow) but tracked separately — giving isn't a
 // cost to minimize the way rent or groceries are, so it shouldn't inherit expense's "risk" color
@@ -43,21 +45,25 @@ const SavingsDetails = z.object({
   balance: z.number().nonnegative(),
   isEmergencyFund: z.boolean().default(false),
 });
-export const ASSET_TYPES = ['traditional', 'crypto', 'forex'] as const;
+// A broad "alternative" bucket, not an enumerated list of specific instruments — crypto and
+// forex are examples, not the only members, and hard-coding just those two would leave every
+// other alternative asset (commodities, private equity, collectibles...) with nowhere to go.
+export const ASSET_TYPES = ['traditional', 'alternative'] as const;
 export type AssetType = (typeof ASSET_TYPES)[number];
 export const ASSET_TYPE_LABELS: Record<AssetType, string> = {
-  traditional: 'מסורתי (מניות/קרנות)',
-  crypto: 'קריפטו',
-  forex: 'פורקס',
+  traditional: 'רגיל (מניות/קרנות)',
+  alternative: 'אלטרנטיבי (קריפטו, פורקס, ועוד)',
 };
 const InvestmentDetails = z.object({
   kind: z.literal('investment'),
   balance: z.number().nonnegative(),
   monthlyContribution: z.number().nonnegative().default(0),
-  // a sub-type, not a whole new category — crypto/forex still behave exactly like any other
-  // investment (weight, liquidity, the investments table), they just get a visibly different
-  // building in the city so their volatility reads at a glance.
-  assetType: z.enum(ASSET_TYPES).default('traditional'),
+  // a sub-type, not a whole new category — an alternative investment still behaves exactly like
+  // any other investment (weight, liquidity, the investments table), it just gets a visibly
+  // different building in the city so its volatility reads at a glance. `.catch` (not just
+  // `.default`) so an entity saved under a since-removed enum value (e.g. the old 'crypto'/'forex'
+  // split) still loads as 'traditional' instead of failing validation outright.
+  assetType: z.enum(ASSET_TYPES).catch('traditional'),
 });
 const PensionDetails = z.object({
   kind: z.literal('pension'),

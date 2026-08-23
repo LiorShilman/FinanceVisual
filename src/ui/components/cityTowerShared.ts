@@ -61,6 +61,43 @@ export function getFacadeTexture(): THREE.CanvasTexture {
   return texture;
 }
 
+// A flat, single-color mesh reads as a placeholder floating next to the textured, window-lit
+// tower body — this gives roof-type accessories the same "has surface detail" quality as the
+// facade, with a shingle-row pattern instead of a window grid.
+let sharedRoofTexture: THREE.CanvasTexture | null = null;
+export function getRoofTexture(): THREE.CanvasTexture {
+  if (sharedRoofTexture) return sharedRoofTexture;
+  const size = 128;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d')!;
+  ctx.fillStyle = '#b5652f';
+  ctx.fillRect(0, 0, size, size);
+
+  const rows = 8;
+  const rowH = size / rows;
+  const shinglesPerRow = 6;
+  const shingleW = size / shinglesPerRow;
+  for (let r = 0; r < rows; r++) {
+    const rowOffset = r % 2 === 0 ? 0 : shingleW / 2;
+    ctx.fillStyle = r % 2 === 0 ? '#a35729' : '#c17038';
+    for (let c = -1; c < shinglesPerRow + 1; c++) {
+      ctx.beginPath();
+      ctx.roundRect(c * shingleW + rowOffset, r * rowH, shingleW - 3, rowH - 3, 3);
+      ctx.fill();
+    }
+  }
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
+  texture.repeat.set(2, 2);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  sharedRoofTexture = texture;
+  return texture;
+}
+
 export interface Tier {
   h: number;
   fp: number;

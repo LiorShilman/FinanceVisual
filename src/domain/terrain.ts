@@ -3,12 +3,12 @@
 // external noise library. Same input always gives the same output, so the ground mesh and every
 // object placed on it agree on where "the ground" actually is at a given x/z.
 //
-// Amplitude is deliberately gentle: buildings range roughly 0.6–9 units tall, and only a subset
-// of ground-level objects (buildings, the lake/valley, streams, debt chains, income links) sample
-// this and adjust their own Y — floating decorative elements (labels, the sun) don't. A small
-// amplitude keeps anything that doesn't sample it from looking obviously wrong, while still
-// giving the ground real, visible relief.
-const AMPLITUDE = 0.55;
+// Disabled (0) per feedback: the relief was too subtle to read as intentional, and streams — each
+// only sampling terrain height once at their own source, not along their full path to the lake/
+// valley — went invisible wherever the ground dipped or rose between source and target. Left at 0
+// rather than removed outright so every call site that already adjusts for "local ground height"
+// keeps working (as a no-op) if this gets revisited later with per-point stream sampling instead.
+const AMPLITUDE = 0;
 
 export function getTerrainHeight(x: number, z: number): number {
   const h =

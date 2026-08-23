@@ -5,14 +5,16 @@ import { LAYOUT_MODES } from '../domain/layout';
 import { useBoardStore } from './boardStore';
 
 const PointSchema = z.object({ x: z.number(), y: z.number() });
+const CityPositionSchema = z.object({ x: z.number(), z: z.number() });
 
 // The same fields zustand's persist middleware used to write to localStorage — the store's
 // action functions aren't part of the payload, only its data.
-const PersistedBoardStateSchema = z.object({
+export const PersistedBoardStateSchema = z.object({
   familyMembers: FamilyMemberSchema.array(),
   entities: FinancialEntitySchema.array(),
   layoutMode: z.enum(LAYOUT_MODES),
   freePositions: z.record(z.string(), PointSchema),
+  cityPositions: z.record(z.string(), CityPositionSchema).default({}),
   entityOrder: z.record(z.string(), z.number()),
   hideAmounts: z.boolean(),
   usdRate: z.number(),
@@ -30,6 +32,7 @@ export const EMPTY_BOARD_STATE: PersistedBoardState = {
   entities: [],
   layoutMode: 'free',
   freePositions: {},
+  cityPositions: {},
   entityOrder: {},
   hideAmounts: false,
   usdRate: 3.7,
@@ -45,6 +48,7 @@ export function getPersistedBoardState(): PersistedBoardState {
     entities: state.entities,
     layoutMode: state.layoutMode,
     freePositions: state.freePositions,
+    cityPositions: state.cityPositions,
     entityOrder: state.entityOrder,
     hideAmounts: state.hideAmounts,
     usdRate: state.usdRate,

@@ -1,9 +1,10 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import * as THREE from 'three';
 import { Canvas } from '@react-three/fiber';
 import { Billboard, OrbitControls, Text } from '@react-three/drei';
 import { useBoardStore } from '../../app/boardStore';
 import { computeCityLayout, DISTRICT_SPACING, DEPTH_SPACING } from '../../domain/city';
+import { computeGroundBounds, type CircularExtent } from '../../domain/cityGrid';
 import { computeDebtLinkPaths } from '../../domain/debtLinks';
 import { CATEGORY_LABELS, ENTITY_CATEGORIES, getWeight, type FinancialEntity } from '../../domain/entity';
 import { computeIncomeLinkPaths } from '../../domain/incomeLinks';
@@ -12,6 +13,7 @@ import { getTerrainHeight } from '../../domain/terrain';
 import { computeValleyFeature } from '../../domain/valley';
 import { computeWaterFeature } from '../../domain/water';
 import { formatCurrency } from '../format';
+import { CityBuildingItem } from './CityBuildingItem';
 import { CityBuildingMesh } from './CityBuildingMesh';
 import { CityCrystalMesh } from './CityCrystalMesh';
 import { CityDebtChains } from './CityDebtChains';
@@ -37,7 +39,9 @@ const DEPTH_LABELS = ['נעול / טווח ארוך', 'טווח קצר', 'נזי
 export function CityView({ entities, onOpen }: Props) {
   const hideAmounts = useBoardStore((s) => s.hideAmounts);
   const usdRate = useBoardStore((s) => s.usdRate);
-  const buildings = useMemo(() => computeCityLayout(entities), [entities]);
+  const cityPositions = useBoardStore((s) => s.cityPositions);
+  const [controlsEnabled, setControlsEnabled] = useState(true);
+  const buildings = useMemo(() => computeCityLayout(entities, cityPositions), [entities, cityPositions]);
   const water = useMemo(() => computeWaterFeature(buildings), [buildings]);
   const valley = useMemo(() => computeValleyFeature(buildings, entities), [buildings, entities]);
   const netWorth = useMemo(() => computeNetWorthBreakdown(entities), [entities]);
@@ -68,6 +72,14 @@ export function CityView({ entities, onOpen }: Props) {
   const depth = (hasDonations ? 3 : 2) * DEPTH_SPACING;
   const groundSize = Math.max(width, depth) + 20;
   const groundCenter: [number, number] = [width / 2, depth / 2];
+  // the grid has to cover exactly what the textured ground plane covers — the lake and the valley
+  // both sit right at (and past) the district square's own corners, so a grid sized to the
+  // district alone would stop short of them.
+  const bounds = computeGroundBounds(groundCenter, groundSize, [
+    { center: water.lakeCenter, radius: water.outerRingRadius } satisfies CircularExtent,
+    { center: valley.center, radius: valley.radius } satisfies CircularExtent,
+  ]);
+  const gridDivisions = Math.round(Math.max(bounds.width, bounds.depth) / 1.6);
 
   return (
     <Canvas camera={{ position: [width * 0.25, 36, depth + 46], fov: 32 }} dir="rtl">
@@ -78,9 +90,12 @@ export function CityView({ entities, onOpen }: Props) {
       <directionalLight position={[-10, 14, -10]} intensity={0.6} color="#6c8dff" />
 
       <CityGround groundCenter={groundCenter} groundSize={groundSize} water={water} valley={valley} />
-      {/* the flat gridHelper that used to sit here was removed with the terrain change — a flat
-          grid floating through real hills/valleys looked like a bug, and the terrain's own relief
-          now gives the same scale/depth cues the grid used to provide. */}
+      <gridHelper
+        args={[1, gridDivisions, '#4a5a7a', '#2e3648']}
+        scale={[bounds.width, 1, bounds.depth]}
+        position={[bounds.center[0], 0, bounds.center[1]]}
+        frustumCulled={false}
+      />
       {/* lower and off to one side (near the valley, not dead-center) — high above the district
           center made it nearly invisible from the default camera angle; this stays in frame from
           a side view without sitting deep enough in z to dim into the fog. */}
@@ -130,39 +145,41 @@ export function CityView({ entities, onOpen }: Props) {
         const entity = entities.find((e) => e.id === b.id)!;
         const weight = getWeight(entity);
         const amount = weight === 0 || hideAmounts ? '' : formatCurrency(weight, entity.currency, usdRate);
-        const commonProps = { x: b.x, z: b.z, height: b.height, footprint: b.footprint, color: b.color, name: b.name, amount };
         const onOpenThis = () => onOpen(b.id);
 
-        let mesh;
-        if (b.category === 'donation') {
-          mesh = <CityGiftMesh {...commonProps} onOpen={onOpenThis} />;
-        } else if (entity.details.kind === 'investment' && entity.details.assetType !== 'traditional') {
-          mesh = <CityCrystalMesh {...commonProps} onOpen={onOpenThis} />;
-        } else if (entity.details.kind === 'expense') {
-          mesh = <CityExpenseMesh {...commonProps} expenseType={entity.details.expenseType} onOpen={onOpenThis} />;
-        } else if (entity.details.kind === 'insurance') {
-          mesh = <CityShieldMesh {...commonProps} onOpen={onOpenThis} />;
-        } else if (entity.details.kind === 'realEstate') {
-          mesh = <CityHouseMesh {...commonProps} onOpen={onOpenThis} />;
-        } else if (entity.details.kind === 'goal') {
-          const { targetAmount, currentAmount } = entity.details;
-          const progress = targetAmount > 0 ? Math.max(0, Math.min(1, currentAmount / targetAmount)) : 0;
-          mesh = <CityGoalMesh {...commonProps} progress={progress} onOpen={onOpenThis} />;
-        } else {
-          mesh = <CityBuildingMesh {...commonProps} onOpen={onOpenThis} />;
-        }
+        // x/z come from the render-time drag position (which may differ from b.x/b.z mid-drag),
+        // not baked in ahead of time — see CityBuildingItem.
+        const renderMesh = (x: number, z: number) => {
+          const commonProps = { x, z, height: b.height, footprint: b.footprint, color: b.color, name: b.name, amount };
+          if (b.category === 'donation') {
+            return <CityGiftMesh {...commonProps} onOpen={onOpenThis} />;
+          }
+          if (entity.details.kind === 'investment' && entity.details.assetType === 'alternative') {
+            return <CityCrystalMesh {...commonProps} onOpen={onOpenThis} />;
+          }
+          if (entity.details.kind === 'expense') {
+            return <CityExpenseMesh {...commonProps} expenseType={entity.details.expenseType} onOpen={onOpenThis} />;
+          }
+          if (entity.details.kind === 'insurance') {
+            return <CityShieldMesh {...commonProps} onOpen={onOpenThis} />;
+          }
+          if (entity.details.kind === 'realEstate') {
+            return <CityHouseMesh {...commonProps} onOpen={onOpenThis} />;
+          }
+          if (entity.details.kind === 'goal') {
+            const { targetAmount, currentAmount } = entity.details;
+            const progress = targetAmount > 0 ? Math.max(0, Math.min(1, currentAmount / targetAmount)) : 0;
+            return <CityGoalMesh {...commonProps} progress={progress} onOpen={onOpenThis} />;
+          }
+          return <CityBuildingMesh {...commonProps} onOpen={onOpenThis} />;
+        };
 
-        // every building sits at the real terrain height for its own x/z instead of a flat 0, so
-        // it rests on the hill/valley under it instead of floating or sinking into it.
-        return (
-          <group key={b.id} position={[0, getTerrainHeight(b.x, b.z), 0]}>
-            {mesh}
-          </group>
-        );
+        return <CityBuildingItem key={b.id} building={b} renderMesh={renderMesh} onOpen={onOpenThis} setControlsEnabled={setControlsEnabled} />;
       })}
 
       <OrbitControls
         makeDefault
+        enabled={controlsEnabled}
         target={[width / 2, 1, depth / 2]}
         enablePan
         enableZoom

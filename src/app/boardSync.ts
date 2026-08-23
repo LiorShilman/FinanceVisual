@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from './firebase';
 import { useBoardStore } from './boardStore';
-import { EMPTY_BOARD_STATE, getPersistedBoardState, type PersistedBoardState } from './boardTransfer';
+import { EMPTY_BOARD_STATE, getPersistedBoardState, PersistedBoardStateSchema, type PersistedBoardState } from './boardTransfer';
 
 // The key zustand's `persist` middleware used to write to before it was replaced by this Firestore
 // sync — still worth reading once for a first-login migration, since real board data already
@@ -14,9 +14,22 @@ function boardDocRef(uid: string) {
   return doc(db, 'users', uid, 'board', 'main');
 }
 
+// A raw type cast here (instead of actually validating) would mean every zod `.default`/`.catch`
+// added to the schema over time — e.g. `assetType`/`expenseType` picking up a fallback when a
+// field is missing or holds a since-removed enum value — never actually runs for data that was
+// already saved before that field/fallback existed. Falling back to the raw data on a parse
+// failure (rather than surfacing an error) keeps a genuinely malformed document from locking the
+// user out of their own board.
+function parseBoardState(raw: unknown): PersistedBoardState {
+  const result = PersistedBoardStateSchema.safeParse(raw);
+  if (result.success) return result.data;
+  console.error('Board data failed schema validation, loading as-is:', result.error);
+  return raw as PersistedBoardState;
+}
+
 async function loadBoardState(uid: string): Promise<PersistedBoardState | null> {
   const snap = await getDoc(boardDocRef(uid));
-  return snap.exists() ? (snap.data() as PersistedBoardState) : null;
+  return snap.exists() ? parseBoardState(snap.data()) : null;
 }
 
 // Firestore's setDoc rejects any field explicitly holding `undefined` (not just nested — anywhere

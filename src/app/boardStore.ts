@@ -12,6 +12,7 @@ import {
   getOrderedBucketIds,
 } from '../domain/layout';
 import { SEED_ENTITIES, SEED_FAMILY_MEMBERS } from '../domain/seed';
+import type { CityPosition } from '../domain/city';
 
 function makeId(prefix: string): string {
   return `${prefix}-${crypto.randomUUID()}`;
@@ -23,6 +24,10 @@ interface BoardState {
   layoutMode: LayoutMode;
   /** Manually-dragged positions in 'free' mode only — the other modes are always recomputed. */
   freePositions: Record<string, Point>;
+  /** Manually-dragged positions within the 3D city — sparse, only entities the user has actually
+   * repositioned appear here. Always re-clamped to the entity's own category/depth cell at read
+   * time (see computeCityLayout), so it stays valid even after the entity's category changes. */
+  cityPositions: Record<string, CityPosition>;
   /** Manual within-category ordering (all bucketed modes share it) — sparse, only touched entities appear. */
   entityOrder: Record<string, number>;
   /** Mask displayed currency figures — for screen-sharing the board's shape without the exact numbers. */
@@ -49,6 +54,7 @@ interface BoardState {
   removeEntity: (id: string) => void;
 
   setFreePosition: (id: string, pos: Point) => void;
+  setCityPosition: (id: string, pos: CityPosition) => void;
   /** Move `id` to `targetIndex` within `orderedBucketIds` and persist fresh sequential order for that bucket. */
   reorderWithinBucket: (orderedBucketIds: string[], id: string, targetIndex: number) => void;
 }
@@ -58,6 +64,7 @@ export const useBoardStore = create<BoardState>()((set) => ({
   entities: SEED_ENTITIES,
   layoutMode: 'free',
   freePositions: {},
+  cityPositions: {},
   entityOrder: {},
   hideAmounts: false,
   usdRate: 3.7,
@@ -97,10 +104,13 @@ export const useBoardStore = create<BoardState>()((set) => ({
         .filter((e) => e.id !== id)
         .map((e) => ({ ...e, linkedEntityIds: e.linkedEntityIds.filter((l) => l !== id) })),
       freePositions: Object.fromEntries(Object.entries(state.freePositions).filter(([key]) => key !== id)),
+      cityPositions: Object.fromEntries(Object.entries(state.cityPositions).filter(([key]) => key !== id)),
     })),
 
   setFreePosition: (id, pos) =>
     set((state) => ({ freePositions: { ...state.freePositions, [id]: pos } })),
+  setCityPosition: (id, pos) =>
+    set((state) => ({ cityPositions: { ...state.cityPositions, [id]: pos } })),
 
   reorderWithinBucket: (orderedBucketIds, id, targetIndex) =>
     set((state) => {
