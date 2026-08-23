@@ -18,6 +18,7 @@ import { FamilyPanel } from '../components/FamilyPanel';
 import { CityView } from '../components/CityView';
 import { CurrencyControl } from '../components/CurrencyControl';
 import { InvestmentsTablePanel } from '../components/InvestmentsTablePanel';
+import { RiseupTransactionsPanel } from '../components/RiseupTransactionsPanel';
 import type { EntityFlowNode, GhostFlowNode } from '../nodeTypes';
 import type { LabelFlowNode } from '../components/LabelNode';
 import type { TierBandFlowNode } from '../components/TierBandNode';
@@ -76,6 +77,7 @@ function BoardCanvas() {
   );
   const [showFamilyPanel, setShowFamilyPanel] = useState(false);
   const [showInvestmentsTable, setShowInvestmentsTable] = useState(false);
+  const [showRiseupTransactions, setShowRiseupTransactions] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const importInputRef = useRef<HTMLInputElement>(null);
 
@@ -380,7 +382,17 @@ function BoardCanvas() {
         />
       )}
 
-      {showFamilyPanel && <FamilyPanel onClose={() => setShowFamilyPanel(false)} />}
+      {showFamilyPanel && (
+        <FamilyPanel
+          onClose={() => setShowFamilyPanel(false)}
+          onOpenRiseupTransactions={() => {
+            setShowFamilyPanel(false);
+            setShowRiseupTransactions(true);
+          }}
+        />
+      )}
+
+      {showRiseupTransactions && <RiseupTransactionsPanel onClose={() => setShowRiseupTransactions(false)} />}
 
       {showInvestmentsTable && (
         <InvestmentsTablePanel

@@ -4,7 +4,7 @@
 // RiseUp proxy server; the token is never stored or logged here, and the server itself is
 // stateless per-request (see RiseUp/server/src/index.js's extractPat).
 const RISEUP_SERVER_URL = import.meta.env.VITE_RISEUP_SERVER_URL || 'https://shilmanlior2608.ddns.net:36500';
-const BUDGET_TIMEOUT_MS = 8000;
+const REQUEST_TIMEOUT_MS = 8000;
 
 export type RiseupConnectionStatus = 'unset' | 'checking' | 'connected' | 'invalidPat' | 'unreachable';
 
@@ -33,25 +33,58 @@ function computeActualsTotals(envelopes: RiseupBudgetEnvelope[]): RiseupMonthSta
   return { income, expense, net: income - expense };
 }
 
-export interface RiseupMonthResult {
+export interface RiseupBudgetResult {
   status: RiseupConnectionStatus;
+  /** The real YYYY-MM RiseUp resolved `month` to — needed as-is for the /api/transactions call,
+   * since that endpoint (unlike /api/budget) doesn't accept 'current'/'previous' shorthands. */
+  budgetDate: string | null;
   data: RiseupMonthStatus | null;
 }
 
+function authHeaders(pat: string): HeadersInit {
+  return { Authorization: `Bearer ${pat.trim()}` };
+}
+
 /** One call does double duty: it's both "is this account's PAT valid" and "what did it return" —
- * a 401 means an invalid/expired PAT, any other failure means the proxy itself is unreachable. */
-export async function fetchCurrentMonthStatus(pat: string): Promise<RiseupMonthResult> {
-  if (!pat.trim()) return { status: 'unset', data: null };
+ * a 401 means an invalid/expired PAT, any other failure means the proxy itself is unreachable.
+ * `month` accepts 'current' (default), 'previous', or an explicit 'YYYY-MM'. */
+export async function fetchBudgetStatus(pat: string, month = 'current'): Promise<RiseupBudgetResult> {
+  if (!pat.trim()) return { status: 'unset', budgetDate: null, data: null };
   try {
-    const res = await fetch(`${RISEUP_SERVER_URL}/api/budget/current`, {
-      headers: { Authorization: `Bearer ${pat.trim()}` },
-      signal: AbortSignal.timeout(BUDGET_TIMEOUT_MS),
+    const res = await fetch(`${RISEUP_SERVER_URL}/api/budget/${encodeURIComponent(month)}`, {
+      headers: authHeaders(pat),
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
-    if (res.status === 401) return { status: 'invalidPat', data: null };
-    if (!res.ok) return { status: 'unreachable', data: null };
-    const data = (await res.json()) as { envelopes?: RiseupBudgetEnvelope[] };
-    return { status: 'connected', data: computeActualsTotals(data.envelopes ?? []) };
+    if (res.status === 401) return { status: 'invalidPat', budgetDate: null, data: null };
+    if (!res.ok) return { status: 'unreachable', budgetDate: null, data: null };
+    const json = (await res.json()) as { budgetDate?: string; envelopes?: RiseupBudgetEnvelope[] };
+    return { status: 'connected', budgetDate: json.budgetDate ?? null, data: computeActualsTotals(json.envelopes ?? []) };
   } catch {
-    return { status: 'unreachable', data: null };
+    return { status: 'unreachable', budgetDate: null, data: null };
+  }
+}
+
+export interface RiseupTransaction {
+  transactionId: string;
+  transactionDate: string;
+  businessName: string;
+  amount: number;
+  isIncome: boolean;
+  categoryLabel?: string;
+}
+
+/** `cashflowMonth` must be a resolved 'YYYY-MM' (RiseUp/server's `/api/transactions` doesn't
+ * accept 'current'/'previous') — get one from `fetchBudgetStatus`'s `budgetDate` first. */
+export async function fetchTransactions(pat: string, cashflowMonth: string): Promise<RiseupTransaction[] | null> {
+  try {
+    const res = await fetch(`${RISEUP_SERVER_URL}/api/transactions?cashflowMonth=${encodeURIComponent(cashflowMonth)}`, {
+      headers: authHeaders(pat),
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+    if (!res.ok) return null;
+    const json = (await res.json()) as { transactions?: RiseupTransaction[] };
+    return json.transactions ?? [];
+  } catch {
+    return null;
   }
 }

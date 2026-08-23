@@ -8,7 +8,7 @@ import {
   type MaritalStatus,
 } from '../../domain/familyMember';
 import { useBoardStore } from '../../app/boardStore';
-import { fetchCurrentMonthStatus, type RiseupConnectionStatus, type RiseupMonthStatus } from '../../app/riseupConnection';
+import { fetchBudgetStatus, type RiseupConnectionStatus, type RiseupMonthStatus } from '../../app/riseupConnection';
 import { formatCurrency } from '../format';
 import styles from './FamilyPanel.module.css';
 
@@ -22,9 +22,10 @@ const RISEUP_STATUS_LABEL: Record<RiseupConnectionStatus, string> = {
 
 interface Props {
   onClose: () => void;
+  onOpenRiseupTransactions: () => void;
 }
 
-export function FamilyPanel({ onClose }: Props) {
+export function FamilyPanel({ onClose, onOpenRiseupTransactions }: Props) {
   const familyMembers = useBoardStore((s) => s.familyMembers);
   const addFamilyMember = useBoardStore((s) => s.addFamilyMember);
   const updateFamilyMember = useBoardStore((s) => s.updateFamilyMember);
@@ -56,7 +57,7 @@ export function FamilyPanel({ onClose }: Props) {
     let cancelled = false;
     const pat = riseupPat.trim();
     if (!pat) return;
-    fetchCurrentMonthStatus(pat).then((result) => {
+    fetchBudgetStatus(pat, 'current').then((result) => {
       if (!cancelled) setRiseupResult({ pat, ...result });
     });
     return () => {
@@ -201,6 +202,11 @@ export function FamilyPanel({ onClose }: Props) {
                 <span className={styles.riseupMonthStat}>טוען את הוצאות החודש…</span>
               )}
             </div>
+          )}
+          {riseupStatus === 'connected' && (
+            <button type="button" className={styles.riseupTransactionsBtn} onClick={onOpenRiseupTransactions}>
+              📋 כל התנועות
+            </button>
           )}
         </div>
 
