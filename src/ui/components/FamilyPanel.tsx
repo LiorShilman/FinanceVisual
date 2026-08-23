@@ -173,6 +173,16 @@ export function FamilyPanel({ onClose }: Props) {
             onBlur={commitRiseupPat}
             onKeyDown={(e) => e.key === 'Enter' && commitRiseupPat()}
           />
+          {(riseupStatus === 'unset' || riseupStatus === 'invalidPat') && (
+            <a
+              className={styles.riseupTokenLink}
+              href="https://input.riseup.co.il/developer/tokens"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              {riseupStatus === 'invalidPat' ? 'צור טוקן חדש ב-RiseUp ↗' : 'ליצירת טוקן ב-RiseUp ↗'}
+            </a>
+          )}
           {riseupStatus === 'connected' && (
             <div className={styles.riseupMonthRow}>
               {monthStatus ? (
