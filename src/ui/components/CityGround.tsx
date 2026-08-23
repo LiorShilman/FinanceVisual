@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import * as THREE from 'three';
 import { computeGroundBounds, type CircularExtent } from '../../domain/cityGrid';
 import { computeMagnitudeShare } from '../../domain/sizing';
+import { getTerrainHeight } from '../../domain/terrain';
 import type { ValleyFeature } from '../../domain/valley';
 import type { WaterFeature } from '../../domain/water';
 
@@ -185,10 +186,12 @@ function buildStreamTubeGeometry(curve: THREE.CatmullRomCurve3, radius: number):
 // ellipse a small height reveals most of its width), so a thick stream still visibly reads as
 // thicker than a thin one, while most of every tube's bulk still sits below the grass line.
 const WATER_SQUASH = 0.4;
-const GROUND_Y = -0.02;
+const GROUND_Y_OFFSET = -0.02;
 const EXPOSED_RADIUS_FRACTION = 0.16;
-function sinkYForRadius(radius: number): number {
-  return GROUND_Y + radius * (EXPOSED_RADIUS_FRACTION - WATER_SQUASH);
+/** `terrainY` is the local ground height at the stream's own position — without it, a stream
+ * would sink into or float above the hill/valley the terrain now has right under it. */
+function sinkYForRadius(radius: number, terrainY: number): number {
+  return terrainY + GROUND_Y_OFFSET + radius * (EXPOSED_RADIUS_FRACTION - WATER_SQUASH);
 }
 
 export function CityGround({ groundCenter, groundSize, water, valley }: Props) {
@@ -255,7 +258,7 @@ export function CityGround({ groundCenter, groundSize, water, valley }: Props) {
         const targetRadius = s.kind === 'liquid' ? water.lakeRadius : water.outerRingRadius;
         const curve = buildInflowCurve(lakeX, lakeZ, targetRadius, s.x, s.z);
         const radius = radiusForWeight(s.weight);
-        return { kind: s.kind, radius, geometry: buildStreamTubeGeometry(curve, radius) };
+        return { kind: s.kind, radius, terrainY: getTerrainHeight(s.x, s.z), geometry: buildStreamTubeGeometry(curve, radius) };
       }),
     [water.streams, lakeX, lakeZ, water.lakeRadius, water.outerRingRadius],
   );
@@ -265,32 +268,54 @@ export function CityGround({ groundCenter, groundSize, water, valley }: Props) {
       valley.streams.map((s) => {
         const curve = buildInflowCurve(valleyX, valleyZ, valley.radius, s.x, s.z);
         const radius = radiusForWeight(s.weight);
-        return { radius, geometry: buildStreamTubeGeometry(curve, radius) };
+        return { radius, terrainY: getTerrainHeight(s.x, s.z), geometry: buildStreamTubeGeometry(curve, radius) };
       }),
     [valley.streams, valleyX, valleyZ, valley.radius],
   );
+
+  const lakeTerrainY = getTerrainHeight(lakeX, lakeZ);
+  const valleyTerrainY = getTerrainHeight(valleyX, valleyZ);
 
   const bounds = computeGroundBounds(groundCenter, groundSize, [
     { center: water.lakeCenter, radius: water.outerRingRadius } satisfies CircularExtent,
     { center: valley.center, radius: valley.radius } satisfies CircularExtent,
   ]);
 
+  // Real hills/valleys, not a flat plane: subdivide and displace each vertex by the same
+  // deterministic height field every other ground-level object samples, so the grass and
+  // everything sitting on it agree on where "the ground" is. PlaneGeometry is authored flat in
+  // its local XY plane; displacing local Z here becomes world Y once rotation-x=-PI/2 is applied,
+  // and the mesh's own `position` translation has to be added back in to sample world-space
+  // terrain height per vertex (matching how every other component samples it).
+  const groundGeometry = useMemo(() => {
+    const segments = 90;
+    const geometry = new THREE.PlaneGeometry(bounds.width, bounds.depth, segments, segments);
+    const pos = geometry.attributes.position;
+    for (let i = 0; i < pos.count; i++) {
+      const worldX = pos.getX(i) + bounds.center[0];
+      const worldZ = -pos.getY(i) + bounds.center[1];
+      pos.setZ(i, getTerrainHeight(worldX, worldZ));
+    }
+    pos.needsUpdate = true;
+    geometry.computeVertexNormals();
+    return geometry;
+  }, [bounds.width, bounds.depth, bounds.center]);
+
   return (
     <group>
-      <mesh rotation-x={-Math.PI / 2} position={[bounds.center[0], -0.02, bounds.center[1]]} frustumCulled={false}>
-        <planeGeometry args={[bounds.width, bounds.depth]} />
+      <mesh geometry={groundGeometry} rotation-x={-Math.PI / 2} position={[bounds.center[0], 0, bounds.center[1]]} frustumCulled={false}>
         <meshStandardMaterial map={groundTexture} roughness={1} />
       </mesh>
 
-      <mesh geometry={pensionRingGeometry} rotation-x={-Math.PI / 2} position={[lakeX, 0.012, lakeZ]} frustumCulled={false}>
+      <mesh geometry={pensionRingGeometry} rotation-x={-Math.PI / 2} position={[lakeX, lakeTerrainY + 0.012, lakeZ]} frustumCulled={false}>
         <meshStandardMaterial map={ringTexture} emissive="#7457d6" emissiveIntensity={0.45} roughness={0.15} metalness={0.12} side={THREE.DoubleSide} />
       </mesh>
 
-      {waterStreamGeometries.map(({ kind, radius, geometry }, i) => (
+      {waterStreamGeometries.map(({ kind, radius, terrainY, geometry }, i) => (
         <mesh
           key={i}
           geometry={geometry}
-          position={[0, sinkYForRadius(radius), 0]}
+          position={[0, sinkYForRadius(radius, terrainY), 0]}
           scale={[1, WATER_SQUASH, 1]}
           frustumCulled={false}
         >
@@ -304,15 +329,15 @@ export function CityGround({ groundCenter, groundSize, water, valley }: Props) {
         </mesh>
       ))}
 
-      <mesh geometry={lakeGeometry} rotation-x={-Math.PI / 2} position={[lakeX, 0.018, lakeZ]} frustumCulled={false}>
+      <mesh geometry={lakeGeometry} rotation-x={-Math.PI / 2} position={[lakeX, lakeTerrainY + 0.018, lakeZ]} frustumCulled={false}>
         <meshStandardMaterial map={lakeTexture} emissive="#1467c9" emissiveIntensity={0.4} roughness={0.12} metalness={0.15} side={THREE.DoubleSide} />
       </mesh>
 
-      {valleyStreamGeometries.map(({ radius, geometry }, i) => (
+      {valleyStreamGeometries.map(({ radius, terrainY, geometry }, i) => (
         <mesh
           key={i}
           geometry={geometry}
-          position={[0, sinkYForRadius(radius), 0]}
+          position={[0, sinkYForRadius(radius, terrainY), 0]}
           scale={[1, WATER_SQUASH, 1]}
           frustumCulled={false}
         >
@@ -320,7 +345,7 @@ export function CityGround({ groundCenter, groundSize, water, valley }: Props) {
         </mesh>
       ))}
 
-      <mesh geometry={valleyGeometry} rotation-x={-Math.PI / 2} position={[valleyX, 0.014, valleyZ]} frustumCulled={false}>
+      <mesh geometry={valleyGeometry} rotation-x={-Math.PI / 2} position={[valleyX, valleyTerrainY + 0.014, valleyZ]} frustumCulled={false}>
         <meshStandardMaterial map={valleyTexture} emissive="#e05a5a" emissiveIntensity={0.65} roughness={0.3} metalness={0.05} side={THREE.DoubleSide} />
       </mesh>
     </group>

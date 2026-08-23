@@ -4,11 +4,11 @@ import { Canvas } from '@react-three/fiber';
 import { Billboard, OrbitControls, Text } from '@react-three/drei';
 import { useBoardStore } from '../../app/boardStore';
 import { computeCityLayout, DISTRICT_SPACING, DEPTH_SPACING } from '../../domain/city';
-import { computeGroundBounds, type CircularExtent } from '../../domain/cityGrid';
 import { computeDebtLinkPaths } from '../../domain/debtLinks';
 import { CATEGORY_LABELS, ENTITY_CATEGORIES, getWeight, type FinancialEntity } from '../../domain/entity';
 import { computeIncomeLinkPaths } from '../../domain/incomeLinks';
 import { computeNetWorthBreakdown } from '../../domain/netWorth';
+import { getTerrainHeight } from '../../domain/terrain';
 import { computeValleyFeature } from '../../domain/valley';
 import { computeWaterFeature } from '../../domain/water';
 import { formatCurrency } from '../format';
@@ -52,7 +52,10 @@ export function CityView({ entities, onOpen }: Props) {
     if (incomeBuildings.length === 0) return null;
     const x = incomeBuildings.reduce((sum, b) => sum + b.x, 0) / incomeBuildings.length;
     const z = incomeBuildings.reduce((sum, b) => sum + b.z, 0) / incomeBuildings.length;
-    const y = Math.max(...incomeBuildings.map((b) => b.height));
+    // the tallest rooftop's absolute height — the building itself now sits at its own terrain
+    // height, so the target has to add that back in too, or droplets land too high/low relative
+    // to a building that's actually standing on a hill or in a dip.
+    const y = getTerrainHeight(x, z) + Math.max(...incomeBuildings.map((b) => b.height));
     return { x, z, y };
   }, [buildings]);
   // an empty category still owns a column of ground, but labeling a district that holds nothing
@@ -65,14 +68,6 @@ export function CityView({ entities, onOpen }: Props) {
   const depth = (hasDonations ? 3 : 2) * DEPTH_SPACING;
   const groundSize = Math.max(width, depth) + 20;
   const groundCenter: [number, number] = [width / 2, depth / 2];
-  // the grid has to cover exactly what the textured ground plane covers — the lake and the valley
-  // both sit right at (and past) the district square's own corners, so a grid sized to the
-  // district alone would stop short of them.
-  const bounds = computeGroundBounds(groundCenter, groundSize, [
-    { center: water.lakeCenter, radius: water.outerRingRadius } satisfies CircularExtent,
-    { center: valley.center, radius: valley.radius } satisfies CircularExtent,
-  ]);
-  const gridDivisions = Math.round(Math.max(bounds.width, bounds.depth) / 1.6);
 
   return (
     <Canvas camera={{ position: [width * 0.25, 36, depth + 46], fov: 32 }} dir="rtl">
@@ -83,12 +78,9 @@ export function CityView({ entities, onOpen }: Props) {
       <directionalLight position={[-10, 14, -10]} intensity={0.6} color="#6c8dff" />
 
       <CityGround groundCenter={groundCenter} groundSize={groundSize} water={water} valley={valley} />
-      <gridHelper
-        args={[1, gridDivisions, '#4a5a7a', '#2e3648']}
-        scale={[bounds.width, 1, bounds.depth]}
-        position={[bounds.center[0], 0, bounds.center[1]]}
-        frustumCulled={false}
-      />
+      {/* the flat gridHelper that used to sit here was removed with the terrain change — a flat
+          grid floating through real hills/valleys looked like a bug, and the terrain's own relief
+          now gives the same scale/depth cues the grid used to provide. */}
       {/* lower and off to one side (near the valley, not dead-center) — high above the district
           center made it nearly invisible from the default camera angle; this stays in frame from
           a side view without sitting deep enough in z to dim into the fog. */}
@@ -138,112 +130,34 @@ export function CityView({ entities, onOpen }: Props) {
         const entity = entities.find((e) => e.id === b.id)!;
         const weight = getWeight(entity);
         const amount = weight === 0 || hideAmounts ? '' : formatCurrency(weight, entity.currency, usdRate);
+        const commonProps = { x: b.x, z: b.z, height: b.height, footprint: b.footprint, color: b.color, name: b.name, amount };
+        const onOpenThis = () => onOpen(b.id);
+
+        let mesh;
         if (b.category === 'donation') {
-          return (
-            <CityGiftMesh
-              key={b.id}
-              x={b.x}
-              z={b.z}
-              height={b.height}
-              footprint={b.footprint}
-              color={b.color}
-              name={b.name}
-              amount={amount}
-              onOpen={() => onOpen(b.id)}
-            />
-          );
-        }
-        if (entity.details.kind === 'investment' && entity.details.assetType !== 'traditional') {
-          return (
-            <CityCrystalMesh
-              key={b.id}
-              x={b.x}
-              z={b.z}
-              height={b.height}
-              footprint={b.footprint}
-              color={b.color}
-              name={b.name}
-              amount={amount}
-              onOpen={() => onOpen(b.id)}
-            />
-          );
-        }
-        if (entity.details.kind === 'expense') {
-          return (
-            <CityExpenseMesh
-              key={b.id}
-              x={b.x}
-              z={b.z}
-              height={b.height}
-              footprint={b.footprint}
-              color={b.color}
-              name={b.name}
-              amount={amount}
-              expenseType={entity.details.expenseType}
-              onOpen={() => onOpen(b.id)}
-            />
-          );
-        }
-        if (entity.details.kind === 'insurance') {
-          return (
-            <CityShieldMesh
-              key={b.id}
-              x={b.x}
-              z={b.z}
-              height={b.height}
-              footprint={b.footprint}
-              color={b.color}
-              name={b.name}
-              amount={amount}
-              onOpen={() => onOpen(b.id)}
-            />
-          );
-        }
-        if (entity.details.kind === 'realEstate') {
-          return (
-            <CityHouseMesh
-              key={b.id}
-              x={b.x}
-              z={b.z}
-              height={b.height}
-              footprint={b.footprint}
-              color={b.color}
-              name={b.name}
-              amount={amount}
-              onOpen={() => onOpen(b.id)}
-            />
-          );
-        }
-        if (entity.details.kind === 'goal') {
+          mesh = <CityGiftMesh {...commonProps} onOpen={onOpenThis} />;
+        } else if (entity.details.kind === 'investment' && entity.details.assetType !== 'traditional') {
+          mesh = <CityCrystalMesh {...commonProps} onOpen={onOpenThis} />;
+        } else if (entity.details.kind === 'expense') {
+          mesh = <CityExpenseMesh {...commonProps} expenseType={entity.details.expenseType} onOpen={onOpenThis} />;
+        } else if (entity.details.kind === 'insurance') {
+          mesh = <CityShieldMesh {...commonProps} onOpen={onOpenThis} />;
+        } else if (entity.details.kind === 'realEstate') {
+          mesh = <CityHouseMesh {...commonProps} onOpen={onOpenThis} />;
+        } else if (entity.details.kind === 'goal') {
           const { targetAmount, currentAmount } = entity.details;
           const progress = targetAmount > 0 ? Math.max(0, Math.min(1, currentAmount / targetAmount)) : 0;
-          return (
-            <CityGoalMesh
-              key={b.id}
-              x={b.x}
-              z={b.z}
-              height={b.height}
-              footprint={b.footprint}
-              color={b.color}
-              name={b.name}
-              amount={amount}
-              progress={progress}
-              onOpen={() => onOpen(b.id)}
-            />
-          );
+          mesh = <CityGoalMesh {...commonProps} progress={progress} onOpen={onOpenThis} />;
+        } else {
+          mesh = <CityBuildingMesh {...commonProps} onOpen={onOpenThis} />;
         }
+
+        // every building sits at the real terrain height for its own x/z instead of a flat 0, so
+        // it rests on the hill/valley under it instead of floating or sinking into it.
         return (
-          <CityBuildingMesh
-            key={b.id}
-            x={b.x}
-            z={b.z}
-            height={b.height}
-            footprint={b.footprint}
-            color={b.color}
-            name={b.name}
-            amount={amount}
-            onOpen={() => onOpen(b.id)}
-          />
+          <group key={b.id} position={[0, getTerrainHeight(b.x, b.z), 0]}>
+            {mesh}
+          </group>
         );
       })}
 

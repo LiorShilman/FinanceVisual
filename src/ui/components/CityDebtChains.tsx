@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import * as THREE from 'three';
 import type { DebtLinkPath } from '../../domain/debtLinks';
+import { getTerrainHeight } from '../../domain/terrain';
 
 interface Props {
   /** Ground position of every debt building — each gets its own ball-and-chain regardless of
@@ -64,13 +65,19 @@ const SIDE_OFFSET = 1.1;
 const CHAIN_TOP_Y = 1.6;
 
 function BallAndChain({ x, z }: { x: number; z: number }) {
+  // sampled at the building's own position — the ground under it, whether hill or dip, not a
+  // flat 0 the terrain no longer actually has.
+  const terrainY = getTerrainHeight(x, z);
   const anchorX = x + SIDE_OFFSET;
-  const top = useMemo(() => new THREE.Vector3(anchorX, CHAIN_TOP_Y, z), [anchorX, z]);
-  const bottom = useMemo(() => new THREE.Vector3(anchorX, BALL_CENTER_Y + BALL_RADIUS, z), [anchorX, z]);
+  const top = useMemo(() => new THREE.Vector3(anchorX, terrainY + CHAIN_TOP_Y, z), [anchorX, z, terrainY]);
+  const bottom = useMemo(
+    () => new THREE.Vector3(anchorX, terrainY + BALL_CENTER_Y + BALL_RADIUS, z),
+    [anchorX, z, terrainY],
+  );
   return (
     <group>
       <ChainLinks from={top} to={bottom} />
-      <mesh position={[anchorX, BALL_CENTER_Y, z]} frustumCulled={false}>
+      <mesh position={[anchorX, terrainY + BALL_CENTER_Y, z]} frustumCulled={false}>
         <sphereGeometry args={[BALL_RADIUS, 16, 16]} />
         <meshStandardMaterial color={BALL_COLOR} emissive={BALL_COLOR} emissiveIntensity={0.5} metalness={0.6} roughness={0.3} />
       </mesh>
@@ -78,13 +85,17 @@ function BallAndChain({ x, z }: { x: number; z: number }) {
   );
 }
 
+const LINK_Y_OFFSET = 0.4;
+
 function LinkChain({ path }: { path: DebtLinkPath }) {
   const [fx, fz] = path.from;
   const [tx, tz] = path.to;
-  const y = 0.4;
-  const start = useMemo(() => new THREE.Vector3(fx, y, fz), [fx, fz]);
-  const corner = useMemo(() => new THREE.Vector3(tx, y, fz), [tx, fz]);
-  const end = useMemo(() => new THREE.Vector3(tx, y, tz), [tx, tz]);
+  // each point of the elbow samples its own terrain height — the two ends can sit at genuinely
+  // different ground heights now, so a single flat y would visibly cut through a hill or hover
+  // over a dip partway along the path.
+  const start = useMemo(() => new THREE.Vector3(fx, LINK_Y_OFFSET + getTerrainHeight(fx, fz), fz), [fx, fz]);
+  const corner = useMemo(() => new THREE.Vector3(tx, LINK_Y_OFFSET + getTerrainHeight(tx, fz), fz), [tx, fz]);
+  const end = useMemo(() => new THREE.Vector3(tx, LINK_Y_OFFSET + getTerrainHeight(tx, tz), tz), [tx, tz]);
   const aligned = Math.abs(fx - tx) < 0.01 || Math.abs(fz - tz) < 0.01;
 
   return aligned ? (
