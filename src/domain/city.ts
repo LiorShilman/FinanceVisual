@@ -32,8 +32,14 @@ export interface CityBuilding {
   cellBounds: CityCellBounds;
 }
 
-export const DISTRICT_SPACING = 6.5;
-export const DEPTH_SPACING = 10.5;
+// Widened from the original 6.5/10.5 — the tighter spacing left barely any room to drag
+// buildings apart within a crowded category/depth cell (see cellBounds below), which was the
+// actual complaint: not that buildings looked wrong, but that there wasn't screen space to
+// spread them out by hand. Every downstream size (ground, camera framing, labels) is derived
+// from these two constants, so widening them scales the whole city instead of needing a change
+// per call site.
+export const DISTRICT_SPACING = 9;
+export const DEPTH_SPACING = 14;
 const MIN_HEIGHT = 0.6;
 const MAX_HEIGHT = 9;
 const MIN_FOOTPRINT = 0.75;
@@ -42,9 +48,11 @@ const MAX_FOOTPRINT = 1.7;
 // touched edge-to-edge with zero gap between them.
 export const LOT_SIZE = 2.6;
 // How far a manual drag is allowed to push a building past its auto-arranged cell before it'd
-// visually collide with the neighboring category column or depth tier.
-const DRAG_MARGIN_X = 1.0;
-const DRAG_MARGIN_Z_BACK = 1.5;
+// visually collide with the neighboring category column or depth tier — kept proportional to the
+// wider DISTRICT_SPACING/DEPTH_SPACING above rather than a fixed margin, so the extra room those
+// actually becomes usable drag space instead of just a bigger empty buffer.
+const DRAG_MARGIN_X = 1.3;
+const DRAG_MARGIN_Z_BACK = 2;
 
 function computeCellBounds(baseX: number, baseZ: number): CityCellBounds {
   return {
