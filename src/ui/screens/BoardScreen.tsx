@@ -350,7 +350,7 @@ function BoardCanvas() {
           טבלת נכסים
         </button>
         {layoutMode === 'city' ? (
-          <CityView entities={entities} onOpen={openEditor} />
+          <CityView entities={entities} familyMembers={familyMembers} onOpen={openEditor} />
         ) : (
           <ReactFlow
             nodes={nodes}

@@ -3,10 +3,11 @@ import * as THREE from 'three';
 import { Canvas } from '@react-three/fiber';
 import { Billboard, OrbitControls, Text } from '@react-three/drei';
 import { useBoardStore } from '../../app/boardStore';
-import { computeCityLayout, DISTRICT_SPACING, DEPTH_SPACING } from '../../domain/city';
+import { computeCityLayout, depthBaseZ, DISTRICT_SPACING } from '../../domain/city';
 import { computeGroundBounds, type CircularExtent } from '../../domain/cityGrid';
 import { computeDebtLinkPaths } from '../../domain/debtLinks';
 import { CATEGORY_LABELS, ENTITY_CATEGORIES, getWeight, type FinancialEntity } from '../../domain/entity';
+import type { FamilyMember } from '../../domain/familyMember';
 import { computeIncomeLinkPaths } from '../../domain/incomeLinks';
 import { computeNetWorthBreakdown } from '../../domain/netWorth';
 import { getTerrainHeight } from '../../domain/terrain';
@@ -18,25 +19,33 @@ import { CityBuildingMesh } from './CityBuildingMesh';
 import { CityCrystalMesh } from './CityCrystalMesh';
 import { CityDebtChains } from './CityDebtChains';
 import { CityExpenseMesh } from './CityExpenseMesh';
+import { CityFamilyAvatar } from './CityFamilyAvatar';
 import { CityGiftMesh } from './CityGiftMesh';
 import { CityGoalMesh } from './CityGoalMesh';
 import { CityGround } from './CityGround';
 import { CityHouseMesh } from './CityHouseMesh';
 import { CityIncomeFaucet } from './CityIncomeFaucet';
 import { CityIncomeLinks } from './CityIncomeLinks';
+import { CityRiskAura } from './CityRiskAura';
 import { CityShieldMesh } from './CityShieldMesh';
 import { CitySun } from './CitySun';
 
 interface Props {
   entities: FinancialEntity[];
+  familyMembers: FamilyMember[];
   onOpen: (id: string) => void;
 }
 
-// index 0 = nearest the camera (Z=0), matching domain/city.ts's depthIndex (locked/long-term
-// is farthest, liquid/current is nearest).
-const DEPTH_LABELS = ['נעול / טווח ארוך', 'טווח קצר', 'נזיל / שוטף'];
+// index 0 (locked/long-term) sits farthest from the camera, index 2 (liquid/current) nearest —
+// matching domain/city.ts's depthIndex. Color follows the same long→short intuition as the rest
+// of the app's health colors: green for the far, patient end; red for the near, immediate one.
+const DEPTH_LABELS: { text: string; color: string }[] = [
+  { text: 'נעול / טווח ארוך', color: '#5fd68f' },
+  { text: 'טווח קצר', color: '#f0a95a' },
+  { text: 'נזיל / שוטף', color: '#ee6b6b' },
+];
 
-export function CityView({ entities, onOpen }: Props) {
+export function CityView({ entities, familyMembers, onOpen }: Props) {
   const hideAmounts = useBoardStore((s) => s.hideAmounts);
   const usdRate = useBoardStore((s) => s.usdRate);
   const cityPositions = useBoardStore((s) => s.cityPositions);
@@ -62,16 +71,38 @@ export function CityView({ entities, onOpen }: Props) {
     const y = getTerrainHeight(x, z) + Math.max(...incomeBuildings.map((b) => b.height));
     return { x, z, y };
   }, [buildings]);
+  // one avatar per family member, hovering above the centroid of the buildings they own — not
+  // one per owned entity, which would clutter the city fast for anyone owning several things.
+  // Members who own nothing yet (or aren't tied to any entity) render no avatar at all.
+  const familyAvatarTargets = useMemo(() => {
+    return familyMembers
+      .map((m) => {
+        const owned = buildings.filter((b) => entities.find((e) => e.id === b.id)?.ownerIds.includes(m.id));
+        if (owned.length === 0) return null;
+        const x = owned.reduce((sum, b) => sum + b.x, 0) / owned.length;
+        const z = owned.reduce((sum, b) => sum + b.z, 0) / owned.length;
+        // clears the tallest owned building's own name/amount billboard (which tops out around
+        // height + 1.5, see CityBuildingMesh/CityGoalMesh), so the avatar floats visibly above it
+        // instead of overlapping the text.
+        const y = getTerrainHeight(x, z) + Math.max(...owned.map((b) => b.height)) + 2.3;
+        return { id: m.id, name: m.name, photoUrl: m.photoUrl, x, z, y };
+      })
+      .filter((t): t is NonNullable<typeof t> => t !== null);
+  }, [familyMembers, buildings, entities]);
   // an empty category still owns a column of ground, but labeling a district that holds nothing
   // just reads as clutter — the pyramid already skips empty tiers the same way.
   const populatedCategories = useMemo(() => new Set(buildings.map((b) => b.category)), [buildings]);
   const hasDonations = populatedCategories.has('donation');
   const width = (ENTITY_CATEGORIES.length - 1) * DISTRICT_SPACING;
   // one extra row of depth when donations exist — their dedicated foreground lane past every
-  // other category's nearest row (see domain/city.ts's depthIndex).
-  const depth = (hasDonations ? 3 : 2) * DEPTH_SPACING;
-  const groundSize = Math.max(width, depth) + 20;
-  const groundCenter: [number, number] = [width / 2, depth / 2];
+  // other category's nearest row (see domain/city.ts's depthIndex). minDepthZ comes from the same
+  // depthBaseZ used to place buildings — locked/long-term sits an extra gap further back than the
+  // other tiers, so the near/far framing below has to reach that far too, not just to z=0.
+  const minDepthZ = depthBaseZ(0);
+  const maxDepthZ = depthBaseZ(hasDonations ? 3 : 2);
+  const depthSpan = maxDepthZ - minDepthZ;
+  const groundSize = Math.max(width, depthSpan) + 20;
+  const groundCenter: [number, number] = [width / 2, (minDepthZ + maxDepthZ) / 2];
   // the grid has to cover exactly what the textured ground plane covers — the lake and the valley
   // both sit right at (and past) the district square's own corners, so a grid sized to the
   // district alone would stop short of them.
@@ -82,12 +113,15 @@ export function CityView({ entities, onOpen }: Props) {
   const gridDivisions = Math.round(Math.max(bounds.width, bounds.depth) / 1.6);
 
   return (
-    <Canvas camera={{ position: [width * 0.25, 36, depth + 46], fov: 32 }} dir="rtl">
+    <Canvas camera={{ position: [width * 0.25, 36, maxDepthZ + 46], fov: 32 }} dir="rtl">
       <color attach="background" args={['#0a0c11']} />
-      <fog attach="fog" args={['#0a0c11', 60, 160]} />
-      <ambientLight intensity={1.05} />
-      <directionalLight position={[width * 0.4, 26, 14]} intensity={2} />
-      <directionalLight position={[-10, 14, -10]} intensity={0.6} color="#6c8dff" />
+      {/* pushed out further than the raw maxDistance=200 — fog starting right at the usual
+          zoomed-out distance made the city visibly dim out exactly when a wider view was the
+          point; starting later keeps it lit until well past normal viewing range. */}
+      <fog attach="fog" args={['#0a0c11', 130, 320]} />
+      <ambientLight intensity={1.5} />
+      <directionalLight position={[width * 0.4, 26, 14]} intensity={2.6} />
+      <directionalLight position={[-10, 14, -10]} intensity={0.85} color="#6c8dff" />
 
       <CityGround groundCenter={groundCenter} groundSize={groundSize} water={water} valley={valley} />
       <gridHelper
@@ -109,7 +143,7 @@ export function CityView({ entities, onOpen }: Props) {
       {ENTITY_CATEGORIES.filter((cat) => populatedCategories.has(cat)).map((cat) => (
         <Billboard
           key={cat}
-          position={[(ENTITY_CATEGORIES.length - 1 - ENTITY_CATEGORIES.indexOf(cat)) * DISTRICT_SPACING, 1.5, depth + 6.5]}
+          position={[(ENTITY_CATEGORIES.length - 1 - ENTITY_CATEGORIES.indexOf(cat)) * DISTRICT_SPACING, 1.5, maxDepthZ + 6.5]}
         >
           <Text
             fontSize={0.72}
@@ -127,19 +161,28 @@ export function CityView({ entities, onOpen }: Props) {
       ))}
 
       {DEPTH_LABELS.map((label, i) => (
-        <Billboard key={label} position={[-4.6, 1.4, i * DEPTH_SPACING]}>
+        <Billboard key={label.text} position={[-4.6, 1.4, depthBaseZ(i)]}>
           <Text
-            fontSize={0.4}
-            color="#99a1b3"
+            fontSize={0.72}
+            color={label.color}
             anchorX="center"
             anchorY="middle"
-            outlineWidth={0.015}
+            outlineWidth={0.02}
             outlineColor="#0a0c11"
+            fontWeight="bold"
             frustumCulled={false}
           >
-            {label}
+            {label.text}
           </Text>
         </Billboard>
+      ))}
+      {buildings
+        .filter((b) => b.isAtRisk)
+        .map((b) => (
+          <CityRiskAura key={`risk-${b.id}`} x={b.x} z={b.z} footprint={b.footprint} />
+        ))}
+      {familyAvatarTargets.map((t) => (
+        <CityFamilyAvatar key={t.id} x={t.x} z={t.z} y={t.y} name={t.name} photoUrl={t.photoUrl} />
       ))}
       {buildings.map((b) => {
         const entity = entities.find((e) => e.id === b.id)!;
@@ -180,7 +223,7 @@ export function CityView({ entities, onOpen }: Props) {
       <OrbitControls
         makeDefault
         enabled={controlsEnabled}
-        target={[width / 2, 1, depth / 2]}
+        target={[width / 2, 1, groundCenter[1]]}
         enablePan
         enableZoom
         enableRotate
@@ -189,7 +232,7 @@ export function CityView({ entities, onOpen }: Props) {
         mouseButtons={{ LEFT: THREE.MOUSE.PAN, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.ROTATE }}
         screenSpacePanning
         minDistance={10}
-        maxDistance={90}
+        maxDistance={200}
         maxPolarAngle={Math.PI / 2.15}
       />
     </Canvas>

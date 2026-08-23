@@ -1,4 +1,7 @@
+import { useRef } from 'react';
+import * as THREE from 'three';
 import { Billboard, Text } from '@react-three/drei';
+import { useFrame } from '@react-three/fiber';
 import type { ThreeEvent } from '@react-three/fiber';
 
 interface Props {
@@ -14,18 +17,38 @@ interface Props {
   onOpen: () => void;
 }
 
+const GOLD = '#ffd166';
+
 /**
  * A goal reads as literally under construction — a wireframe shell at the full target size, with
  * a solid mass filling it from the ground up as it gets funded. At 0% it's an empty scaffold; at
- * 100% the solid box exactly fills the shell, same footprint as a finished building.
+ * 100% the solid box exactly fills the shell — which on its own reads as "just a plain building
+ * now", the same as any other fully-built one, losing exactly the moment worth celebrating. A
+ * completed goal gets a slowly spinning golden ring overhead instead, so reaching 100% stays
+ * visibly different from simply being a funded goal at 99%.
  */
 export function CityGoalMesh({ x, z, height, footprint, color, name, amount, progress, onOpen }: Props) {
+  const ringRef = useRef<THREE.Mesh>(null);
+  const isComplete = progress >= 1;
+  // deterministic per-position phase (not Math.random — impure during render) so multiple
+  // completed goals don't spin in lockstep.
+  const phase = (Math.sin(x * 12.9898 + z * 78.233) * 43758.5453) % (Math.PI * 2);
+  const ringRadius = Math.max(0.5, footprint * 0.7);
+  const ringY = height + 0.5;
+
   const handleClick = (e: ThreeEvent<MouseEvent>) => {
     e.stopPropagation();
     onOpen();
   };
 
   const solidHeight = Math.max(0.02, height * progress);
+
+  useFrame(({ clock }) => {
+    if (!ringRef.current) return;
+    const t = clock.elapsedTime;
+    ringRef.current.rotation.z = t * 0.6 + phase;
+    ringRef.current.rotation.x = Math.PI / 2.4 + Math.sin(t * 0.8 + phase) * 0.15;
+  });
 
   return (
     <group position={[x, 0, z]}>
@@ -42,7 +65,17 @@ export function CityGoalMesh({ x, z, height, footprint, color, name, amount, pro
         </mesh>
       )}
 
-      <Billboard position={[0, height + 0.7, 0]}>
+      {isComplete && (
+        <>
+          <mesh ref={ringRef} position={[0, ringY, 0]} rotation={[Math.PI / 2.4, 0, 0]} frustumCulled={false} onClick={handleClick}>
+            <torusGeometry args={[ringRadius, ringRadius * 0.08, 10, 28]} />
+            <meshStandardMaterial color={GOLD} emissive={GOLD} emissiveIntensity={0.9} roughness={0.3} metalness={0.4} />
+          </mesh>
+          <pointLight position={[0, ringY, 0]} color={GOLD} intensity={0.7} distance={4} decay={2} />
+        </>
+      )}
+
+      <Billboard position={[0, height + (isComplete ? 1.3 : 0.7), 0]}>
         {amount !== '' && (
           <Text
             position={[0, 0.62, 0]}

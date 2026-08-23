@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   FAMILY_RELATIONS,
   RELATION_LABELS,
@@ -8,6 +8,7 @@ import {
   type MaritalStatus,
 } from '../../domain/familyMember';
 import { useBoardStore } from '../../app/boardStore';
+import { resizeImageToDataUrl } from '../../app/imageResize';
 import { fetchBudgetStatus, type RiseupConnectionStatus, type RiseupMonthStatus } from '../../app/riseupConnection';
 import { formatCurrency } from '../format';
 import styles from './FamilyPanel.module.css';
@@ -33,6 +34,17 @@ export function FamilyPanel({ onClose, onOpenRiseupTransactions }: Props) {
 
   const [newName, setNewName] = useState('');
   const [newRelation, setNewRelation] = useState<FamilyRelation>('spouse');
+
+  const photoInputRef = useRef<HTMLInputElement>(null);
+  const [photoTargetId, setPhotoTargetId] = useState<string | null>(null);
+
+  function handlePhotoPick(file: File | undefined) {
+    const targetId = photoTargetId;
+    if (!file || !targetId) return;
+    resizeImageToDataUrl(file).then((photoUrl) => {
+      updateFamilyMember(targetId, { photoUrl });
+    });
+  }
 
   const riseupPat = useBoardStore((s) => s.riseupPat);
   const setRiseupPat = useBoardStore((s) => s.setRiseupPat);
@@ -90,9 +102,35 @@ export function FamilyPanel({ onClose, onOpenRiseupTransactions }: Props) {
       <div className={styles.panel} onClick={(e) => e.stopPropagation()}>
         <h2 className={styles.title}>בני המשפחה</h2>
 
+        <input
+          ref={photoInputRef}
+          type="file"
+          accept="image/*"
+          style={{ display: 'none' }}
+          onChange={(e) => {
+            handlePhotoPick(e.target.files?.[0]);
+            e.target.value = '';
+          }}
+        />
+
         {familyMembers.map((m) => (
           <div key={m.id} className={styles.memberRow}>
             <div className={styles.memberRowLine}>
+              <button
+                type="button"
+                className={styles.avatarBtn}
+                title="העלאת תמונה"
+                onClick={() => {
+                  setPhotoTargetId(m.id);
+                  photoInputRef.current?.click();
+                }}
+              >
+                {m.photoUrl ? (
+                  <img className={styles.avatarImg} src={m.photoUrl} alt="" />
+                ) : (
+                  m.name.trim().charAt(0) || '?'
+                )}
+              </button>
               <input
                 className={styles.memberName}
                 value={m.name}

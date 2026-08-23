@@ -1,6 +1,6 @@
 import { ENTITY_CATEGORIES, getWeight, type EntityCategory, type FinancialEntity } from './entity';
 import { getHorizonBucket } from './layout';
-import { buildHealthContext, computeHealth, getDisplayHealthOverride, HEALTH_COLORS } from './health';
+import { buildHealthContext, computeHealth, getDisplayHealthOverride, HEALTH_COLORS, type HealthStatus } from './health';
 import { computeRankSizes } from './sizing';
 
 export interface CityPosition {
@@ -24,6 +24,15 @@ export interface CityBuilding {
   height: number;
   footprint: number;
   color: string;
+  /** The same status `color` was resolved from — kept as the enum (not just its hex) so callers
+   * can single out e.g. 'risk' buildings for a visual treatment without string-matching a color. */
+  healthStatus: HealthStatus;
+  /** True only when 'risk' came from an actual computed judgment (high debt burden, thin
+   * insurance coverage, a stalled goal) — NOT from a flat category color. Every expense's
+   * `healthStatus` is unconditionally 'risk' too (getDisplayHealthOverride — that's just "this
+   * category is always drawn red", not a warning), so a UI that wants to flag "this genuinely
+   * needs attention" must check this, not `healthStatus === 'risk'` directly. */
+  isAtRisk: boolean;
   /** Raw amount (not the visually rank-scaled height/footprint) — for anything that needs to
    * compare true magnitudes across buildings, like the lake's liquid-vs-pension radius ratio. */
   weight: number;
@@ -54,13 +63,33 @@ export const LOT_SIZE = 2.6;
 const DRAG_MARGIN_X = 1.3;
 const DRAG_MARGIN_Z_BACK = 2;
 
-function computeCellBounds(baseX: number, baseZ: number): CityCellBounds {
+// Locked/long-term money is meant to read as categorically more remote, not just one more row
+// spaced like all the others — pushed back a full extra DEPTH_SPACING behind where the uniform
+// grid would otherwise put it.
+const LONG_TERM_EXTRA_GAP = DEPTH_SPACING;
+
+/** The z-coordinate for a given depth tier — every tier is evenly spaced except tier 0
+ * (locked/long-term), which gets pushed an extra DEPTH_SPACING further back. Exported so CityView
+ * can derive matching ground/camera/label framing from the same single source of truth. */
+export function depthBaseZ(depth: number): number {
+  if (depth === 0) return -LONG_TERM_EXTRA_GAP;
+  return depth * DEPTH_SPACING;
+}
+
+// How many depth tiers back (from its own auto-assigned one) a category's buildings can be
+// dragged. Expenses always land in the same 'current' tier (getHorizonBucket has no per-entity
+// variation for expenses, unlike debt/goal/investment etc.), so without this every expense would
+// be stuck in one lane with no way to manually set any of them apart as more "short-term" — two
+// tiers back reaches all the way to the adjacent short-term tier's own front line.
+const DEPTH_REACH: Partial<Record<EntityCategory, number>> = { expense: 2 };
+
+function computeCellBounds(baseX: number, baseZ: number, depthReach: number): CityCellBounds {
   return {
     minX: baseX - (DISTRICT_SPACING / 2 - DRAG_MARGIN_X),
     maxX: baseX + (DISTRICT_SPACING / 2 - DRAG_MARGIN_X),
     // z only recedes backward from the tier's own front line (see the row-placement comment
     // below) — dragging "forward" past baseZ would encroach on the next, nearer tier.
-    minZ: baseZ - (DEPTH_SPACING - DRAG_MARGIN_Z_BACK),
+    minZ: baseZ - (DEPTH_SPACING * depthReach - DRAG_MARGIN_Z_BACK),
     maxZ: baseZ,
   };
 }
@@ -125,9 +154,9 @@ export function computeCityLayout(entities: FinancialEntity[], overrides: Record
     const depth = Number(depthStr);
     // reversed so the first category reads on the right, matching RTL flow.
     const baseX = (ENTITY_CATEGORIES.length - 1 - CATEGORY_INDEX[cat]) * DISTRICT_SPACING;
-    const baseZ = depth * DEPTH_SPACING;
+    const baseZ = depthBaseZ(depth);
     const cols = Math.max(1, Math.ceil(Math.sqrt(list.length)));
-    const cellBounds = computeCellBounds(baseX, baseZ);
+    const cellBounds = computeCellBounds(baseX, baseZ, DEPTH_REACH[cat] ?? 1);
 
     list.forEach((entity, i) => {
       const col = i % cols;
@@ -154,6 +183,8 @@ export function computeCityLayout(entities: FinancialEntity[], overrides: Record
         height: heightByEntity.get(entity.id)!,
         footprint: footprintByEntity.get(entity.id)!,
         color: HEALTH_COLORS[health],
+        healthStatus: health,
+        isAtRisk: healthOverride === null && health === 'risk',
         weight: Math.abs(getWeight(entity)),
         cellBounds,
       });

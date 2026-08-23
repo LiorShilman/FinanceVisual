@@ -18,11 +18,9 @@ interface Props {
   onOpen: () => void;
 }
 
-const SHARD_COUNT = 5;
-
-// Deterministic per-index jitter (same sine-hash pattern used elsewhere in the city) instead of
+// Deterministic per-position jitter (same sine-hash pattern used elsewhere in the city) instead of
 // Math.random() — oxlint's react(purity) rule flags Math.random() in a render path, and identical
-// input should always place the same shard the same way anyway.
+// input should always resolve to the same phase anyway.
 function hash01(seed: number): number {
   const s = Math.sin(seed * 12.9898) * 43758.5453;
   return s - Math.floor(s);
@@ -64,31 +62,22 @@ function labelBlock(name: string, amount: string, y: number) {
 }
 
 /**
- * A small orbiting storm of red shards around a pulsing core — 'other' has no real-world building
- * shape to lean on the way housing/food/transport do, so instead of another tower it gets motion:
- * money going in unclassified directions, read literally as debris flying off in every direction.
- * Stays in the shared expense-red family so it's still legible as "expense" at a glance.
+ * A single pulsing crystal core — 'other' has no real-world building shape to lean on the way
+ * housing/food/transport do, so instead of another tower it gets a plain faceted shape with a
+ * slow breathing pulse. (An earlier version orbited a storm of shard debris around the core —
+ * fine for one of these, but with several 'other' expenses in view at once it read as visual
+ * overload across the whole expense district, so the shards are gone; the pulse alone is still
+ * enough to read as "alive" and distinct from a static building.) Stays in the shared expense-red
+ * family so it's still legible as "expense" at a glance.
  */
 function ChaosExpenseMesh({ x, z, height, footprint, color, name, amount, onOpen }: Omit<Props, 'expenseType'>) {
   const coreRef = useRef<THREE.Mesh>(null);
-  const shardRefs = useRef<(THREE.Group | null)[]>([]);
   // deterministic per-position phase (not Math.random — impure during render, and would reshuffle
-  // on every re-render anyway) so multiple instances don't all spin in lockstep.
+  // on every re-render anyway) so multiple instances don't all pulse in lockstep.
   const phase = hash01(x * 0.37 + z * 0.53) * Math.PI * 2;
 
   const coreRadius = Math.max(0.35, Math.min(height * 0.28, footprint * 0.65));
   const floatY = coreRadius + Math.max(0.6, height * 0.25);
-
-  const shards = Array.from({ length: SHARD_COUNT }, (_, i) => {
-    const seed = i + 1;
-    return {
-      orbitRadius: coreRadius * (1.7 + hash01(seed * 3.1) * 1.0),
-      orbitSpeed: 0.35 + hash01(seed * 5.7) * 0.45,
-      yOffset: (hash01(seed * 7.3) - 0.5) * coreRadius * 1.6,
-      phaseOffset: hash01(seed * 9.1) * Math.PI * 2,
-      size: coreRadius * (0.28 + hash01(seed * 2.3) * 0.18),
-    };
-  });
 
   const handleClick = (e: ThreeEvent<MouseEvent>) => {
     e.stopPropagation();
@@ -102,13 +91,6 @@ function ChaosExpenseMesh({ x, z, height, footprint, color, name, amount, onOpen
       coreRef.current.scale.setScalar(pulse);
       coreRef.current.rotation.y = t * 0.4;
     }
-    shards.forEach((s, i) => {
-      const g = shardRefs.current[i];
-      if (!g) return;
-      const angle = t * s.orbitSpeed + s.phaseOffset;
-      g.position.set(Math.cos(angle) * s.orbitRadius, floatY + s.yOffset + Math.sin(t * 0.9 + s.phaseOffset) * 0.15, Math.sin(angle) * s.orbitRadius);
-      g.rotation.set(t * 1.3 + s.phaseOffset, t * 0.9, t * 0.6);
-    });
   });
 
   return (
@@ -118,19 +100,6 @@ function ChaosExpenseMesh({ x, z, height, footprint, color, name, amount, onOpen
         <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.3} roughness={0.45} metalness={0.15} />
       </mesh>
       <pointLight position={[0, floatY, 0]} color={color} intensity={0.5} distance={4} decay={2} />
-      {shards.map((s, i) => (
-        <group
-          key={i}
-          ref={(el) => {
-            shardRefs.current[i] = el;
-          }}
-        >
-          <mesh frustumCulled={false} onClick={handleClick}>
-            <coneGeometry args={[s.size, s.size * 1.7, 3]} />
-            <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.25} roughness={0.5} />
-          </mesh>
-        </group>
-      ))}
       {labelBlock(name, amount, floatY + coreRadius + 0.7)}
     </group>
   );

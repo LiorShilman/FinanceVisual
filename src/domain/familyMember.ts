@@ -18,6 +18,10 @@ export const FamilyMemberSchema = z.object({
   name: z.string().min(1),
   relation: z.enum(FAMILY_RELATIONS),
   maritalStatus: z.enum(MARITAL_STATUSES).optional(),
+  // a small (resized client-side before storing — see FamilyPanel.tsx) data URL, not a Storage
+  // reference — this app has no file storage of its own, and a downscaled square thumbnail is
+  // tiny enough to just live alongside the rest of the account's synced Firestore document.
+  photoUrl: z.string().optional(),
 });
 export type FamilyMember = z.infer<typeof FamilyMemberSchema>;
 
