@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   FAMILY_RELATIONS,
   RELATION_LABELS,
@@ -8,7 +8,17 @@ import {
   type MaritalStatus,
 } from '../../domain/familyMember';
 import { useBoardStore } from '../../app/boardStore';
+import { fetchCurrentMonthStatus, type RiseupConnectionStatus, type RiseupMonthStatus } from '../../app/riseupConnection';
+import { formatCurrency } from '../format';
 import styles from './FamilyPanel.module.css';
+
+const RISEUP_STATUS_LABEL: Record<RiseupConnectionStatus, string> = {
+  unset: 'לא מוגדר',
+  checking: 'בודק…',
+  connected: 'מחובר',
+  invalidPat: 'PAT לא תקין',
+  unreachable: 'לא מחובר',
+};
 
 interface Props {
   onClose: () => void;
@@ -22,6 +32,49 @@ export function FamilyPanel({ onClose }: Props) {
 
   const [newName, setNewName] = useState('');
   const [newRelation, setNewRelation] = useState<FamilyRelation>('spouse');
+
+  const riseupPat = useBoardStore((s) => s.riseupPat);
+  const setRiseupPat = useBoardStore((s) => s.setRiseupPat);
+
+  // riseupPatDraft tracks every keystroke; the store's riseupPat (synced to Firestore) only
+  // changes on blur/Enter — the connection check runs off the synced value so typing doesn't
+  // fire a fetch, or a Firestore write, per character. Initialized straight from the store (not
+  // resynced afterward) — by the time this panel can be opened, AuthGate has already finished
+  // loading the account's Firestore board, so riseupPat is never stale at mount.
+  const [riseupPatDraft, setRiseupPatDraft] = useState(riseupPat);
+
+  // only ever written from the effect's async resolution, never synchronously — "checking" is
+  // derived below by comparing the result's pat against the current synced one, so a stale
+  // result from a previous token doesn't flash the wrong status while a new check is in flight.
+  const [riseupResult, setRiseupResult] = useState<{
+    pat: string;
+    status: RiseupConnectionStatus;
+    data: RiseupMonthStatus | null;
+  } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const pat = riseupPat.trim();
+    if (!pat) return;
+    fetchCurrentMonthStatus(pat).then((result) => {
+      if (!cancelled) setRiseupResult({ pat, ...result });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [riseupPat]);
+
+  const trimmedRiseupPat = riseupPat.trim();
+  const riseupStatus: RiseupConnectionStatus = !trimmedRiseupPat
+    ? 'unset'
+    : riseupResult?.pat === trimmedRiseupPat
+      ? riseupResult.status
+      : 'checking';
+  const monthStatus = riseupResult?.pat === trimmedRiseupPat ? riseupResult.data : null;
+
+  function commitRiseupPat() {
+    setRiseupPat(riseupPatDraft);
+  }
 
   function handleAdd() {
     const name = newName.trim();
@@ -103,6 +156,43 @@ export function FamilyPanel({ onClose }: Props) {
         <button type="button" className={styles.addBtn} onClick={handleAdd} disabled={!newName.trim()}>
           + הוספת בן משפחה
         </button>
+
+        <div className={styles.riseupSection}>
+          <div className={styles.riseupHeader}>
+            <span className={styles.riseupTitle}>חיבור ל-RiseUp</span>
+            <span className={`${styles.riseupPill} ${styles[`riseupPill_${riseupStatus}`]}`}>
+              {RISEUP_STATUS_LABEL[riseupStatus]}
+            </span>
+          </div>
+          <input
+            className={styles.riseupInput}
+            type="password"
+            placeholder="הטוקן האישי שלך מ-RiseUp (riseup_pat_…)"
+            value={riseupPatDraft}
+            onChange={(e) => setRiseupPatDraft(e.target.value)}
+            onBlur={commitRiseupPat}
+            onKeyDown={(e) => e.key === 'Enter' && commitRiseupPat()}
+          />
+          {riseupStatus === 'connected' && (
+            <div className={styles.riseupMonthRow}>
+              {monthStatus ? (
+                <>
+                  <span className={styles.riseupMonthStat}>
+                    הוצאות החודש <strong>{formatCurrency(monthStatus.expense)}</strong>
+                  </span>
+                  <span className={styles.riseupMonthStat}>
+                    הכנסות <strong>{formatCurrency(monthStatus.income)}</strong>
+                  </span>
+                  <span className={`${styles.riseupMonthStat} ${monthStatus.net < 0 ? styles.riseupMonthNegative : ''}`}>
+                    מאזן <strong>{formatCurrency(monthStatus.net)}</strong>
+                  </span>
+                </>
+              ) : (
+                <span className={styles.riseupMonthStat}>טוען את הוצאות החודש…</span>
+              )}
+            </div>
+          )}
+        </div>
 
         <button type="button" className={styles.closeBtn} onClick={onClose}>
           סגירה

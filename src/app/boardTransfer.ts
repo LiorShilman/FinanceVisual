@@ -20,6 +20,7 @@ export const PersistedBoardStateSchema = z.object({
   usdRate: z.number(),
   usdRateUpdatedAt: z.string().nullable(),
   autoUpdateUsdRate: z.boolean(),
+  riseupPat: z.string().default(''),
 });
 
 export type PersistedBoardState = z.infer<typeof PersistedBoardStateSchema>;
@@ -38,6 +39,7 @@ export const EMPTY_BOARD_STATE: PersistedBoardState = {
   usdRate: 3.7,
   usdRateUpdatedAt: null,
   autoUpdateUsdRate: false,
+  riseupPat: '',
 };
 
 /** Pulls just the persisted fields out of the live store — same shape the JSON file holds. */
@@ -54,6 +56,7 @@ export function getPersistedBoardState(): PersistedBoardState {
     usdRate: state.usdRate,
     usdRateUpdatedAt: state.usdRateUpdatedAt,
     autoUpdateUsdRate: state.autoUpdateUsdRate,
+    riseupPat: state.riseupPat,
   };
 }
 

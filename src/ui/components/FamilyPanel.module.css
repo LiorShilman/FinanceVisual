@@ -99,6 +99,83 @@
   cursor: not-allowed;
 }
 
+.riseupSection {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.riseupHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.riseupTitle {
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+.riseupPill {
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  color: var(--text-dim);
+}
+
+.riseupPill_connected {
+  background: color-mix(in srgb, var(--health-good) 22%, transparent);
+  color: var(--health-good);
+}
+
+.riseupPill_unreachable,
+.riseupPill_invalidPat {
+  background: color-mix(in srgb, var(--health-risk) 22%, transparent);
+  color: var(--health-risk);
+}
+
+.riseupPill_checking {
+  background: color-mix(in srgb, var(--health-warning) 22%, transparent);
+  color: var(--health-warning);
+}
+
+.riseupInput {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.8rem;
+}
+
+.riseupMonthRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  padding-top: 2px;
+}
+
+.riseupMonthStat {
+  font-size: 0.76rem;
+  color: var(--text-dim);
+}
+
+.riseupMonthStat strong {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.riseupMonthNegative strong {
+  color: var(--health-risk);
+}
+
 .closeBtn {
   align-self: flex-end;
   border: 1px solid var(--border);

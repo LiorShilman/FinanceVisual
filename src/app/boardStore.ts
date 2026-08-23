@@ -38,11 +38,16 @@ interface BoardState {
   usdRateUpdatedAt: string | null;
   /** When true, the board fetches a fresh rate once per session on load — opt-in, never forced. */
   autoUpdateUsdRate: boolean;
+  /** This account's own RiseUp personal access token — synced per-account (not per-browser) so
+   * it follows a family across devices. Sent as a bearer header straight to the RiseUp proxy
+   * server; never touches any RiseUp-side storage of its own. */
+  riseupPat: string;
 
   setLayoutMode: (mode: LayoutMode) => void;
   toggleHideAmounts: () => void;
   setUsdRate: (rate: number, updatedAt?: string) => void;
   toggleAutoUpdateUsdRate: () => void;
+  setRiseupPat: (pat: string) => void;
 
   addFamilyMember: (member: Omit<FamilyMember, 'id'>) => void;
   updateFamilyMember: (id: string, patch: Partial<Omit<FamilyMember, 'id'>>) => void;
@@ -69,11 +74,13 @@ export const useBoardStore = create<BoardState>()((set) => ({
   usdRate: 3.7,
   usdRateUpdatedAt: null,
   autoUpdateUsdRate: false,
+  riseupPat: '',
 
   setLayoutMode: (mode) => set({ layoutMode: mode }),
   toggleHideAmounts: () => set((state) => ({ hideAmounts: !state.hideAmounts })),
   setUsdRate: (rate, updatedAt) => set({ usdRate: rate, usdRateUpdatedAt: updatedAt ?? new Date().toISOString() }),
   toggleAutoUpdateUsdRate: () => set((state) => ({ autoUpdateUsdRate: !state.autoUpdateUsdRate })),
+  setRiseupPat: (pat) => set({ riseupPat: pat }),
 
   addFamilyMember: (member) =>
     set((state) => ({
