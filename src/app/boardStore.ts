@@ -8,7 +8,6 @@ import {
   type PyramidBand,
   computeBucketedLayout,
   computeCompactDefaultLayout,
-  computeStackedPyramidLayout,
   getOrderedBucketIds,
 } from '../domain/layout';
 import { SEED_ENTITIES, SEED_FAMILY_MEMBERS } from '../domain/seed';
@@ -145,10 +144,6 @@ export function useBoardLayout(): BoardLayout {
       // 'city' has its own 3D renderer and doesn't consume positions/regions at all.
       const fallback = computeCompactDefaultLayout(entities);
       return { positions: { ...fallback, ...freePositions }, regions: [] };
-    }
-    if (layoutMode === 'byPyramid') {
-      const { positions, bands } = computeStackedPyramidLayout(entities, entityOrder);
-      return { positions, regions: bands };
     }
     const { positions, regions } = computeBucketedLayout(entities, familyMembers, layoutMode, entityOrder);
     return { positions, regions };

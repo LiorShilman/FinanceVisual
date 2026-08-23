@@ -172,6 +172,11 @@ export const FinancialEntitySchema = z.object({
   liquidity: z.enum(LIQUIDITY_LEVELS).optional(),
   linkedEntityIds: z.array(z.string()).default([]),
   notes: z.string().optional(),
+  // an external shortcut — the investment house's login page, the bank's site, etc. — opened in a
+  // new tab straight from the edit panel. Deliberately not validated as a strict URL: a user
+  // pasting a link from their bank's app or a share sheet shouldn't get rejected by an overly
+  // picky format check; the open button just no-ops on genuinely empty input.
+  link: z.string().optional(),
   details: EntityDetailsSchema,
   // every amount is still stored in ₪ (so totals/sizing/health stay simple, single-currency math)
   // — this only remembers which currency the entity was actually entered/should be shown in, per

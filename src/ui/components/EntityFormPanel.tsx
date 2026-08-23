@@ -62,6 +62,7 @@ interface Draft {
   liquidity: Liquidity;
   linkedEntityIds: string[];
   notes: string;
+  link: string;
   details: EntityDetails;
   currency: DisplayCurrency;
 }
@@ -93,6 +94,7 @@ export function EntityFormPanel({ entityId, presetCategory, presetDetailOverride
         liquidity: existing.liquidity ?? 'immediate',
         linkedEntityIds: existing.linkedEntityIds,
         notes: existing.notes ?? '',
+        link: existing.link ?? '',
         details: existing.details,
         currency: existing.currency ?? 'ils',
       };
@@ -104,6 +106,7 @@ export function EntityFormPanel({ entityId, presetCategory, presetDetailOverride
       liquidity: 'immediate',
       linkedEntityIds: [],
       notes: '',
+      link: '',
       details: { ...defaultDetails(category), ...presetDetailOverrides } as EntityDetails,
       currency: 'ils',
     };
@@ -168,6 +171,7 @@ export function EntityFormPanel({ entityId, presetCategory, presetDetailOverride
       liquidity: resolveLiquidity(draft.details.kind, draft.liquidity),
       linkedEntityIds: draft.linkedEntityIds,
       notes: draft.notes.trim() || undefined,
+      link: draft.link.trim() || undefined,
       details: draft.details,
       currency: draft.currency,
     };
@@ -528,6 +532,32 @@ export function EntityFormPanel({ entityId, presetCategory, presetDetailOverride
             </div>
           </div>
         )}
+
+        <label className={styles.field}>
+          <span className={styles.label}>קישור מהיר</span>
+          <div className={styles.linkRow}>
+            <input
+              className={styles.input}
+              type="text"
+              placeholder="לדוגמה: קישור להתחברות לבית ההשקעות או לחשבון הבנק"
+              value={draft.link}
+              onChange={(e) => setDraft((s) => ({ ...s, link: e.target.value }))}
+            />
+            <button
+              type="button"
+              className={styles.btn}
+              disabled={!draft.link.trim()}
+              onClick={() => {
+                const url = draft.link.trim();
+                if (!url) return;
+                const href = /^https?:\/\//i.test(url) ? url : `https://${url}`;
+                window.open(href, '_blank', 'noopener,noreferrer');
+              }}
+            >
+              פתח ↗
+            </button>
+          </div>
+        </label>
 
         <label className={styles.field}>
           <span className={styles.label}>הערות</span>

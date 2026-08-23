@@ -7,9 +7,7 @@ import { getWeight, type EntityCategory, type EntityDetails, type FinancialEntit
 import { computeHealth, buildHealthContext, getMissingEssentials } from '../../domain/health';
 import { computeNodeSize, computeTotalWeight } from '../../domain/sizing';
 import { getEntityBucketKey, getOrderedBucketIds, type LayoutMode, type PyramidBand } from '../../domain/layout';
-import { computeTierFillRatios, PYRAMID_TIER_COLORS } from '../../domain/pyramidTiers';
 import { CATEGORY_ICONS } from '../icons';
-import { PyramidBadge } from '../components/PyramidBadge';
 import { LayoutSwitcher } from '../components/LayoutSwitcher';
 import { EntityNode } from '../components/EntityNode';
 import { GhostNode } from '../components/GhostNode';
@@ -78,6 +76,7 @@ function BoardCanvas() {
   );
   const [showFamilyPanel, setShowFamilyPanel] = useState(false);
   const [showInvestmentsTable, setShowInvestmentsTable] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const importInputRef = useRef<HTMLInputElement>(null);
 
   const handleImportFile = useCallback(async (e: ChangeEvent<HTMLInputElement>) => {
@@ -139,9 +138,6 @@ function BoardCanvas() {
       data: { text: region.label },
     }));
 
-    let fillByTier: Record<string, number> = {};
-    if (layoutMode === 'byPyramid') fillByTier = computeTierFillRatios(entities);
-
     const bandNodes: TierBandFlowNode[] = regions.map((region) => ({
       id: `band-${region.key}`,
       type: 'tierBand',
@@ -150,8 +146,8 @@ function BoardCanvas() {
       selectable: false,
       zIndex: -1,
       data: {
-        color: region.tier ? PYRAMID_TIER_COLORS[region.tier] : NEUTRAL_REGION_COLOR,
-        fillRatio: region.tier ? (fillByTier[region.tier] ?? 0) : 0.55,
+        color: NEUTRAL_REGION_COLOR,
+        fillRatio: 0.55,
         width: region.width,
         height: region.height,
       },
@@ -163,8 +159,8 @@ function BoardCanvas() {
   useEffect(() => {
     if (layoutMode === 'city') return;
     const t = setTimeout(() => {
-      if (layoutMode === 'free' || layoutMode === 'byPyramid') {
-        // both are self-contained shapes meant to be seen whole.
+      if (layoutMode === 'free') {
+        // a self-contained shape meant to be seen whole.
         fitView({ duration: 500, padding: 0.12, maxZoom: 1 });
       } else {
         // side-by-side modes can have many columns — fitting them ALL into view shrinks nodes to
@@ -263,49 +259,75 @@ function BoardCanvas() {
   );
 
   return (
-    <div className={styles.screen}>
+    <div className={`${styles.screen} ${layoutMode === 'city' ? styles.cityMode : ''}`}>
       <header className={styles.header}>
         <div className={styles.titleBlock}>
           <h1 className={styles.title}>הלוח הפיננסי המשפחתי</h1>
           <span className={styles.subtitle}>גרור, ארגן, בנה את תמונת המצב שלך</span>
         </div>
-        <LayoutSwitcher value={layoutMode} onChange={(m: LayoutMode) => setLayoutMode(m)} />
-        <div className={styles.headerActions}>
-          <PyramidBadge entities={entities} onClick={() => setLayoutMode('byPyramid')} />
-          <CurrencyControl />
-          <button
-            type="button"
-            className={`${styles.btn} ${hideAmounts ? styles.btnActive : ''}`}
-            onClick={toggleHideAmounts}
-            title="הסתר/הצג סכומים — שימושי לשיתוף מסך"
-          >
-            {hideAmounts ? '🙈 סכומים מוסתרים' : '👁️ הסתר סכומים'}
-          </button>
-          <button type="button" className={styles.btn} onClick={() => setShowFamilyPanel(true)}>
-            משפחה ({familyMembers.length})
-          </button>
-          <button type="button" className={styles.btn} onClick={exportBoardToFile} title="הורדת כל נתוני הלוח כקובץ JSON">
-            ⬇️ ייצוא נתונים
-          </button>
-          <button
-            type="button"
-            className={styles.btn}
-            onClick={() => importInputRef.current?.click()}
-            title="טעינת קובץ JSON שיוצא מכאן — מחליף את כל נתוני הלוח הנוכחיים"
-          >
-            ⬆️ ייבוא נתונים
-          </button>
-          <input ref={importInputRef} type="file" accept="application/json" hidden onChange={handleImportFile} />
-          <button
-            type="button"
-            className={`${styles.btn} ${styles.btnPrimary}`}
-            onClick={() => setCreating({ category: 'savings' })}
-          >
-            + ישות
-          </button>
-          <button type="button" className={styles.btn} onClick={() => void signOutUser()} title="התנתקות מהחשבון">
-            התנתקות
-          </button>
+        <button
+          type="button"
+          className={styles.menuToggle}
+          onClick={() => setMenuOpen((o) => !o)}
+          aria-label="תפריט"
+          aria-expanded={menuOpen}
+        >
+          {menuOpen ? '✕' : '☰'}
+        </button>
+        <div className={`${styles.menu} ${menuOpen ? styles.menuOpen : ''}`}>
+          <LayoutSwitcher
+            value={layoutMode}
+            onChange={(m: LayoutMode) => {
+              setLayoutMode(m);
+              setMenuOpen(false);
+            }}
+          />
+          <div className={styles.headerActions}>
+            <CurrencyControl />
+            <button
+              type="button"
+              className={`${styles.btn} ${hideAmounts ? styles.btnActive : ''}`}
+              onClick={toggleHideAmounts}
+              title="הסתר/הצג סכומים — שימושי לשיתוף מסך"
+            >
+              {hideAmounts ? '🙈 סכומים מוסתרים' : '👁️ הסתר סכומים'}
+            </button>
+            <button
+              type="button"
+              className={styles.btn}
+              onClick={() => {
+                setShowFamilyPanel(true);
+                setMenuOpen(false);
+              }}
+            >
+              משפחה ({familyMembers.length})
+            </button>
+            <button type="button" className={styles.btn} onClick={exportBoardToFile} title="הורדת כל נתוני הלוח כקובץ JSON">
+              ⬇️ ייצוא נתונים
+            </button>
+            <button
+              type="button"
+              className={styles.btn}
+              onClick={() => importInputRef.current?.click()}
+              title="טעינת קובץ JSON שיוצא מכאן — מחליף את כל נתוני הלוח הנוכחיים"
+            >
+              ⬆️ ייבוא נתונים
+            </button>
+            <input ref={importInputRef} type="file" accept="application/json" hidden onChange={handleImportFile} />
+            <button
+              type="button"
+              className={`${styles.btn} ${styles.btnPrimary}`}
+              onClick={() => {
+                setCreating({ category: 'savings' });
+                setMenuOpen(false);
+              }}
+            >
+              + ישות
+            </button>
+            <button type="button" className={styles.btn} onClick={() => void signOutUser()} title="התנתקות מהחשבון">
+              התנתקות
+            </button>
+          </div>
         </div>
       </header>
 

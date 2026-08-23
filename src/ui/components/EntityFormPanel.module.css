@@ -90,6 +90,20 @@
   flex: 1;
 }
 
+.linkRow {
+  display: flex;
+  gap: 8px;
+}
+
+.linkRow > input {
+  flex: 1;
+  min-width: 0;
+}
+
+.linkRow > button {
+  flex-shrink: 0;
+}
+
 .checkboxRow {
   display: flex;
   align-items: center;

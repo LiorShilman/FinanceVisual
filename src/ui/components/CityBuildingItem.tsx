@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import type { ThreeEvent } from '@react-three/fiber';
 import { useBoardStore } from '../../app/boardStore';
@@ -20,6 +20,23 @@ interface Props {
 const GROUND_PLANE = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 // Below this, a press-and-release still counts as "open the entity", not "moved it by accident".
 const DRAG_THRESHOLD = 0.15;
+const TOUCH_QUERY = '(pointer: coarse)';
+
+// A touch device has no way to tell "orbit the camera" and "drag this building" apart from a
+// single finger alone — both start as one pointer moving across the same spot. Rather than fight
+// that ambiguity, dragging is a mouse-only feature; a coarse (touch) pointer falls back to plain
+// tap-to-open, same as before this feature existed, and leaves OrbitControls' own touch gestures
+// (orbit/pinch-zoom/pan) completely uncontested.
+function useIsTouchDevice(): boolean {
+  const [isTouch, setIsTouch] = useState(() => typeof window !== 'undefined' && window.matchMedia(TOUCH_QUERY).matches);
+  useEffect(() => {
+    const mql = window.matchMedia(TOUCH_QUERY);
+    const onChange = () => setIsTouch(mql.matches);
+    mql.addEventListener('change', onChange);
+    return () => mql.removeEventListener('change', onChange);
+  }, []);
+  return isTouch;
+}
 
 /**
  * Wraps one city building with an invisible, generously-oversized hit-box that owns pointer
@@ -31,10 +48,16 @@ const DRAG_THRESHOLD = 0.15;
  * offset.
  */
 export function CityBuildingItem({ building, renderMesh, onOpen, setControlsEnabled }: Props) {
+  const isTouch = useIsTouchDevice();
   const setCityPosition = useBoardStore((s) => s.setCityPosition);
   const [dragPos, setDragPos] = useState<CityPosition | null>(null);
   const draggingRef = useRef(false);
   const activeRef = useRef(false);
+
+  const terrainYTouch = getTerrainHeight(building.x, building.z);
+  if (isTouch) {
+    return <group position={[0, terrainYTouch, 0]}>{renderMesh(building.x, building.z)}</group>;
+  }
 
   const displayX = dragPos?.x ?? building.x;
   const displayZ = dragPos?.z ?? building.z;
