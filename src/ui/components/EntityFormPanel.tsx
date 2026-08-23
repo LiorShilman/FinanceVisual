@@ -1,8 +1,12 @@
 import { useMemo, useState } from 'react';
 import {
+  ASSET_TYPES,
+  ASSET_TYPE_LABELS,
   CATEGORY_LABELS,
   DISPLAY_CURRENCIES,
   ENTITY_CATEGORIES,
+  EXPENSE_TYPES,
+  EXPENSE_TYPE_LABELS,
   FinancialEntitySchema,
   INSURANCE_TYPES,
   INSURANCE_TYPE_LABELS,
@@ -26,7 +30,7 @@ function defaultDetails(category: EntityCategory): EntityDetails {
     case 'income':
       return { kind: 'income', monthlyAmount: 0 };
     case 'expense':
-      return { kind: 'expense', monthlyAmount: 0, essential: true };
+      return { kind: 'expense', monthlyAmount: 0, essential: true, expenseType: 'other' };
     case 'donation':
       return { kind: 'donation', monthlyAmount: 0 };
     case 'checking':
@@ -34,7 +38,7 @@ function defaultDetails(category: EntityCategory): EntityDetails {
     case 'savings':
       return { kind: 'savings', balance: 0, isEmergencyFund: false };
     case 'investment':
-      return { kind: 'investment', balance: 0, monthlyContribution: 0 };
+      return { kind: 'investment', balance: 0, monthlyContribution: 0, assetType: 'traditional' };
     case 'pension':
       return { kind: 'pension', balance: 0, monthlyContribution: 0 };
     case 'studyFund':
@@ -257,6 +261,20 @@ export function EntityFormPanel({ entityId, presetCategory, presetDetailOverride
                 onChange={(v) => updateDetail({ monthlyAmount: fromDisplay(v) })}
               />
             </label>
+            <label className={styles.field}>
+              <span className={styles.label}>סוג הוצאה</span>
+              <select
+                className={styles.select}
+                value={d.expenseType}
+                onChange={(e) => updateDetail({ expenseType: e.target.value })}
+              >
+                {EXPENSE_TYPES.map((t) => (
+                  <option key={t} value={t}>
+                    {EXPENSE_TYPE_LABELS[t]}
+                  </option>
+                ))}
+              </select>
+            </label>
             <div className={styles.checkboxRow}>
               <input
                 type="checkbox"
@@ -340,6 +358,23 @@ export function EntityFormPanel({ entityId, presetCategory, presetDetailOverride
               />
             </label>
           </div>
+        )}
+
+        {d.kind === 'investment' && (
+          <label className={styles.field}>
+            <span className={styles.label}>סוג נכס</span>
+            <select
+              className={styles.select}
+              value={d.assetType}
+              onChange={(e) => updateDetail({ assetType: e.target.value })}
+            >
+              {ASSET_TYPES.map((t) => (
+                <option key={t} value={t}>
+                  {ASSET_TYPE_LABELS[t]}
+                </option>
+              ))}
+            </select>
+          </label>
         )}
 
         {d.kind === 'insurance' && (

@@ -18,7 +18,7 @@ export const SEED_ENTITIES: FinancialEntity[] = [
     ownerIds: ['self'],
     currency: 'ils',
     linkedEntityIds: [],
-    details: { kind: 'expense', monthlyAmount: 9000, essential: true },
+    details: { kind: 'expense', monthlyAmount: 9000, essential: true, expenseType: 'other' },
   },
   {
     id: 'savings-emergency',
@@ -36,7 +36,7 @@ export const SEED_ENTITIES: FinancialEntity[] = [
     currency: 'ils',
     liquidity: 'shortTerm',
     linkedEntityIds: [],
-    details: { kind: 'investment', balance: 60000, monthlyContribution: 1000 },
+    details: { kind: 'investment', balance: 60000, monthlyContribution: 1000, assetType: 'traditional' },
   },
   {
     id: 'pension-main',

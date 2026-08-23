@@ -13,11 +13,16 @@ import { computeValleyFeature } from '../../domain/valley';
 import { computeWaterFeature } from '../../domain/water';
 import { formatCurrency } from '../format';
 import { CityBuildingMesh } from './CityBuildingMesh';
+import { CityCrystalMesh } from './CityCrystalMesh';
 import { CityDebtChains } from './CityDebtChains';
+import { CityExpenseMesh } from './CityExpenseMesh';
 import { CityGiftMesh } from './CityGiftMesh';
+import { CityGoalMesh } from './CityGoalMesh';
 import { CityGround } from './CityGround';
+import { CityHouseMesh } from './CityHouseMesh';
 import { CityIncomeFaucet } from './CityIncomeFaucet';
 import { CityIncomeLinks } from './CityIncomeLinks';
+import { CityShieldMesh } from './CityShieldMesh';
 import { CitySun } from './CitySun';
 
 interface Props {
@@ -144,6 +149,85 @@ export function CityView({ entities, onOpen }: Props) {
               color={b.color}
               name={b.name}
               amount={amount}
+              onOpen={() => onOpen(b.id)}
+            />
+          );
+        }
+        if (entity.details.kind === 'investment' && entity.details.assetType !== 'traditional') {
+          return (
+            <CityCrystalMesh
+              key={b.id}
+              x={b.x}
+              z={b.z}
+              height={b.height}
+              footprint={b.footprint}
+              color={b.color}
+              name={b.name}
+              amount={amount}
+              onOpen={() => onOpen(b.id)}
+            />
+          );
+        }
+        if (entity.details.kind === 'expense') {
+          return (
+            <CityExpenseMesh
+              key={b.id}
+              x={b.x}
+              z={b.z}
+              height={b.height}
+              footprint={b.footprint}
+              color={b.color}
+              name={b.name}
+              amount={amount}
+              expenseType={entity.details.expenseType}
+              onOpen={() => onOpen(b.id)}
+            />
+          );
+        }
+        if (entity.details.kind === 'insurance') {
+          return (
+            <CityShieldMesh
+              key={b.id}
+              x={b.x}
+              z={b.z}
+              height={b.height}
+              footprint={b.footprint}
+              color={b.color}
+              name={b.name}
+              amount={amount}
+              onOpen={() => onOpen(b.id)}
+            />
+          );
+        }
+        if (entity.details.kind === 'realEstate') {
+          return (
+            <CityHouseMesh
+              key={b.id}
+              x={b.x}
+              z={b.z}
+              height={b.height}
+              footprint={b.footprint}
+              color={b.color}
+              name={b.name}
+              amount={amount}
+              onOpen={() => onOpen(b.id)}
+            />
+          );
+        }
+        if (entity.details.kind === 'goal') {
+          const { targetAmount, currentAmount } = entity.details;
+          const progress = targetAmount > 0 ? Math.max(0, Math.min(1, currentAmount / targetAmount)) : 0;
+          return (
+            <CityGoalMesh
+              key={b.id}
+              x={b.x}
+              z={b.z}
+              height={b.height}
+              footprint={b.footprint}
+              color={b.color}
+              name={b.name}
+              amount={amount}
+              progress={progress}
               onOpen={() => onOpen(b.id)}
             />
           );

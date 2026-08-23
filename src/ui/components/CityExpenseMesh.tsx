@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { Billboard, Text } from '@react-three/drei';
 import type { ThreeEvent } from '@react-three/fiber';
+import type { ExpenseType } from '../../domain/entity';
 import { computeTiers, getFacadeTexture } from './cityTowerShared';
 
 interface Props {
@@ -11,10 +12,19 @@ interface Props {
   color: string;
   name: string;
   amount: string;
+  expenseType: ExpenseType;
   onOpen: () => void;
 }
 
-export function CityBuildingMesh({ x, z, height, footprint, color, name, amount, onOpen }: Props) {
+const ACCENT_COLOR = '#e05a5a';
+
+/**
+ * Same tiered-tower massing every building uses (color stays the shared expense-risk red, so
+ * "red = expense" still reads at a glance) with one small accessory mesh layered on top by
+ * expenseType — a gable roof for housing, wheels for transport, an awning for food. 'other' gets
+ * no accessory at all, so it looks exactly like the plain building it used to be.
+ */
+export function CityExpenseMesh({ x, z, height, footprint, color, name, amount, expenseType, onOpen }: Props) {
   const facadeTexture = useMemo(() => getFacadeTexture(), []);
   const tiers = useMemo(() => computeTiers(height, footprint), [height, footprint]);
 
@@ -40,8 +50,6 @@ export function CityBuildingMesh({ x, z, height, footprint, color, name, amount,
             roughness={0.55}
           />
         </mesh>
-        {/* a solid ledge at the top of every tier but the last — makes each setback read as a
-            distinct storey break, not just a texture seam. */}
         {i < tiers.length - 1 && (
           <mesh position={[0, tierTops[i] + ledgeHeight / 2, 0]} frustumCulled={false} onClick={handleClick}>
             <boxGeometry args={[tier.fp * 1.06, ledgeHeight, tier.fp * 1.06]} />
@@ -52,8 +60,59 @@ export function CityBuildingMesh({ x, z, height, footprint, color, name, amount,
     );
   });
 
-  const roofFootprint = tiers[tiers.length - 1].fp * 1.12;
+  const topFootprint = tiers[tiers.length - 1].fp;
+  const roofFootprint = topFootprint * 1.12;
   const roofHeight = Math.max(0.08, height * 0.015);
+  const baseFootprint = tiers[0].fp;
+
+  const accessory = (() => {
+    if (expenseType === 'housing') {
+      const half = roofFootprint / 2;
+      const slope = Math.max(0.4, roofFootprint * 0.5);
+      return (
+        <group position={[0, height + roofHeight, 0]} onClick={handleClick}>
+          <mesh position={[-half / 2, slope * 0.25, 0]} rotation={[0, 0, Math.PI / 5]} frustumCulled={false}>
+            <boxGeometry args={[slope, 0.06, roofFootprint * 1.02]} />
+            <meshStandardMaterial color="#8a4b3a" roughness={0.7} />
+          </mesh>
+          <mesh position={[half / 2, slope * 0.25, 0]} rotation={[0, 0, -Math.PI / 5]} frustumCulled={false}>
+            <boxGeometry args={[slope, 0.06, roofFootprint * 1.02]} />
+            <meshStandardMaterial color="#8a4b3a" roughness={0.7} />
+          </mesh>
+        </group>
+      );
+    }
+    if (expenseType === 'transport') {
+      const wheelR = Math.max(0.14, baseFootprint * 0.16);
+      const offset = baseFootprint / 2 + 0.02;
+      return (
+        <group onClick={handleClick}>
+          {[-offset, offset].map((xOff) => (
+            <mesh key={xOff} position={[xOff, wheelR, 0]} rotation={[Math.PI / 2, 0, 0]} frustumCulled={false}>
+              <torusGeometry args={[wheelR, wheelR * 0.35, 8, 16]} />
+              <meshStandardMaterial color="#20242e" metalness={0.5} roughness={0.5} />
+            </mesh>
+          ))}
+        </group>
+      );
+    }
+    if (expenseType === 'food') {
+      const awningW = baseFootprint * 1.3;
+      const awningDepth = Math.max(0.3, baseFootprint * 0.35);
+      return (
+        <mesh
+          position={[0, height * 0.22, baseFootprint / 2 + awningDepth / 2]}
+          rotation={[-Math.PI / 10, 0, 0]}
+          frustumCulled={false}
+          onClick={handleClick}
+        >
+          <boxGeometry args={[awningW, 0.06, awningDepth]} />
+          <meshStandardMaterial color={ACCENT_COLOR} emissive={ACCENT_COLOR} emissiveIntensity={0.4} roughness={0.6} />
+        </mesh>
+      );
+    }
+    return null;
+  })();
 
   return (
     <group position={[x, 0, z]}>
@@ -62,6 +121,7 @@ export function CityBuildingMesh({ x, z, height, footprint, color, name, amount,
         <boxGeometry args={[roofFootprint, roofHeight, roofFootprint]} />
         <meshStandardMaterial color="#20242e" emissive={color} emissiveIntensity={0.25} roughness={0.6} />
       </mesh>
+      {accessory}
       <Billboard position={[0, height + roofHeight + 0.85, 0]}>
         {amount !== '' && (
           <Text

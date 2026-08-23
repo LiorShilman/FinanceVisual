@@ -10,10 +10,21 @@ export const LIQUIDITY_LABELS: Record<Liquidity, string> = {
 };
 
 const IncomeDetails = z.object({ kind: z.literal('income'), monthlyAmount: z.number().nonnegative() });
+export const EXPENSE_TYPES = ['housing', 'food', 'transport', 'other'] as const;
+export type ExpenseType = (typeof EXPENSE_TYPES)[number];
+export const EXPENSE_TYPE_LABELS: Record<ExpenseType, string> = {
+  housing: 'דיור',
+  food: 'מזון',
+  transport: 'תחבורה',
+  other: 'אחר',
+};
 const ExpenseDetails = z.object({
   kind: z.literal('expense'),
   monthlyAmount: z.number().nonnegative(),
   essential: z.boolean().default(true),
+  // drives which silhouette accent the city building gets — stays the same shared expense-red
+  // health color regardless, only the shape varies (see CityExpenseMesh).
+  expenseType: z.enum(EXPENSE_TYPES).default('other'),
 });
 // same shape as expense (a recurring monthly outflow) but tracked separately — giving isn't a
 // cost to minimize the way rent or groceries are, so it shouldn't inherit expense's "risk" color
@@ -32,10 +43,21 @@ const SavingsDetails = z.object({
   balance: z.number().nonnegative(),
   isEmergencyFund: z.boolean().default(false),
 });
+export const ASSET_TYPES = ['traditional', 'crypto', 'forex'] as const;
+export type AssetType = (typeof ASSET_TYPES)[number];
+export const ASSET_TYPE_LABELS: Record<AssetType, string> = {
+  traditional: 'מסורתי (מניות/קרנות)',
+  crypto: 'קריפטו',
+  forex: 'פורקס',
+};
 const InvestmentDetails = z.object({
   kind: z.literal('investment'),
   balance: z.number().nonnegative(),
   monthlyContribution: z.number().nonnegative().default(0),
+  // a sub-type, not a whole new category — crypto/forex still behave exactly like any other
+  // investment (weight, liquidity, the investments table), they just get a visibly different
+  // building in the city so their volatility reads at a glance.
+  assetType: z.enum(ASSET_TYPES).default('traditional'),
 });
 const PensionDetails = z.object({
   kind: z.literal('pension'),
