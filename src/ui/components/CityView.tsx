@@ -27,12 +27,17 @@ import { CityHouseMesh } from './CityHouseMesh';
 import { CityIncomeFaucet } from './CityIncomeFaucet';
 import { CityIncomeLinks } from './CityIncomeLinks';
 import { CityRiskAura } from './CityRiskAura';
+import { CityRiseupMismatchBadge } from './CityRiseupMismatchBadge';
 import { CityShieldMesh } from './CityShieldMesh';
 import { CitySun } from './CitySun';
 
 interface Props {
   entities: FinancialEntity[];
   familyMembers: FamilyMember[];
+  // entities whose linked RiseUp field (see domain/entity.ts's riseupLink) doesn't match this
+  // month's real total — drives the floating "?" badge, computed once in BoardScreen rather than
+  // duplicating the fetch/compare here.
+  riseupMismatchIds: Set<string>;
   onOpen: (id: string) => void;
 }
 
@@ -45,7 +50,7 @@ const DEPTH_LABELS: { text: string; color: string }[] = [
   { text: 'נזיל / שוטף', color: '#ee6b6b' },
 ];
 
-export function CityView({ entities, familyMembers, onOpen }: Props) {
+export function CityView({ entities, familyMembers, riseupMismatchIds, onOpen }: Props) {
   const hideAmounts = useBoardStore((s) => s.hideAmounts);
   const usdRate = useBoardStore((s) => s.usdRate);
   const cityPositions = useBoardStore((s) => s.cityPositions);
@@ -130,10 +135,10 @@ export function CityView({ entities, familyMembers, onOpen }: Props) {
         position={[bounds.center[0], 0, bounds.center[1]]}
         frustumCulled={false}
       />
-      {/* lower and off to one side (near the valley, not dead-center) — high above the district
-          center made it nearly invisible from the default camera angle; this stays in frame from
-          a side view without sitting deep enough in z to dim into the fog. */}
-      <CitySun x={valley.center[0] + 4} y={10} z={-4} breakdown={hideAmounts ? null : netWorth} />
+      {/* off to one side, not dead-center over the district — anchored to the camera-relative
+          frame (width/depth) rather than the valley's own far-corner position, which left almost
+          no headroom to raise it without pushing it straight out of the frustum's edge. */}
+      <CitySun x={width * 0.68} y={19} z={maxDepthZ * 0.35} breakdown={hideAmounts ? null : netWorth} />
       <CityIncomeLinks paths={incomeLinkPaths} />
       <CityDebtChains debtPositions={debtPositions} linkPaths={debtLinkPaths} />
       {incomeFaucetTarget && (
@@ -180,6 +185,16 @@ export function CityView({ entities, familyMembers, onOpen }: Props) {
         .filter((b) => b.isAtRisk)
         .map((b) => (
           <CityRiskAura key={`risk-${b.id}`} x={b.x} z={b.z} footprint={b.footprint} />
+        ))}
+      {buildings
+        .filter((b) => riseupMismatchIds.has(b.id))
+        .map((b) => (
+          <CityRiseupMismatchBadge
+            key={`riseup-${b.id}`}
+            x={b.x + b.footprint * 0.7}
+            z={b.z}
+            y={getTerrainHeight(b.x, b.z) + b.height + 1.7}
+          />
         ))}
       {familyAvatarTargets.map((t) => (
         <CityFamilyAvatar key={t.id} x={t.x} z={t.z} y={t.y} name={t.name} photoUrl={t.photoUrl} />

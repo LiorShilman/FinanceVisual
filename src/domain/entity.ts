@@ -182,8 +182,75 @@ export const FinancialEntitySchema = z.object({
   // — this only remembers which currency the entity was actually entered/should be shown in, per
   // entity, not as a global "view everything in $" toggle.
   currency: z.enum(DISPLAY_CURRENCIES).default('ils'),
+  // opt-in link from one numeric field on this entity (whichever one makes sense for its kind —
+  // see LINKABLE_FIELDS) to a hand-picked set of RiseUp transactions, identified by business name
+  // (not transactionId — RiseUp mints a fresh id per transaction every month, but the same
+  // recurring payee's name is what actually keeps matching month to month). This never overwrites
+  // what was typed in by hand; it only lets the UI compute "RiseUp's total for these businesses
+  // this month" alongside it and flag a mismatch — see app/riseupSync.ts.
+  riseupLink: z
+    .object({
+      field: z.string(),
+      businessNames: z.array(z.string()).min(1),
+    })
+    .optional(),
 });
 export type FinancialEntity = z.infer<typeof FinancialEntitySchema>;
+export type RiseupLink = NonNullable<FinancialEntity['riseupLink']>;
+
+/** Reads a linked field's current value straight off the live details object — deliberately not
+ * typed per-kind (LINKABLE_FIELDS spans every kind's own shape), so this is the one place that
+ * has to reach past the discriminated union to read it generically. */
+export function getLinkedFieldValue(details: EntityDetails, field: string): number | null {
+  const value = (details as unknown as Record<string, unknown>)[field];
+  return typeof value === 'number' ? value : null;
+}
+
+interface LinkableField {
+  key: string;
+  label: string;
+}
+
+// Which numeric field(s) on each entity kind are meaningful to compare against RiseUp — a debt's
+// outstandingBalance isn't something RiseUp's cashflow data can ever confirm, but its
+// monthlyPayment is exactly a recurring transaction total; a goal's targetAmount is a static
+// choice, but currentAmount could plausibly be tracked the same way. 'source' has no numeric
+// fields at all, so it's simply absent.
+export const LINKABLE_FIELDS: Partial<Record<EntityCategory, LinkableField[]>> = {
+  income: [{ key: 'monthlyAmount', label: 'סכום חודשי' }],
+  expense: [{ key: 'monthlyAmount', label: 'סכום חודשי' }],
+  donation: [{ key: 'monthlyAmount', label: 'סכום חודשי' }],
+  checking: [
+    { key: 'balance', label: 'יתרה' },
+    { key: 'availableForInvestment', label: 'פנוי להשקעה' },
+  ],
+  savings: [{ key: 'balance', label: 'יתרה' }],
+  investment: [
+    { key: 'balance', label: 'יתרה' },
+    { key: 'monthlyContribution', label: 'הפקדה חודשית' },
+  ],
+  pension: [
+    { key: 'balance', label: 'יתרה' },
+    { key: 'monthlyContribution', label: 'הפקדה חודשית' },
+  ],
+  studyFund: [
+    { key: 'balance', label: 'יתרה' },
+    { key: 'monthlyContribution', label: 'הפקדה חודשית' },
+  ],
+  insurance: [
+    { key: 'coverageAmount', label: 'סכום כיסוי' },
+    { key: 'monthlyPremium', label: 'פרמיה חודשית' },
+  ],
+  debt: [
+    { key: 'outstandingBalance', label: 'יתרת חוב' },
+    { key: 'monthlyPayment', label: 'תשלום חודשי' },
+  ],
+  goal: [
+    { key: 'targetAmount', label: 'סכום יעד' },
+    { key: 'currentAmount', label: 'נצבר עד כה' },
+  ],
+  realEstate: [{ key: 'currentValue', label: 'שווי נוכחי' }],
+};
 
 export function getCategory(entity: FinancialEntity): EntityCategory {
   return entity.details.kind;

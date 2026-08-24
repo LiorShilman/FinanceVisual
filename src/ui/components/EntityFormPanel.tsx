@@ -8,8 +8,10 @@ import {
   EXPENSE_TYPES,
   EXPENSE_TYPE_LABELS,
   FinancialEntitySchema,
+  getLinkedFieldValue,
   INSURANCE_TYPES,
   INSURANCE_TYPE_LABELS,
+  LINKABLE_FIELDS,
   LIQUIDITY_LABELS,
   LIQUIDITY_LEVELS,
   isLiquidityRelevant,
@@ -21,7 +23,10 @@ import {
   type Liquidity,
 } from '../../domain/entity';
 import { useBoardStore } from '../../app/boardStore';
+import type { RiseupTransaction } from '../../app/riseupConnection';
+import { sumRiseupForBusinesses } from '../../app/riseupSync';
 import { CATEGORY_ICONS } from '../icons';
+import { formatCurrency } from '../format';
 import { NumberField } from './NumberField';
 import styles from './EntityFormPanel.module.css';
 
@@ -73,10 +78,13 @@ interface Props {
   entityId: string | null;
   presetCategory?: EntityCategory;
   presetDetailOverrides?: Partial<EntityDetails>;
+  // this month's real RiseUp transactions, for the linked-field discrepancy indicator below —
+  // empty when disconnected or still loading, which just hides the indicator.
+  riseupTransactions: RiseupTransaction[];
   onClose: () => void;
 }
 
-export function EntityFormPanel({ entityId, presetCategory, presetDetailOverrides, onClose }: Props) {
+export function EntityFormPanel({ entityId, presetCategory, presetDetailOverrides, riseupTransactions, onClose }: Props) {
   const entities = useBoardStore((s) => s.entities);
   const familyMembers = useBoardStore((s) => s.familyMembers);
   const addEntity = useBoardStore((s) => s.addEntity);
@@ -165,6 +173,12 @@ export function EntityFormPanel({ entityId, presetCategory, presetDetailOverride
   }
 
   function handleSubmit() {
+    // a category switch can leave a stale riseupLink pointing at a field that doesn't exist on
+    // the new kind (e.g. linked to debt's monthlyPayment, then switched to savings) — drop it
+    // rather than carry forward a link nothing can ever display or compare again.
+    const validFieldKeys = new Set((LINKABLE_FIELDS[draft.details.kind] ?? []).map((f) => f.key));
+    const riseupLink = existing?.riseupLink && validFieldKeys.has(existing.riseupLink.field) ? existing.riseupLink : undefined;
+
     const payload = {
       name: draft.name.trim(),
       ownerIds: draft.ownerIds,
@@ -174,6 +188,7 @@ export function EntityFormPanel({ entityId, presetCategory, presetDetailOverride
       link: draft.link.trim() || undefined,
       details: draft.details,
       currency: draft.currency,
+      riseupLink,
     };
     const result = FinancialEntitySchema.omit({ id: true }).safeParse(payload);
     if (!result.success) {
@@ -197,7 +212,32 @@ export function EntityFormPanel({ entityId, presetCategory, presetDetailOverride
     onClose();
   }
 
+  function handleUnlinkRiseup() {
+    if (existing) updateEntity(existing.id, { riseupLink: undefined });
+  }
+
   const d = draft.details;
+
+  // read-only comparison against this month's real RiseUp data for whichever field is linked
+  // (see domain/entity.ts's riseupLink) — never written back automatically; the entity's own
+  // stored number only ever changes when a person types a new one in and saves.
+  //
+  // Deliberately compares against `existing.details` (the last *saved* value), not `d`
+  // (`draft.details`, which updates on every keystroke) — comparing against the live draft made
+  // this box show "0 difference" the instant you typed a matching number, before you'd actually
+  // saved anything, while the city's own badge (which only ever sees the store's saved entities)
+  // correctly kept showing the mismatch. Same saved value on both ends now.
+  const riseupLinkInfo = useMemo(() => {
+    if (!existing?.riseupLink) return null;
+    const fieldMeta = (LINKABLE_FIELDS[existing.details.kind] ?? []).find((f) => f.key === existing.riseupLink!.field);
+    if (!fieldMeta) return null;
+    const savedValue = getLinkedFieldValue(existing.details, existing.riseupLink.field);
+    if (savedValue === null) return null;
+    const riseupTotal = sumRiseupForBusinesses(riseupTransactions, existing.riseupLink.businessNames);
+    const draftValue = getLinkedFieldValue(d, existing.riseupLink.field);
+    const hasUnsavedChange = draftValue !== null && draftValue !== savedValue;
+    return { fieldMeta, savedValue, riseupTotal, businessNames: existing.riseupLink.businessNames, hasUnsavedChange };
+  }, [existing, d, riseupTransactions]);
 
   return (
     <div className={styles.overlay} onClick={onClose}>
@@ -480,6 +520,34 @@ export function EntityFormPanel({ entityId, presetCategory, presetDetailOverride
               onChange={(v) => updateDetail({ currentValue: fromDisplay(v) })}
             />
           </label>
+        )}
+
+        {riseupLinkInfo && (
+          <div
+            className={`${styles.riseupLinkBox} ${riseupLinkInfo.savedValue !== riseupLinkInfo.riseupTotal ? styles.riseupLinkBoxMismatch : ''}`}
+          >
+            <span className={styles.riseupLinkTitle}>קשור ל-RiseUp — {riseupLinkInfo.fieldMeta.label}</span>
+            <div className={styles.riseupLinkAmounts}>
+              <span>
+                בישות: <strong>{formatCurrency(riseupLinkInfo.savedValue)}</strong>
+              </span>
+              <span>
+                ב-RiseUp החודש: <strong>{formatCurrency(riseupLinkInfo.riseupTotal)}</strong>
+              </span>
+              {riseupLinkInfo.savedValue !== riseupLinkInfo.riseupTotal && (
+                <span className={styles.riseupLinkDiff}>
+                  ⚠ הפרש {formatCurrency(Math.abs(riseupLinkInfo.riseupTotal - riseupLinkInfo.savedValue))}
+                </span>
+              )}
+            </div>
+            {riseupLinkInfo.hasUnsavedChange && (
+              <span className={styles.riseupLinkDiff}>יש לך שינוי שעדיין לא נשמר בשדה הזה — לחץ "שמירה" כדי שההשוואה תתעדכן</span>
+            )}
+            <span className={styles.riseupLinkBusinesses}>מבוסס על: {riseupLinkInfo.businessNames.join(', ')}</span>
+            <button type="button" className={styles.riseupUnlinkBtn} onClick={handleUnlinkRiseup}>
+              בטל קישור
+            </button>
+          </div>
         )}
 
         {isLiquidityRelevant(d.kind) && (

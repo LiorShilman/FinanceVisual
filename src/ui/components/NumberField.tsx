@@ -5,6 +5,7 @@ interface Props {
   onChange: (value: number) => void;
   className?: string;
   placeholder?: string;
+  disabled?: boolean;
 }
 
 function formatDigits(n: number): string {
@@ -18,7 +19,7 @@ function parseDigits(text: string): number {
 }
 
 /** Text input that displays whole numbers grouped with commas (1,000,000) while editing. */
-export function NumberField({ value, onChange, className, placeholder }: Props) {
+export function NumberField({ value, onChange, className, placeholder, disabled }: Props) {
   const [text, setText] = useState(() => formatDigits(value));
   const [lastValue, setLastValue] = useState(value);
 
@@ -34,6 +35,7 @@ export function NumberField({ value, onChange, className, placeholder }: Props) 
       dir="ltr"
       className={className}
       placeholder={placeholder}
+      disabled={disabled}
       value={text}
       onChange={(e) => {
         const parsed = parseDigits(e.target.value);

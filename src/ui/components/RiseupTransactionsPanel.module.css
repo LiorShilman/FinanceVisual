@@ -173,6 +173,81 @@
   white-space: nowrap;
 }
 
+.linkBar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 24px 12px;
+  font-size: 0.8rem;
+}
+
+.linkStatus {
+  color: var(--text-dim);
+}
+
+.linkStatus strong {
+  color: var(--text);
+}
+
+.linkBarBtn {
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-dim);
+  padding: 5px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 0.74rem;
+  font-weight: 600;
+}
+
+.linkBarBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.linkBarBtnPrimary {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+  color: var(--text);
+}
+
+.unlinkBtn {
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--health-risk);
+  padding: 5px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 0.74rem;
+  font-weight: 600;
+}
+
+.linkedBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 0.68rem;
+  color: var(--accent);
+  margin-inline-start: 6px;
+  white-space: nowrap;
+}
+
+.rowSelected {
+  background: color-mix(in srgb, var(--accent) 14%, transparent) !important;
+}
+
+.checkboxCol {
+  width: 28px;
+}
+
+.linkSelect {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 0.78rem;
+}
+
 .empty,
 .state {
   padding: 48px 24px;

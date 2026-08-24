@@ -2,8 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } f
 import { Background, Controls, MiniMap, ReactFlow, useNodesState, useReactFlow, type Connection, type Edge } from '@xyflow/react';
 import { useBoardStore, useBoardLayout } from '../../app/boardStore';
 import { exportBoardToFile, importBoardFromFile } from '../../app/boardTransfer';
+import { fetchBudgetStatus, fetchTransactions, type RiseupTransaction } from '../../app/riseupConnection';
+import { sumRiseupForBusinesses } from '../../app/riseupSync';
 import { signOutUser } from '../../app/useAuth';
-import { getWeight, type EntityCategory, type EntityDetails, type FinancialEntity } from '../../domain/entity';
+import { getLinkedFieldValue, getWeight, type EntityCategory, type EntityDetails, type FinancialEntity } from '../../domain/entity';
 import { computeHealth, buildHealthContext, getMissingEssentials } from '../../domain/health';
 import { computeNodeSize, computeTotalWeight } from '../../domain/sizing';
 import { getEntityBucketKey, getOrderedBucketIds, type LayoutMode, type PyramidBand } from '../../domain/layout';
@@ -26,6 +28,9 @@ import styles from './BoardScreen.module.css';
 
 const nodeTypes = { entity: EntityNode, ghost: GhostNode, label: LabelNode, tierBand: TierBandNode };
 const NEUTRAL_REGION_COLOR = '#5b6b8c';
+// a stable reference (not a fresh `[]` every render) so the riseupMismatchIds memo below doesn't
+// think its input changed on every single render while disconnected/still loading.
+const EMPTY_RISEUP_TRANSACTIONS: RiseupTransaction[] = [];
 
 function edgeColor(a: FinancialEntity, b: FinancialEntity): string {
   const kinds = [a.details.kind, b.details.kind];
@@ -80,6 +85,51 @@ function BoardCanvas() {
   const [showRiseupTransactions, setShowRiseupTransactions] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const importInputRef = useRef<HTMLInputElement>(null);
+
+  const riseupPat = useBoardStore((s) => s.riseupPat);
+  // only ever written from the async chain's resolution, never synchronously — same "checking"
+  // pattern as FamilyPanel/RiseupTransactionsPanel. Two calls chained (budget status first, for
+  // its resolved budgetDate, then transactions for that exact month) since /api/transactions
+  // doesn't accept the 'current'/'previous' shorthands. Fetched once here (not per-open of
+  // EntityFormPanel) purely so a linked entity's discrepancy indicator has this month's real
+  // transactions to compare against — nothing here writes to any entity.
+  const [riseupTransactionsResult, setRiseupTransactionsResult] = useState<{ pat: string; transactions: RiseupTransaction[] } | null>(
+    null,
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    const pat = riseupPat.trim();
+    if (!pat) return;
+    fetchBudgetStatus(pat, 'current').then((budget) => {
+      if (cancelled || budget.status !== 'connected' || !budget.budgetDate) return;
+      fetchTransactions(pat, budget.budgetDate).then((transactions) => {
+        if (cancelled || !transactions) return;
+        setRiseupTransactionsResult({ pat, transactions });
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [riseupPat]);
+
+  const riseupTransactions =
+    riseupTransactionsResult?.pat === riseupPat.trim() ? riseupTransactionsResult.transactions : EMPTY_RISEUP_TRANSACTIONS;
+
+  // ids of every linked entity whose stored field doesn't match this month's real RiseUp total —
+  // the only input CityView's floating "?" badge needs; the actual comparison numbers still live
+  // in EntityFormPanel for when someone opens the entity to see why.
+  const riseupMismatchIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const entity of entities) {
+      if (!entity.riseupLink) continue;
+      const entered = getLinkedFieldValue(entity.details, entity.riseupLink.field);
+      if (entered === null) continue;
+      const actual = sumRiseupForBusinesses(riseupTransactions, entity.riseupLink.businessNames);
+      if (entered !== actual) ids.add(entity.id);
+    }
+    return ids;
+  }, [entities, riseupTransactions]);
 
   const handleImportFile = useCallback(async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -350,7 +400,7 @@ function BoardCanvas() {
           טבלת נכסים
         </button>
         {layoutMode === 'city' ? (
-          <CityView entities={entities} familyMembers={familyMembers} onOpen={openEditor} />
+          <CityView entities={entities} familyMembers={familyMembers} riseupMismatchIds={riseupMismatchIds} onOpen={openEditor} />
         ) : (
           <ReactFlow
             nodes={nodes}
@@ -375,6 +425,7 @@ function BoardCanvas() {
           entityId={editingId}
           presetCategory={creating?.category}
           presetDetailOverrides={creating?.overrides}
+          riseupTransactions={riseupTransactions}
           onClose={() => {
             setEditingId(null);
             setCreating(null);

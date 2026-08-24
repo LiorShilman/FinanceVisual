@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useBoardStore } from '../../app/boardStore';
 import { fetchBudgetStatus, fetchTransactions, type RiseupMonthStatus, type RiseupTransaction } from '../../app/riseupConnection';
 import { formatCurrency } from '../format';
+import { LINKABLE_FIELDS } from '../../domain/entity';
 import styles from './RiseupTransactionsPanel.module.css';
 
 interface Props {
@@ -57,6 +58,8 @@ function formatTxDate(iso: string): string {
  */
 export function RiseupTransactionsPanel({ onClose }: Props) {
   const riseupPat = useBoardStore((s) => s.riseupPat);
+  const entities = useBoardStore((s) => s.entities);
+  const updateEntity = useBoardStore((s) => s.updateEntity);
 
   // 'current' / 'previous' / an explicit 'YYYY-MM' picked via the native month input — mirrors
   // RiseUp/client's own MonthPicker, since /api/budget already accepts all three forms.
@@ -81,6 +84,12 @@ export function RiseupTransactionsPanel({ onClose }: Props) {
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
   const [sortKey, setSortKey] = useState<SortKey>('date');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
+
+  // transaction-level linking: pick specific rows, then attach their business names to one
+  // numeric field on one entity (see domain/entity.ts's riseupLink / LINKABLE_FIELDS).
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [linkEntityId, setLinkEntityId] = useState('');
+  const [linkField, setLinkField] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -120,6 +129,54 @@ export function RiseupTransactionsPanel({ onClose }: Props) {
     const set = new Set(transactions.map((t) => t.categoryLabel || NO_CATEGORY));
     return [...set].sort((a, b) => a.localeCompare(b, 'he'));
   }, [transactions]);
+
+  // a transactionId from last month means nothing once this month's list has replaced it — clear
+  // the selection right where the month itself changes, rather than watching for it in an effect.
+  function changeMonth(next: string) {
+    setMonth(next);
+    setSelectedIds(new Set());
+  }
+
+  function toggleSelected(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  const selectedTxs = useMemo(() => (transactions ?? []).filter((t) => selectedIds.has(t.transactionId)), [transactions, selectedIds]);
+  const selectedTotal = useMemo(() => selectedTxs.reduce((sum, t) => sum + Math.abs(t.amount), 0), [selectedTxs]);
+
+  // only entities whose kind actually has a numeric field worth comparing against RiseUp (a
+  // 'source' node has none) show up as link targets.
+  const linkableEntities = useMemo(() => entities.filter((e) => (LINKABLE_FIELDS[e.details.kind]?.length ?? 0) > 0), [entities]);
+  const linkEntity = linkableEntities.find((e) => e.id === linkEntityId) ?? null;
+  const linkFieldOptions = linkEntity ? (LINKABLE_FIELDS[linkEntity.details.kind] ?? []) : [];
+
+  function handleLink() {
+    if (!linkEntity || !linkField || selectedTxs.length === 0) return;
+    const businessNames = [...new Set(selectedTxs.map((t) => t.businessName))];
+    updateEntity(linkEntity.id, { riseupLink: { field: linkField, businessNames } });
+    setSelectedIds(new Set());
+    setLinkEntityId('');
+    setLinkField('');
+  }
+
+  // per-business-name lookup of which entities already have it linked — drives the small "🔗"
+  // badge on matching rows, so an already-linked transaction doesn't get silently re-linked
+  // elsewhere without the user noticing it was already spoken for.
+  const linksByBusiness = useMemo(() => {
+    const map = new Map<string, string[]>();
+    for (const e of entities) {
+      if (!e.riseupLink) continue;
+      for (const b of e.riseupLink.businessNames) {
+        map.set(b, [...(map.get(b) ?? []), e.name]);
+      }
+    }
+    return map;
+  }, [entities]);
 
   const filtered = useMemo(() => {
     if (!transactions) return [];
@@ -172,14 +229,14 @@ export function RiseupTransactionsPanel({ onClose }: Props) {
           <button
             type="button"
             className={`${styles.monthPill} ${month === 'previous' ? styles.monthPillActive : ''}`}
-            onClick={() => setMonth('previous')}
+            onClick={() => changeMonth('previous')}
           >
             חודש קודם
           </button>
           <button
             type="button"
             className={`${styles.monthPill} ${month === 'current' ? styles.monthPillActive : ''}`}
-            onClick={() => setMonth('current')}
+            onClick={() => changeMonth('current')}
           >
             חודש נוכחי
           </button>
@@ -189,7 +246,7 @@ export function RiseupTransactionsPanel({ onClose }: Props) {
               className={styles.monthCustomInput}
               type="month"
               value={month === 'current' || month === 'previous' ? '' : month}
-              onChange={(e) => e.target.value && setMonth(e.target.value)}
+              onChange={(e) => e.target.value && changeMonth(e.target.value)}
               aria-label="בחר חודש מותאם אישית"
             />
           </label>
@@ -246,6 +303,50 @@ export function RiseupTransactionsPanel({ onClose }: Props) {
               </span>
             </div>
 
+            {selectedIds.size > 0 && (
+              <div className={styles.linkBar}>
+                <span className={styles.linkStatus}>
+                  <strong>{selectedIds.size}</strong> תנועות נבחרו · סה״כ <strong>{formatCurrency(selectedTotal)}</strong>
+                </span>
+                <select
+                  className={styles.linkSelect}
+                  value={linkEntityId}
+                  onChange={(e) => {
+                    setLinkEntityId(e.target.value);
+                    setLinkField('');
+                  }}
+                >
+                  <option value="">קשר לישות…</option>
+                  {linkableEntities.map((e) => (
+                    <option key={e.id} value={e.id}>
+                      {e.name}
+                    </option>
+                  ))}
+                </select>
+                {linkEntity && (
+                  <select className={styles.linkSelect} value={linkField} onChange={(e) => setLinkField(e.target.value)}>
+                    <option value="">לאיזה שדה…</option>
+                    {linkFieldOptions.map((f) => (
+                      <option key={f.key} value={f.key}>
+                        {f.label}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                <button
+                  type="button"
+                  className={`${styles.linkBarBtn} ${styles.linkBarBtnPrimary}`}
+                  disabled={!linkEntity || !linkField}
+                  onClick={handleLink}
+                >
+                  קשר
+                </button>
+                <button type="button" className={styles.linkBarBtn} onClick={() => setSelectedIds(new Set())}>
+                  נקה בחירה
+                </button>
+              </div>
+            )}
+
             {filtered.length === 0 ? (
               <div className={styles.empty}>אין תנועות תואמות</div>
             ) : (
@@ -253,6 +354,7 @@ export function RiseupTransactionsPanel({ onClose }: Props) {
                 <table className={styles.table}>
                   <thead>
                     <tr>
+                      <th className={styles.checkboxCol} />
                       <th className={styles.sortable} onClick={() => toggleSort('date')}>
                         תאריך{sortArrow('date')}
                       </th>
@@ -270,10 +372,24 @@ export function RiseupTransactionsPanel({ onClose }: Props) {
                   <tbody>
                     {filtered.map((tx) => {
                       const label = tx.categoryLabel || NO_CATEGORY;
+                      const linkedTo = linksByBusiness.get(tx.businessName);
                       return (
-                        <tr key={tx.transactionId} className={tx.isIncome ? styles.rowIncome : styles.rowExpense}>
+                        <tr
+                          key={tx.transactionId}
+                          className={`${tx.isIncome ? styles.rowIncome : styles.rowExpense} ${selectedIds.has(tx.transactionId) ? styles.rowSelected : ''}`}
+                        >
+                          <td className={styles.checkboxCol}>
+                            <input
+                              type="checkbox"
+                              checked={selectedIds.has(tx.transactionId)}
+                              onChange={() => toggleSelected(tx.transactionId)}
+                            />
+                          </td>
                           <td className={styles.colDate}>{formatTxDate(tx.transactionDate)}</td>
-                          <td>{tx.businessName}</td>
+                          <td>
+                            {tx.businessName}
+                            {linkedTo && <span className={styles.linkedBadge}>🔗 {linkedTo.join(', ')}</span>}
+                          </td>
                           <td>
                             <span
                               className={styles.categoryPill}

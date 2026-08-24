@@ -76,6 +76,70 @@
   font-size: 0.85rem;
 }
 
+.input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.hint {
+  margin: -6px 0 0;
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  line-height: 1.4;
+}
+
+.riseupLinkBox {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  font-size: 0.78rem;
+}
+
+.riseupLinkBoxMismatch {
+  border-color: var(--health-warning);
+  background: color-mix(in srgb, var(--health-warning) 12%, var(--surface-2));
+}
+
+.riseupLinkTitle {
+  font-weight: 700;
+  color: var(--text-dim);
+  font-size: 0.72rem;
+}
+
+.riseupLinkAmounts {
+  display: flex;
+  gap: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+.riseupLinkAmounts strong {
+  color: var(--text);
+}
+
+.riseupLinkDiff {
+  color: var(--health-warning);
+  font-weight: 700;
+}
+
+.riseupLinkBusinesses {
+  color: var(--text-dim);
+  font-size: 0.7rem;
+}
+
+.riseupUnlinkBtn {
+  align-self: flex-start;
+  border: none;
+  background: transparent;
+  color: var(--health-risk);
+  font-size: 0.72rem;
+  text-decoration: underline;
+  padding: 0;
+}
+
 .textarea {
   resize: vertical;
   min-height: 60px;
