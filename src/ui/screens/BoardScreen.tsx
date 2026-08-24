@@ -3,6 +3,7 @@ import { Background, Controls, MiniMap, ReactFlow, useNodesState, useReactFlow, 
 import { useBoardStore, useBoardLayout } from '../../app/boardStore';
 import { exportBoardToFile, importBoardFromFile } from '../../app/boardTransfer';
 import { fetchBudgetStatus, fetchTransactions, type RiseupTransaction } from '../../app/riseupConnection';
+import { fetchRiseupHistory, type MonthHistoryPoint } from '../../app/riseupHistory';
 import { sumRiseupForBusinesses } from '../../app/riseupSync';
 import { signOutUser } from '../../app/useAuth';
 import { getLinkedFieldValue, getWeight, type EntityCategory, type EntityDetails, type FinancialEntity } from '../../domain/entity';
@@ -31,6 +32,11 @@ const NEUTRAL_REGION_COLOR = '#5b6b8c';
 // a stable reference (not a fresh `[]` every render) so the riseupMismatchIds memo below doesn't
 // think its input changed on every single render while disconnected/still loading.
 const EMPTY_RISEUP_TRANSACTIONS: RiseupTransaction[] = [];
+const EMPTY_RISEUP_HISTORY: MonthHistoryPoint[] = [];
+// RiseUp's own documented history endpoint caps numMonthsBack at 12 — matching that ceiling here
+// too, even though this fetches each month individually rather than via that combined endpoint
+// (see riseupHistory.ts for why).
+const RISEUP_HISTORY_MONTHS = 12;
 
 function edgeColor(a: FinancialEntity, b: FinancialEntity): string {
   const kinds = [a.details.kind, b.details.kind];
@@ -115,6 +121,25 @@ function BoardCanvas() {
 
   const riseupTransactions =
     riseupTransactionsResult?.pat === riseupPat.trim() ? riseupTransactionsResult.transactions : EMPTY_RISEUP_TRANSACTIONS;
+
+  // last few months of real RiseUp totals, for CityView's trend chart — fetched once here
+  // (independent of the transactions/mismatch fetch above, which only ever needs the current
+  // month) rather than inside CityView, keeping every RiseUp network call in one place.
+  const [riseupHistoryResult, setRiseupHistoryResult] = useState<{ pat: string; history: MonthHistoryPoint[] } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const pat = riseupPat.trim();
+    if (!pat) return;
+    fetchRiseupHistory(pat, RISEUP_HISTORY_MONTHS).then((history) => {
+      if (!cancelled) setRiseupHistoryResult({ pat, history });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [riseupPat]);
+
+  const riseupHistory = riseupHistoryResult?.pat === riseupPat.trim() ? riseupHistoryResult.history : EMPTY_RISEUP_HISTORY;
 
   // ids of every linked entity whose stored field doesn't match this month's real RiseUp total —
   // the only input CityView's floating "?" badge needs; the actual comparison numbers still live
@@ -400,7 +425,13 @@ function BoardCanvas() {
           טבלת נכסים
         </button>
         {layoutMode === 'city' ? (
-          <CityView entities={entities} familyMembers={familyMembers} riseupMismatchIds={riseupMismatchIds} onOpen={openEditor} />
+          <CityView
+            entities={entities}
+            familyMembers={familyMembers}
+            riseupMismatchIds={riseupMismatchIds}
+            riseupHistory={riseupHistory}
+            onOpen={openEditor}
+          />
         ) : (
           <ReactFlow
             nodes={nodes}

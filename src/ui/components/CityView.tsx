@@ -3,6 +3,8 @@ import * as THREE from 'three';
 import { Canvas } from '@react-three/fiber';
 import { Billboard, OrbitControls, Text } from '@react-three/drei';
 import { useBoardStore } from '../../app/boardStore';
+import type { MonthHistoryPoint } from '../../app/riseupHistory';
+import { computeCityAtmosphere } from '../../domain/atmosphere';
 import { computeCityLayout, depthBaseZ, depthIndex, DISTRICT_SPACING } from '../../domain/city';
 import { computeGroundBounds, type CircularExtent } from '../../domain/cityGrid';
 import { computeDebtLinkPaths } from '../../domain/debtLinks';
@@ -28,6 +30,7 @@ import { CityIncomeFaucet } from './CityIncomeFaucet';
 import { CityIncomeLinks } from './CityIncomeLinks';
 import { CityRiskAura } from './CityRiskAura';
 import { CityRiseupMismatchBadge } from './CityRiseupMismatchBadge';
+import { CityRiseupTrend } from './CityRiseupTrend';
 import { CityShieldMesh } from './CityShieldMesh';
 import { CitySun } from './CitySun';
 
@@ -38,6 +41,9 @@ interface Props {
   // month's real total — drives the floating "?" badge, computed once in BoardScreen rather than
   // duplicating the fetch/compare here.
   riseupMismatchIds: Set<string>;
+  // last few months of real RiseUp totals, oldest first — drives the in-city trend chart; empty
+  // when disconnected or still loading, which just skips rendering it.
+  riseupHistory: MonthHistoryPoint[];
   onOpen: (id: string) => void;
 }
 
@@ -55,7 +61,7 @@ const DEPTH_LABELS: { text: string; color: string }[] = [
 // mixing in liabilities or a checking balance would make the number meaningless.
 const GROWTH_ASSET_KINDS = new Set(['savings', 'investment', 'pension', 'studyFund']);
 
-export function CityView({ entities, familyMembers, riseupMismatchIds, onOpen }: Props) {
+export function CityView({ entities, familyMembers, riseupMismatchIds, riseupHistory, onOpen }: Props) {
   const hideAmounts = useBoardStore((s) => s.hideAmounts);
   const usdRate = useBoardStore((s) => s.usdRate);
   const cityPositions = useBoardStore((s) => s.cityPositions);
@@ -64,6 +70,7 @@ export function CityView({ entities, familyMembers, riseupMismatchIds, onOpen }:
   const water = useMemo(() => computeWaterFeature(buildings), [buildings]);
   const valley = useMemo(() => computeValleyFeature(buildings, entities), [buildings, entities]);
   const netWorth = useMemo(() => computeNetWorthBreakdown(entities), [entities]);
+  const atmosphere = useMemo(() => computeCityAtmosphere(buildings, netWorth), [buildings, netWorth]);
   const incomeLinkPaths = useMemo(() => computeIncomeLinkPaths(buildings, entities), [buildings, entities]);
   const debtLinkPaths = useMemo(() => computeDebtLinkPaths(buildings, entities), [buildings, entities]);
   const debtPositions = useMemo(
@@ -135,12 +142,14 @@ export function CityView({ entities, familyMembers, riseupMismatchIds, onOpen }:
 
   return (
     <Canvas camera={{ position: [width * 0.25, 36, maxDepthZ + 46], fov: 32 }} dir="rtl">
-      <color attach="background" args={['#0a0c11']} />
-      {/* pushed out further than the raw maxDistance=200 — fog starting right at the usual
-          zoomed-out distance made the city visibly dim out exactly when a wider view was the
-          point; starting later keeps it lit until well past normal viewing range. */}
-      <fog attach="fog" args={['#0a0c11', 130, 320]} />
-      <ambientLight intensity={1.5} />
+      {/* background/fog/ambient all come from computeCityAtmosphere — a healthy board renders
+          these exact fixed values (fog pushed out past the raised maxDistance=200, so it stays
+          lit well past normal viewing range); the more of the city reads as at-risk, the further
+          they drift toward a dim, hazy red "weather", entirely driven by real board data, not a
+          decorative toggle. */}
+      <color attach="background" args={[atmosphere.background]} />
+      <fog attach="fog" args={[atmosphere.background, atmosphere.fogNear, atmosphere.fogFar]} />
+      <ambientLight intensity={atmosphere.ambientIntensity} color={atmosphere.ambientColor} />
       <directionalLight position={[width * 0.4, 26, 14]} intensity={2.6} />
       <directionalLight position={[-10, 14, -10]} intensity={0.85} color="#6c8dff" />
 
@@ -155,6 +164,14 @@ export function CityView({ entities, familyMembers, riseupMismatchIds, onOpen }:
           frame (width/depth) rather than the valley's own far-corner position, which left almost
           no headroom to raise it without pushing it straight out of the frustum's edge. */}
       <CitySun x={width * 0.68} y={19} z={maxDepthZ * 0.35} breakdown={hideAmounts ? null : netWorth} />
+      {/* a few units to the right of the depth-tier labels' own column (x=-4.6 — "right" meaning
+          toward higher x, since categories read right-to-left in this RTL city), centered in z
+          between the long-term and short-term tiers specifically (not the full long-to-current
+          span) — off to the side of the actual district instead of near the sun, where it sat
+          right in the main view and competed with it. */}
+      {!hideAmounts && (
+        <CityRiseupTrend x={1.8} z={(depthBaseZ(0) + depthBaseZ(1)) / 2} history={riseupHistory} />
+      )}
       <CityIncomeLinks paths={incomeLinkPaths} />
       <CityDebtChains debtPositions={debtPositions} linkPaths={debtLinkPaths} />
       {incomeFaucetTarget && (
