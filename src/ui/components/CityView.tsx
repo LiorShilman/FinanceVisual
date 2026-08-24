@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { Canvas } from '@react-three/fiber';
 import { Billboard, OrbitControls, Text } from '@react-three/drei';
 import { useBoardStore } from '../../app/boardStore';
-import { computeCityLayout, depthBaseZ, DISTRICT_SPACING } from '../../domain/city';
+import { computeCityLayout, depthBaseZ, depthIndex, DISTRICT_SPACING } from '../../domain/city';
 import { computeGroundBounds, type CircularExtent } from '../../domain/cityGrid';
 import { computeDebtLinkPaths } from '../../domain/debtLinks';
 import { CATEGORY_LABELS, ENTITY_CATEGORIES, getWeight, type FinancialEntity } from '../../domain/entity';
@@ -50,6 +50,11 @@ const DEPTH_LABELS: { text: string; color: string }[] = [
   { text: 'נזיל / שוטף', color: '#ee6b6b' },
 ];
 
+// only the actual growth/savings vehicles — not debt, goals, checking, etc. — even though those
+// share the same depth tiers. Showing "how much is actually growing at this horizon" is the point;
+// mixing in liabilities or a checking balance would make the number meaningless.
+const GROWTH_ASSET_KINDS = new Set(['savings', 'investment', 'pension', 'studyFund']);
+
 export function CityView({ entities, familyMembers, riseupMismatchIds, onOpen }: Props) {
   const hideAmounts = useBoardStore((s) => s.hideAmounts);
   const usdRate = useBoardStore((s) => s.usdRate);
@@ -65,6 +70,17 @@ export function CityView({ entities, familyMembers, riseupMismatchIds, onOpen }:
     () => buildings.filter((b) => b.category === 'debt').map((b): [number, number] => [b.x, b.z]),
     [buildings],
   );
+  // per-depth-tier total of just the growth assets (savings/investment/pension/studyFund) sitting
+  // at that horizon — shown next to each depth label, alongside its existing "which tier is this"
+  // role.
+  const growthTotalByDepth = useMemo(() => {
+    const totals = [0, 0, 0];
+    for (const e of entities) {
+      if (!GROWTH_ASSET_KINDS.has(e.details.kind)) continue;
+      totals[depthIndex(e)] = (totals[depthIndex(e)] ?? 0) + getWeight(e);
+    }
+    return totals;
+  }, [entities]);
   const incomeFaucetTarget = useMemo(() => {
     const incomeBuildings = buildings.filter((b) => b.category === 'income');
     if (incomeBuildings.length === 0) return null;
@@ -179,6 +195,21 @@ export function CityView({ entities, familyMembers, riseupMismatchIds, onOpen }:
           >
             {label.text}
           </Text>
+          {!hideAmounts && growthTotalByDepth[i] > 0 && (
+            <Text
+              position={[0, -0.95, 0]}
+              fontSize={0.56}
+              color="#c3cadb"
+              anchorX="center"
+              anchorY="middle"
+              outlineWidth={0.02}
+              outlineColor="#0a0c11"
+              fontWeight="bold"
+              frustumCulled={false}
+            >
+              {formatCurrency(growthTotalByDepth[i])}
+            </Text>
+          )}
         </Billboard>
       ))}
       {buildings
@@ -202,7 +233,13 @@ export function CityView({ entities, familyMembers, riseupMismatchIds, onOpen }:
       {buildings.map((b) => {
         const entity = entities.find((e) => e.id === b.id)!;
         const weight = getWeight(entity);
-        const amount = weight === 0 || hideAmounts ? '' : formatCurrency(weight, entity.currency, usdRate);
+        // insurance's weight is coverageAmount, which plenty of real policies just don't have a
+        // meaningful figure for (or the user hasn't filled in) — rather than showing nothing
+        // above the building, fall back to the recurring premium, which every insurance entity
+        // does have. Building height/footprint still rank by the real weight, unaffected.
+        const displayAmount =
+          weight === 0 && entity.details.kind === 'insurance' ? entity.details.monthlyPremium : weight;
+        const amount = displayAmount === 0 || hideAmounts ? '' : formatCurrency(displayAmount, entity.currency, usdRate);
         const onOpenThis = () => onOpen(b.id);
 
         // x/z come from the render-time drag position (which may differ from b.x/b.z mid-drag),

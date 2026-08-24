@@ -110,7 +110,7 @@ export function snapCityPosition(rawX: number, rawZ: number, baseX: number, base
  * otherwise, unified into one axis as requested. Index 0 = nearest the camera, 2 = farthest —
  * locked/long-term recedes into the distance, liquid/current stays up close.
  */
-function depthIndex(entity: FinancialEntity): number {
+export function depthIndex(entity: FinancialEntity): number {
   // donations get their own row, one step closer to the camera than every other category's
   // nearest ("immediate"/"current") row — a dedicated foreground lane, not folded into the
   // shared liquidity/horizon axis the rest of the city uses.
