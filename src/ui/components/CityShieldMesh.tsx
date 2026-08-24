@@ -32,8 +32,8 @@ export function CityShieldMesh({ x, z, height, footprint, color, name, amount, o
     onOpen();
   };
 
-  const width = Math.max(1.55, footprint * 1.75);
-  const bodyHeight = Math.max(1.75, height * 0.98);
+  const width = Math.max(2.1, footprint * 2.35);
+  const bodyHeight = Math.max(2.4, height * 1.3);
   const radiusTop = width / 2;
   const collarY = bodyHeight * 0.72;
   const collarHeight = bodyHeight * 0.14;

@@ -31,6 +31,11 @@ const CANOPY_PALETTE: Record<TreeVariant, { base: string; light: string; bark: s
   fruit: { base: '#3f8a4a', light: '#6bb35e', bark: '#5f4128' },
 };
 
+// blob count and color alone read as too similar at typical city-view distance — an overall size
+// difference is the one cue that still holds up as a small silhouette. Savings stays a visibly
+// young, small sapling; investment grows into a noticeably bigger, broader tree.
+const SIZE_SCALE: Record<TreeVariant, number> = { sapling: 0.62, oak: 1.2, pine: 1, fruit: 1 };
+
 function hash(seed: number): number {
   const s = Math.sin(seed * 12.9898) * 43758.5453;
   return s - Math.floor(s);
@@ -43,10 +48,11 @@ export function CityTreeMesh({ x, z, height, footprint, color, name, amount, var
   };
 
   const palette = CANOPY_PALETTE[variant];
-  const trunkHeight = Math.max(0.8, Math.min(3.4, height * 0.5));
-  const trunkRadiusBottom = Math.max(0.1, Math.min(0.24, footprint * 0.13));
+  const sizeScale = SIZE_SCALE[variant];
+  const trunkHeight = Math.max(0.8, Math.min(3.4, height * 0.5)) * sizeScale;
+  const trunkRadiusBottom = Math.max(0.1, Math.min(0.24, footprint * 0.13)) * sizeScale;
   const trunkRadiusTop = trunkRadiusBottom * 0.7;
-  const canopyRadius = Math.max(0.55, Math.min(1.55, footprint * 0.8 + height * 0.05));
+  const canopyRadius = Math.max(0.55, Math.min(1.55, footprint * 0.8 + height * 0.05)) * sizeScale;
 
   // deterministic per-building jitter (position-seeded, not Math.random()) so the canopy clumps
   // stay stable across re-renders instead of reshuffling every frame.
@@ -69,16 +75,30 @@ export function CityTreeMesh({ x, z, height, footprint, color, name, amount, var
     });
   }, [seed, canopyRadius, variant]);
 
+  // anchored to each leaf blob's own surface, pushed out along that blob's own direction away
+  // from the trunk (not a uniformly random point on the sphere) and well past its radius — the
+  // blobs overlap each other heavily (their centers sit close together relative to their own
+  // radii), so a fruit merely "on" one blob's surface is still very likely swallowed by a
+  // neighboring blob; only a clear outward push reliably pokes past all of them.
   const fruits = useMemo(() => {
-    if (variant !== 'fruit') return [];
+    if (variant !== 'fruit' || blobs.length === 0) return [];
     return Array.from({ length: 5 }, (_, i) => {
+      const blob = blobs[i % blobs.length];
+      const blobRadius = canopyRadius * blob.scale;
       const h1 = hash(seed + i * 4.4 + 10);
       const h2 = hash(seed + i * 6.6 + 20);
-      const angle = h1 * Math.PI * 2;
-      const r = canopyRadius * (0.55 + h2 * 0.35);
-      return { x: Math.cos(angle) * r, y: (hash(seed + i * 2.2 + 30) - 0.5) * canopyRadius * 0.5, z: Math.sin(angle) * r };
+      const outwardMag = Math.hypot(blob.x, blob.z);
+      const baseAngle = outwardMag > 0.01 ? Math.atan2(blob.z, blob.x) : i * 2.4;
+      const theta = baseAngle + (h1 - 0.5) * 1.4;
+      const upTilt = 0.25 + h2 * 0.55;
+      const r = blobRadius * (1.25 + h2 * 0.25);
+      return {
+        x: blob.x + Math.cos(theta) * Math.cos(upTilt) * r,
+        y: blob.y + Math.sin(upTilt) * r,
+        z: blob.z + Math.sin(theta) * Math.cos(upTilt) * r,
+      };
     });
-  }, [seed, canopyRadius, variant]);
+  }, [seed, canopyRadius, variant, blobs]);
 
   const canopyBaseY = trunkHeight + canopyRadius * 0.15;
   const labelY = variant === 'pine' ? trunkHeight + canopyRadius * 1.9 + 0.4 : canopyBaseY + canopyRadius * 1.15 + 0.4;
@@ -127,8 +147,8 @@ export function CityTreeMesh({ x, z, height, footprint, color, name, amount, var
           ))}
           {fruits.map((f, i) => (
             <mesh key={i} position={[f.x, canopyBaseY + f.y, f.z]} frustumCulled={false}>
-              <sphereGeometry args={[canopyRadius * 0.11, 8, 8]} />
-              <meshStandardMaterial color="#e2793a" emissive="#e2793a" emissiveIntensity={0.5} roughness={0.4} />
+              <sphereGeometry args={[canopyRadius * 0.16, 8, 8]} />
+              <meshStandardMaterial color="#e2793a" emissive="#e2793a" emissiveIntensity={0.7} roughness={0.4} />
             </mesh>
           ))}
         </>
