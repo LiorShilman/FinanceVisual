@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { FinancialEntitySchema } from '../domain/entity';
 import { FamilyMemberSchema } from '../domain/familyMember';
 import { LAYOUT_MODES } from '../domain/layout';
+import { SEED_FAMILY_MEMBERS } from '../domain/seed';
 import { useBoardStore } from './boardStore';
 
 const PointSchema = z.object({ x: z.number(), y: z.number() });
@@ -25,11 +26,13 @@ export const PersistedBoardStateSchema = z.object({
 
 export type PersistedBoardState = z.infer<typeof PersistedBoardStateSchema>;
 
-/** A genuinely new account's starting board — no demo data. The seed entities only make sense as
- * an in-browser first-run demo; a real new user signing up has their own real board to build, not
- * ours. */
+/** A genuinely new account's starting board — no demo data. The seed *entities* only make sense
+ * as an in-browser first-run demo (someone else's fake salary/mortgage/etc.), so those stay
+ * empty; but SEED_FAMILY_MEMBERS is just the one 'self' placeholder every account needs regardless
+ * — without it, FamilyPanel opens with nobody to even name, and the "add member" form itself won't
+ * offer 'self' as an option, leaving no way to create one by hand either. */
 export const EMPTY_BOARD_STATE: PersistedBoardState = {
-  familyMembers: [],
+  familyMembers: SEED_FAMILY_MEMBERS,
   entities: [],
   layoutMode: 'free',
   freePositions: {},

@@ -191,9 +191,9 @@ export function CityView({ entities, familyMembers, riseupMismatchIds, onOpen }:
         .map((b) => (
           <CityRiseupMismatchBadge
             key={`riseup-${b.id}`}
-            x={b.x + b.footprint * 0.7}
+            x={b.x + b.footprint * 1.15}
             z={b.z}
-            y={getTerrainHeight(b.x, b.z) + b.height + 1.7}
+            y={getTerrainHeight(b.x, b.z) + b.height + 2.4}
           />
         ))}
       {familyAvatarTargets.map((t) => (

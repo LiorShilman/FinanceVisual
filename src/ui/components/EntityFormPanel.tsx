@@ -216,6 +216,17 @@ export function EntityFormPanel({ entityId, presetCategory, presetDetailOverride
     if (existing) updateEntity(existing.id, { riseupLink: undefined });
   }
 
+  // removes just one business from the link's set — dropping the last one is the same as
+  // unlinking entirely, since an empty businessNames array isn't a valid link (see
+  // domain/entity.ts's riseupLink schema, min(1)).
+  function handleUnlinkBusiness(businessName: string) {
+    if (!existing?.riseupLink) return;
+    const remaining = existing.riseupLink.businessNames.filter((b) => b !== businessName);
+    updateEntity(existing.id, {
+      riseupLink: remaining.length > 0 ? { ...existing.riseupLink, businessNames: remaining } : undefined,
+    });
+  }
+
   const d = draft.details;
 
   // read-only comparison against this month's real RiseUp data for whichever field is linked
@@ -543,9 +554,25 @@ export function EntityFormPanel({ entityId, presetCategory, presetDetailOverride
             {riseupLinkInfo.hasUnsavedChange && (
               <span className={styles.riseupLinkDiff}>יש לך שינוי שעדיין לא נשמר בשדה הזה — לחץ "שמירה" כדי שההשוואה תתעדכן</span>
             )}
-            <span className={styles.riseupLinkBusinesses}>מבוסס על: {riseupLinkInfo.businessNames.join(', ')}</span>
+            <span className={styles.riseupLinkBusinesses}>מבוסס על:</span>
+            <div className={styles.riseupBusinessChips}>
+              {riseupLinkInfo.businessNames.map((b) => (
+                <span key={b} className={styles.riseupBusinessChip}>
+                  {b}
+                  <button
+                    type="button"
+                    className={styles.riseupBusinessChipRemove}
+                    onClick={() => handleUnlinkBusiness(b)}
+                    aria-label={`בטל קישור ל-${b}`}
+                    title="בטל קישור לעסק הזה בלבד"
+                  >
+                    ✕
+                  </button>
+                </span>
+              ))}
+            </div>
             <button type="button" className={styles.riseupUnlinkBtn} onClick={handleUnlinkRiseup}>
-              בטל קישור
+              בטל את כל הקישור
             </button>
           </div>
         )}

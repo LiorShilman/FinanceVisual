@@ -173,6 +173,16 @@
   white-space: nowrap;
 }
 
+.linkedOnlyToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
 .linkBar {
   display: flex;
   align-items: center;
@@ -229,6 +239,14 @@
   color: var(--accent);
   margin-inline-start: 6px;
   white-space: nowrap;
+  border: none;
+  background: transparent;
+  padding: 0;
+}
+
+.linkedBadge:hover {
+  color: var(--health-risk);
+  text-decoration: underline;
 }
 
 .rowSelected {

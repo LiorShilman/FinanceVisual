@@ -82,6 +82,7 @@ export function RiseupTransactionsPanel({ onClose }: Props) {
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
+  const [linkedOnly, setLinkedOnly] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>('date');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
 
@@ -157,7 +158,11 @@ export function RiseupTransactionsPanel({ onClose }: Props) {
 
   function handleLink() {
     if (!linkEntity || !linkField || selectedTxs.length === 0) return;
-    const businessNames = [...new Set(selectedTxs.map((t) => t.businessName))];
+    // merge with whatever this entity's already linked on this same field — this used to replace
+    // the whole riseupLink outright, which silently dropped every business name linked in an
+    // earlier pass the moment you linked one more transaction to the same entity.
+    const existingNames = linkEntity.riseupLink?.field === linkField ? linkEntity.riseupLink.businessNames : [];
+    const businessNames = [...new Set([...existingNames, ...selectedTxs.map((t) => t.businessName)])];
     updateEntity(linkEntity.id, { riseupLink: { field: linkField, businessNames } });
     setSelectedIds(new Set());
     setLinkEntityId('');
@@ -165,18 +170,28 @@ export function RiseupTransactionsPanel({ onClose }: Props) {
   }
 
   // per-business-name lookup of which entities already have it linked — drives the small "🔗"
-  // badge on matching rows, so an already-linked transaction doesn't get silently re-linked
-  // elsewhere without the user noticing it was already spoken for.
+  // badge on matching rows (so an already-linked transaction doesn't get silently re-linked
+  // elsewhere without the user noticing it was already spoken for), and lets that badge unlink
+  // just this one business from just that entity, not the entity's whole link.
   const linksByBusiness = useMemo(() => {
-    const map = new Map<string, string[]>();
+    const map = new Map<string, { id: string; name: string }[]>();
     for (const e of entities) {
       if (!e.riseupLink) continue;
       for (const b of e.riseupLink.businessNames) {
-        map.set(b, [...(map.get(b) ?? []), e.name]);
+        map.set(b, [...(map.get(b) ?? []), { id: e.id, name: e.name }]);
       }
     }
     return map;
   }, [entities]);
+
+  // same "drop one, or drop the whole link if it was the last one" rule as EntityFormPanel's own
+  // per-business unlink.
+  function unlinkBusiness(entityId: string, businessName: string) {
+    const entity = entities.find((e) => e.id === entityId);
+    if (!entity?.riseupLink) return;
+    const remaining = entity.riseupLink.businessNames.filter((b) => b !== businessName);
+    updateEntity(entityId, { riseupLink: remaining.length > 0 ? { ...entity.riseupLink, businessNames: remaining } : undefined });
+  }
 
   const filtered = useMemo(() => {
     if (!transactions) return [];
@@ -184,6 +199,7 @@ export function RiseupTransactionsPanel({ onClose }: Props) {
     if (typeFilter === 'expense') list = list.filter((t) => !t.isIncome);
     if (typeFilter === 'income') list = list.filter((t) => t.isIncome);
     if (categoryFilter !== 'all') list = list.filter((t) => (t.categoryLabel || NO_CATEGORY) === categoryFilter);
+    if (linkedOnly) list = list.filter((t) => linksByBusiness.has(t.businessName));
     const q = search.trim().toLowerCase();
     if (q) list = list.filter((t) => t.businessName.toLowerCase().includes(q));
 
@@ -196,7 +212,7 @@ export function RiseupTransactionsPanel({ onClose }: Props) {
       return sortDir === 'asc' ? cmp : -cmp;
     });
     return sorted;
-  }, [transactions, typeFilter, categoryFilter, search, sortKey, sortDir]);
+  }, [transactions, typeFilter, categoryFilter, linkedOnly, linksByBusiness, search, sortKey, sortDir]);
 
   function toggleSort(key: SortKey) {
     if (key === sortKey) {
@@ -298,6 +314,10 @@ export function RiseupTransactionsPanel({ onClose }: Props) {
                 <option value="expense">הוצאות בלבד</option>
                 <option value="income">הכנסות בלבד</option>
               </select>
+              <label className={styles.linkedOnlyToggle}>
+                <input type="checkbox" checked={linkedOnly} onChange={(e) => setLinkedOnly(e.target.checked)} />
+                🔗 מקושרים בלבד
+              </label>
               <span className={styles.resultCount}>
                 {filtered.length} מתוך {transactions?.length ?? 0} תנועות
               </span>
@@ -388,7 +408,17 @@ export function RiseupTransactionsPanel({ onClose }: Props) {
                           <td className={styles.colDate}>{formatTxDate(tx.transactionDate)}</td>
                           <td>
                             {tx.businessName}
-                            {linkedTo && <span className={styles.linkedBadge}>🔗 {linkedTo.join(', ')}</span>}
+                            {linkedTo?.map(({ id, name }) => (
+                              <button
+                                key={id}
+                                type="button"
+                                className={styles.linkedBadge}
+                                onClick={() => unlinkBusiness(id, tx.businessName)}
+                                title={`בטל קישור ל-${name}`}
+                              >
+                                🔗 {name} ✕
+                              </button>
+                            ))}
                           </td>
                           <td>
                             <span

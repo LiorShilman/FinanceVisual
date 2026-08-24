@@ -3,6 +3,7 @@ import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from './firebase';
 import { useBoardStore } from './boardStore';
 import { EMPTY_BOARD_STATE, getPersistedBoardState, PersistedBoardStateSchema, type PersistedBoardState } from './boardTransfer';
+import { SEED_FAMILY_MEMBERS } from '../domain/seed';
 
 // The key zustand's `persist` middleware used to write to before it was replaced by this Firestore
 // sync — still worth reading once for a first-login migration, since real board data already
@@ -12,6 +13,17 @@ const SAVE_DEBOUNCE_MS = 800;
 
 function boardDocRef(uid: string) {
   return doc(db, 'users', uid, 'board', 'main');
+}
+
+// Accounts created before EMPTY_BOARD_STATE started seeding a 'self' member (or one somehow
+// deleted — though FamilyPanel's own UI blocks that) are stuck with no way to represent the
+// account owner at all: FamilyPanel opens with nothing to name, and its own "add member" form
+// deliberately excludes 'self' as a choosable relation, so there was no way to create one by hand
+// either. This is the same kind of self-healing migration parseBoardState already does for
+// per-field schema drift, just for a structural gap instead.
+function ensureSelfMember(state: PersistedBoardState): PersistedBoardState {
+  if (state.familyMembers.some((m) => m.relation === 'self')) return state;
+  return { ...state, familyMembers: [...SEED_FAMILY_MEMBERS, ...state.familyMembers] };
 }
 
 // A raw type cast here (instead of actually validating) would mean every zod `.default`/`.catch`
@@ -98,12 +110,14 @@ export function useBoardSync(uid: string | null): { loading: boolean } {
         const remote = await loadBoardState(uid);
         if (cancelled) return;
         if (remote) {
-          useBoardStore.setState(remote);
+          const migrated = ensureSelfMember(remote);
+          useBoardStore.setState(migrated);
+          if (migrated !== remote) await saveBoardState(uid, getPersistedBoardState());
         } else {
           // brand-new account: carry forward this browser's pre-login local data if there is any,
           // otherwise start genuinely empty — not the seed/demo board.
           const legacy = readLegacyLocalStorageBoard();
-          useBoardStore.setState(legacy ?? EMPTY_BOARD_STATE);
+          useBoardStore.setState(ensureSelfMember(legacy ?? EMPTY_BOARD_STATE));
           await saveBoardState(uid, getPersistedBoardState());
         }
       } catch (err) {
