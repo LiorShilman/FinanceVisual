@@ -25,16 +25,20 @@ const MAX_RADIUS = 7;
 // Debt drains the same way an expense does — the *ongoing* monthly payment is the actual drain
 // (not the outstanding balance, which is a much bigger number that would swamp the expense
 // streams and misrepresent the valley as "how much you owe" instead of "how much leaves every
-// month").
+// month"). Insurance is the same pattern again — the monthly premium is a real recurring
+// outflow, same as any expense or debt payment; only its coverage amount (not sized here) is a
+// held/held-for-later figure like a debt's outstanding balance, not a drain.
 export function computeValleyFeature(buildings: CityBuilding[], entities: FinancialEntity[]): ValleyFeature {
   const entityById = new Map(entities.map((e) => [e.id, e]));
   const streams = buildings
-    .filter((b) => b.category === 'expense' || b.category === 'debt')
+    .filter((b) => b.category === 'expense' || b.category === 'debt' || b.category === 'insurance')
     .map((b) => {
       if (b.category === 'expense') return { x: b.x, z: b.z, weight: b.weight };
       const entity = entityById.get(b.id);
-      const weight = entity?.details.kind === 'debt' ? entity.details.monthlyPayment : 0;
-      return { x: b.x, z: b.z, weight };
+      if (b.category === 'debt') {
+        return { x: b.x, z: b.z, weight: entity?.details.kind === 'debt' ? entity.details.monthlyPayment : 0 };
+      }
+      return { x: b.x, z: b.z, weight: entity?.details.kind === 'insurance' ? entity.details.monthlyPremium : 0 };
     })
     .filter((s) => s.weight > 0);
   const total = streams.reduce((sum, s) => sum + s.weight, 0);
