@@ -1,0 +1,22 @@
+.cameraLockBar {
+  position: absolute;
+  bottom: 16px;
+  left: 16px;
+  z-index: 20;
+}
+
+.cameraLockBtn {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  box-shadow: var(--shadow-panel);
+}
+
+.cameraLockBtnActive {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}

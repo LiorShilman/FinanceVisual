@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState, type ElementRef } from 'react';
 import * as THREE from 'three';
 import { Canvas } from '@react-three/fiber';
 import { Billboard, OrbitControls, Text } from '@react-three/drei';
@@ -28,11 +28,14 @@ import { CityGround } from './CityGround';
 import { CityHouseMesh } from './CityHouseMesh';
 import { CityIncomeFaucet } from './CityIncomeFaucet';
 import { CityIncomeLinks } from './CityIncomeLinks';
+import { CityMortgageMesh } from './CityMortgageMesh';
 import { CityRiskAura } from './CityRiskAura';
 import { CityRiseupMismatchBadge } from './CityRiseupMismatchBadge';
 import { CityRiseupTrend } from './CityRiseupTrend';
 import { CityShieldMesh } from './CityShieldMesh';
 import { CitySun } from './CitySun';
+import { CityTreeMesh, type TreeVariant } from './CityTreeMesh';
+import styles from './CityView.module.css';
 
 interface Props {
   entities: FinancialEntity[];
@@ -61,11 +64,59 @@ const DEPTH_LABELS: { text: string; color: string }[] = [
 // mixing in liabilities or a checking balance would make the number meaningless.
 const GROWTH_ASSET_KINDS = new Set(['savings', 'investment', 'pension', 'studyFund']);
 
+// the four growth categories render as trees, not towers — each gets its own species so they stay
+// visually distinct from one another (investment's 'alternative' assetType is handled separately,
+// as CityCrystalMesh, before this map is even consulted).
+const TREE_VARIANT_BY_KIND: Partial<Record<string, TreeVariant>> = {
+  savings: 'sapling',
+  investment: 'oak',
+  pension: 'pine',
+  studyFund: 'fruit',
+};
+
+// per-browser, not synced — the camera angle is a viewing preference for this screen, not board
+// data, so it lives in localStorage the same way a scroll position or zoom level would.
+const CAMERA_LOCK_KEY = 'financevisual:cityCameraLock';
+
+interface LockedCamera {
+  position: [number, number, number];
+  target: [number, number, number];
+}
+
+function loadLockedCamera(): LockedCamera | null {
+  const raw = localStorage.getItem(CAMERA_LOCK_KEY);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as LockedCamera;
+  } catch {
+    return null;
+  }
+}
+
 export function CityView({ entities, familyMembers, riseupMismatchIds, riseupHistory, onOpen }: Props) {
   const hideAmounts = useBoardStore((s) => s.hideAmounts);
   const usdRate = useBoardStore((s) => s.usdRate);
   const cityPositions = useBoardStore((s) => s.cityPositions);
   const [controlsEnabled, setControlsEnabled] = useState(true);
+  const controlsRef = useRef<ElementRef<typeof OrbitControls>>(null);
+  const [lockedCamera, setLockedCamera] = useState(() => loadLockedCamera());
+
+  function handleLockCamera() {
+    const controls = controlsRef.current;
+    if (!controls) return;
+    const camera = controls.object;
+    const value: LockedCamera = {
+      position: [camera.position.x, camera.position.y, camera.position.z],
+      target: [controls.target.x, controls.target.y, controls.target.z],
+    };
+    localStorage.setItem(CAMERA_LOCK_KEY, JSON.stringify(value));
+    setLockedCamera(value);
+  }
+
+  function handleResetCamera() {
+    localStorage.removeItem(CAMERA_LOCK_KEY);
+    setLockedCamera(null);
+  }
   const buildings = useMemo(() => computeCityLayout(entities, cityPositions), [entities, cityPositions]);
   const water = useMemo(() => computeWaterFeature(buildings), [buildings]);
   const valley = useMemo(() => computeValleyFeature(buildings, entities), [buildings, entities]);
@@ -139,9 +190,25 @@ export function CityView({ entities, familyMembers, riseupMismatchIds, riseupHis
     { center: valley.center, radius: valley.radius } satisfies CircularExtent,
   ]);
   const gridDivisions = Math.round(Math.max(bounds.width, bounds.depth) / 1.6);
+  // once locked, the saved position/target win over the computed defaults — kept fixed here
+  // (not recomputed from board data) so the view stays exactly where the user pinned it,
+  // regardless of what gets added to the board afterward.
+  const initialCameraPosition = lockedCamera?.position ?? [width * 0.25, 36, maxDepthZ + 46];
+  const orbitTarget = lockedCamera?.target ?? [width / 2, 1, groundCenter[1]];
 
   return (
-    <Canvas camera={{ position: [width * 0.25, 36, maxDepthZ + 46], fov: 32 }} dir="rtl">
+    <>
+    <Canvas
+      camera={{ position: initialCameraPosition, fov: 32 }}
+      dir="rtl"
+      // preserveDrawingBuffer: without it, the WebGL framebuffer clears itself right after each
+      // frame renders — canvas.toDataURL() (used by the download/share buttons in BoardScreen)
+      // would capture a blank frame instead of what's actually on screen. dpr caps device pixel
+      // ratio at 2x — sharper on high-DPI displays (and in the exported image), without paying
+      // for resolutions past what any real screen asks for.
+      gl={{ preserveDrawingBuffer: true }}
+      dpr={[1, 2]}
+    >
       {/* background/fog/ambient all come from computeCityAtmosphere — a healthy board renders
           these exact fixed values (fog pushed out past the raised maxDistance=200, so it stays
           lit well past normal viewing range); the more of the city reads as at-risk, the further
@@ -283,6 +350,13 @@ export function CityView({ entities, familyMembers, riseupMismatchIds, riseupHis
             const progress = targetAmount > 0 ? Math.max(0, Math.min(1, currentAmount / targetAmount)) : 0;
             return <CityGoalMesh {...commonProps} progress={progress} onOpen={onOpenThis} />;
           }
+          if (entity.details.kind === 'debt' && entity.details.isMortgage) {
+            return <CityMortgageMesh {...commonProps} onOpen={onOpenThis} />;
+          }
+          const treeVariant = TREE_VARIANT_BY_KIND[entity.details.kind];
+          if (treeVariant) {
+            return <CityTreeMesh {...commonProps} variant={treeVariant} onOpen={onOpenThis} />;
+          }
           return <CityBuildingMesh {...commonProps} onOpen={onOpenThis} />;
         };
 
@@ -290,9 +364,10 @@ export function CityView({ entities, familyMembers, riseupMismatchIds, riseupHis
       })}
 
       <OrbitControls
+        ref={controlsRef}
         makeDefault
         enabled={controlsEnabled}
-        target={[width / 2, 1, groundCenter[1]]}
+        target={orbitTarget}
         enablePan
         enableZoom
         enableRotate
@@ -305,5 +380,17 @@ export function CityView({ entities, familyMembers, riseupMismatchIds, riseupHis
         maxPolarAngle={Math.PI / 2.15}
       />
     </Canvas>
+    <div className={styles.cameraLockBar}>
+      {lockedCamera ? (
+        <button type="button" className={`${styles.cameraLockBtn} ${styles.cameraLockBtnActive}`} onClick={handleResetCamera}>
+          🔓 בטל קיבוע מצלמה
+        </button>
+      ) : (
+        <button type="button" className={styles.cameraLockBtn} onClick={handleLockCamera} title="שומר את הזווית והגובה הנוכחיים ומחזיר אליהם בכל טעינה מחדש">
+          📌 קבע זווית מצלמה
+        </button>
+      )}
+    </div>
+    </>
   );
 }

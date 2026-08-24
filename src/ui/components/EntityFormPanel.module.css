@@ -9,7 +9,10 @@
 }
 
 .panel {
-  width: min(480px, 92vw);
+  /* widened from 480px — the mortgage tracks row (6 columns: type/balance/rate/payment/months/
+     remove) needs real room; a plain field or two never needed this much, but nothing here
+     shrinks awkwardly at the larger size either. */
+  width: min(640px, 94vw);
   max-height: 88vh;
   overflow-y: auto;
   background: var(--surface);
@@ -208,6 +211,84 @@
   align-items: center;
   gap: 8px;
   font-size: 0.82rem;
+}
+
+.mortgageTracks {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+/* each track is a two-row card rather than one wide grid — a select plus 4 numeric fields plus
+   a remove button never comfortably fit one row at any reasonable panel width, so the type +
+   remove controls sit on their own header row and the numeric fields get their own row below,
+   where they can wrap freely on narrow screens without clipping. */
+.mortgageTrackCard {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-3);
+}
+
+.mortgageTrackHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mortgageTrackHeader .select {
+  flex: 1;
+}
+
+.mortgageTrackFields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
+  gap: 6px;
+}
+
+.mortgageTrackField {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.mortgageTrackFieldLabel {
+  font-size: 0.66rem;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+.mortgageTrackCard .input,
+.mortgageTrackCard .select {
+  font-size: 0.76rem;
+  padding: 6px 8px;
+  width: 100%;
+  min-width: 0;
+}
+
+.addBtn {
+  border: 1px dashed var(--border);
+  background: transparent;
+  color: var(--text-dim);
+  padding: 8px;
+  border-radius: var(--radius-sm);
+  font-size: 0.78rem;
+}
+
+.removeBtn {
+  border: none;
+  background: transparent;
+  color: var(--health-risk);
+  font-size: 0.74rem;
+  padding: 4px 6px;
 }
 
 .chipList {

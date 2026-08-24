@@ -93,11 +93,43 @@ const InsuranceDetails = z.object({
   monthlyPremium: z.number().nonnegative(),
   insuranceType: z.enum(INSURANCE_TYPES),
 });
+// A mortgage's own track types (Israeli mortgages are near-universally split across several of
+// these, each with its own rate/term) — not a separate entity category from 'debt' (see
+// isMortgage below), the same way an investment's assetType or an expense's expenseType is a
+// sub-type, not a whole parallel category.
+export const MORTGAGE_TRACK_TYPES = ['primeLinked', 'fixedLinked', 'fixedUnlinked', 'variableLinked', 'variableUnlinked'] as const;
+export type MortgageTrackType = (typeof MORTGAGE_TRACK_TYPES)[number];
+export const MORTGAGE_TRACK_TYPE_LABELS: Record<MortgageTrackType, string> = {
+  primeLinked: 'פריים',
+  fixedLinked: 'קבועה צמודה',
+  fixedUnlinked: 'קבועה לא צמודה',
+  variableLinked: 'משתנה צמודה',
+  variableUnlinked: 'משתנה לא צמודה',
+};
+
+const MortgageTrackSchema = z.object({
+  id: z.string(),
+  trackType: z.enum(MORTGAGE_TRACK_TYPES),
+  outstandingBalance: z.number().nonnegative(),
+  interestRatePct: z.number().nonnegative(),
+  monthlyPayment: z.number().nonnegative(),
+  remainingMonths: z.number().nonnegative().default(0),
+});
+export type MortgageTrack = z.infer<typeof MortgageTrackSchema>;
+
 const DebtDetails = z.object({
   kind: z.literal('debt'),
   outstandingBalance: z.number().nonnegative(),
   monthlyPayment: z.number().nonnegative(),
   interestRatePct: z.number().nonnegative().default(0),
+  // opt-in mortgage breakdown (the "תמהיל" — track mix). When tracks are present, the three
+  // fields above are kept as their aggregate (summed balance, summed payment, balance-weighted
+  // average rate) rather than a second source of truth — every other part of the app that reads
+  // a debt's outstandingBalance/monthlyPayment/interestRatePct (health, city sizing, RiseUp
+  // linking...) keeps working completely unchanged; the tracks are purely an editable breakdown
+  // that the form aggregates on save.
+  isMortgage: z.boolean().default(false),
+  mortgageTracks: z.array(MortgageTrackSchema).default([]),
 });
 const GoalDetails = z.object({
   kind: z.literal('goal'),

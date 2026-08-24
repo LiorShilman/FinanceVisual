@@ -14,6 +14,8 @@ import {
   LINKABLE_FIELDS,
   LIQUIDITY_LABELS,
   LIQUIDITY_LEVELS,
+  MORTGAGE_TRACK_TYPES,
+  MORTGAGE_TRACK_TYPE_LABELS,
   isLiquidityRelevant,
   resolveLiquidity,
   type DisplayCurrency,
@@ -21,12 +23,15 @@ import {
   type EntityDetails,
   type FinancialEntity,
   type Liquidity,
+  type MortgageTrack,
+  type MortgageTrackType,
 } from '../../domain/entity';
 import { useBoardStore } from '../../app/boardStore';
 import type { RiseupTransaction } from '../../app/riseupConnection';
 import { sumRiseupForBusinesses } from '../../app/riseupSync';
 import { CATEGORY_ICONS } from '../icons';
 import { formatCurrency } from '../format';
+import { MortgageScheduleModal } from './MortgageScheduleModal';
 import { NumberField } from './NumberField';
 import styles from './EntityFormPanel.module.css';
 
@@ -51,7 +56,7 @@ function defaultDetails(category: EntityCategory): EntityDetails {
     case 'insurance':
       return { kind: 'insurance', coverageAmount: 0, monthlyPremium: 0, insuranceType: 'life' };
     case 'debt':
-      return { kind: 'debt', outstandingBalance: 0, monthlyPayment: 0, interestRatePct: 0 };
+      return { kind: 'debt', outstandingBalance: 0, monthlyPayment: 0, interestRatePct: 0, isMortgage: false, mortgageTracks: [] };
     case 'goal':
       return { kind: 'goal', targetAmount: 1, currentAmount: 0 };
     case 'realEstate':
@@ -59,6 +64,29 @@ function defaultDetails(category: EntityCategory): EntityDetails {
     case 'source':
       return { kind: 'source' };
   }
+}
+
+function makeTrackId(): string {
+  return `track-${crypto.randomUUID()}`;
+}
+
+/** The three plain debt fields (outstandingBalance/monthlyPayment/interestRatePct) as the
+ * aggregate of a mortgage's tracks — balance and payment simply sum, but the rate is
+ * balance-weighted (a ₪800k track at 3% and a ₪200k track at 6% is a 3.6% mortgage overall, not a
+ * flat 4.5% average of the two rates). Every other part of the app keeps reading these three
+ * plain fields and never needs to know tracks exist. */
+function aggregateMortgageTracks(tracks: MortgageTrack[]): {
+  outstandingBalance: number;
+  monthlyPayment: number;
+  interestRatePct: number;
+} {
+  const outstandingBalance = tracks.reduce((sum, t) => sum + t.outstandingBalance, 0);
+  const monthlyPayment = tracks.reduce((sum, t) => sum + t.monthlyPayment, 0);
+  const interestRatePct =
+    outstandingBalance > 0
+      ? tracks.reduce((sum, t) => sum + t.interestRatePct * t.outstandingBalance, 0) / outstandingBalance
+      : 0;
+  return { outstandingBalance, monthlyPayment, interestRatePct };
 }
 
 interface Draft {
@@ -120,6 +148,7 @@ export function EntityFormPanel({ entityId, presetCategory, presetDetailOverride
     };
   });
   const [error, setError] = useState<string | null>(null);
+  const [showMortgageSchedule, setShowMortgageSchedule] = useState(false);
 
   // every amount is always stored in ₪ — these just convert what the number fields show/accept
   // to/from the entity's own chosen currency, so switching the toggle re-labels without silently
@@ -227,6 +256,36 @@ export function EntityFormPanel({ entityId, presetCategory, presetDetailOverride
     });
   }
 
+  // every track edit writes the whole tracks array back plus its freshly recomputed aggregate in
+  // one updateDetail call — the aggregate is never allowed to drift out of sync with the tracks
+  // that produced it.
+  function setMortgageTracks(tracks: MortgageTrack[]) {
+    updateDetail({ mortgageTracks: tracks, ...aggregateMortgageTracks(tracks) });
+  }
+
+  function addMortgageTrack() {
+    if (d.kind !== 'debt') return;
+    const track: MortgageTrack = {
+      id: makeTrackId(),
+      trackType: 'primeLinked',
+      outstandingBalance: 0,
+      interestRatePct: 0,
+      monthlyPayment: 0,
+      remainingMonths: 0,
+    };
+    setMortgageTracks([...d.mortgageTracks, track]);
+  }
+
+  function updateMortgageTrack(id: string, patch: Partial<MortgageTrack>) {
+    if (d.kind !== 'debt') return;
+    setMortgageTracks(d.mortgageTracks.map((t) => (t.id === id ? { ...t, ...patch } : t)));
+  }
+
+  function removeMortgageTrack(id: string) {
+    if (d.kind !== 'debt') return;
+    setMortgageTracks(d.mortgageTracks.filter((t) => t.id !== id));
+  }
+
   const d = draft.details;
 
   // read-only comparison against this month's real RiseUp data for whichever field is linked
@@ -251,6 +310,7 @@ export function EntityFormPanel({ entityId, presetCategory, presetDetailOverride
   }, [existing, d, riseupTransactions]);
 
   return (
+    <>
     <div className={styles.overlay} onClick={onClose}>
       <div className={styles.panel} onClick={(e) => e.stopPropagation()}>
         <h2 className={styles.title}>{existing ? 'עריכת ישות' : 'הוספת ישות פיננסית'}</h2>
@@ -478,6 +538,7 @@ export function EntityFormPanel({ entityId, presetCategory, presetDetailOverride
                   className={styles.input}
                   value={toDisplay(d.outstandingBalance)}
                   onChange={(v) => updateDetail({ outstandingBalance: fromDisplay(v) })}
+                  disabled={d.isMortgage && d.mortgageTracks.length > 0}
                 />
               </label>
               <label className={styles.field}>
@@ -486,6 +547,7 @@ export function EntityFormPanel({ entityId, presetCategory, presetDetailOverride
                   className={styles.input}
                   value={toDisplay(d.monthlyPayment)}
                   onChange={(v) => updateDetail({ monthlyPayment: fromDisplay(v) })}
+                  disabled={d.isMortgage && d.mortgageTracks.length > 0}
                 />
               </label>
             </div>
@@ -496,8 +558,92 @@ export function EntityFormPanel({ entityId, presetCategory, presetDetailOverride
                 className={styles.input}
                 value={d.interestRatePct}
                 onChange={(e) => updateDetail({ interestRatePct: Number(e.target.value) })}
+                disabled={d.isMortgage && d.mortgageTracks.length > 0}
               />
             </label>
+
+            <div className={styles.checkboxRow}>
+              <input type="checkbox" checked={d.isMortgage} onChange={(e) => updateDetail({ isMortgage: e.target.checked })} />
+              <span>זו משכנתא (עם תמהיל מסלולים)</span>
+            </div>
+
+            {d.isMortgage && (
+              <div className={styles.mortgageTracks}>
+                {d.mortgageTracks.length > 0 && (
+                  <p className={styles.hint}>
+                    יתרת החוב, התשלום החודשי והריבית למעלה מחושבים אוטומטית מסכום המסלולים כל עוד יש מסלולים.
+                  </p>
+                )}
+                {d.mortgageTracks.map((track) => (
+                  <div key={track.id} className={styles.mortgageTrackCard}>
+                    <div className={styles.mortgageTrackHeader}>
+                      <select
+                        className={styles.select}
+                        value={track.trackType}
+                        onChange={(e) => updateMortgageTrack(track.id, { trackType: e.target.value as MortgageTrackType })}
+                      >
+                        {MORTGAGE_TRACK_TYPES.map((t) => (
+                          <option key={t} value={t}>
+                            {MORTGAGE_TRACK_TYPE_LABELS[t]}
+                          </option>
+                        ))}
+                      </select>
+                      <button type="button" className={styles.removeBtn} onClick={() => removeMortgageTrack(track.id)}>
+                        הסר
+                      </button>
+                    </div>
+                    <div className={styles.mortgageTrackFields}>
+                      <label className={styles.mortgageTrackField}>
+                        <span className={styles.mortgageTrackFieldLabel}>יתרה ({currencySymbol})</span>
+                        <NumberField
+                          className={styles.input}
+                          placeholder="יתרה"
+                          value={toDisplay(track.outstandingBalance)}
+                          onChange={(v) => updateMortgageTrack(track.id, { outstandingBalance: fromDisplay(v) })}
+                        />
+                      </label>
+                      <label className={styles.mortgageTrackField}>
+                        <span className={styles.mortgageTrackFieldLabel}>ריבית שנתית (%)</span>
+                        <input
+                          type="number"
+                          className={styles.input}
+                          placeholder="ריבית %"
+                          value={track.interestRatePct}
+                          onChange={(e) => updateMortgageTrack(track.id, { interestRatePct: Number(e.target.value) })}
+                        />
+                      </label>
+                      <label className={styles.mortgageTrackField}>
+                        <span className={styles.mortgageTrackFieldLabel}>תשלום חודשי ({currencySymbol})</span>
+                        <NumberField
+                          className={styles.input}
+                          placeholder="תשלום חודשי"
+                          value={toDisplay(track.monthlyPayment)}
+                          onChange={(v) => updateMortgageTrack(track.id, { monthlyPayment: fromDisplay(v) })}
+                        />
+                      </label>
+                      <label className={styles.mortgageTrackField}>
+                        <span className={styles.mortgageTrackFieldLabel}>חודשים שנותרו</span>
+                        <input
+                          type="number"
+                          className={styles.input}
+                          placeholder="חודשים שנותרו"
+                          value={track.remainingMonths}
+                          onChange={(e) => updateMortgageTrack(track.id, { remainingMonths: Number(e.target.value) })}
+                        />
+                      </label>
+                    </div>
+                  </div>
+                ))}
+                <button type="button" className={styles.addBtn} onClick={addMortgageTrack}>
+                  + הוספת מסלול
+                </button>
+                {d.mortgageTracks.length > 0 && (
+                  <button type="button" className={styles.btn} onClick={() => setShowMortgageSchedule(true)}>
+                    הצג לוח סילוקין (שפיצר)
+                  </button>
+                )}
+              </div>
+            )}
           </>
         )}
 
@@ -684,5 +830,15 @@ export function EntityFormPanel({ entityId, presetCategory, presetDetailOverride
         </div>
       </div>
     </div>
+    {showMortgageSchedule && d.kind === 'debt' && d.mortgageTracks.length > 0 && (
+      <MortgageScheduleModal
+        entityName={draft.name || 'משכנתא'}
+        tracks={d.mortgageTracks}
+        currency={draft.currency}
+        usdRate={usdRate}
+        onClose={() => setShowMortgageSchedule(false)}
+      />
+    )}
+    </>
   );
 }

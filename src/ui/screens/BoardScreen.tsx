@@ -91,6 +91,47 @@ function BoardCanvas() {
   const [showRiseupTransactions, setShowRiseupTransactions] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const importInputRef = useRef<HTMLInputElement>(null);
+  const canvasWrapRef = useRef<HTMLDivElement>(null);
+
+  const canShareFiles = typeof navigator.share === 'function' && typeof navigator.canShare === 'function';
+
+  // canvas.toBlob (not toDataURL) — a data URL of a full-resolution PNG can run to several MB as
+  // a base64 string, which both the download link and (worse) the File constructor below would
+  // otherwise have to hold as text; toBlob keeps it binary the whole way through.
+  function getCityCanvasBlob(): Promise<Blob | null> {
+    const canvas = canvasWrapRef.current?.querySelector('canvas');
+    if (!canvas) return Promise.resolve(null);
+    return new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+  }
+
+  async function handleDownloadCity() {
+    const blob = await getCityCanvasBlob();
+    if (!blob) return;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `העיר-הפיננסית-${new Date().toISOString().slice(0, 10)}.png`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  async function handleShareCity() {
+    const blob = await getCityCanvasBlob();
+    if (!blob) return;
+    const file = new File([blob], 'העיר-הפיננסית.png', { type: 'image/png' });
+    if (!navigator.canShare({ files: [file] })) {
+      handleDownloadCity();
+      return;
+    }
+    try {
+      await navigator.share({ files: [file], title: 'העיר הפיננסית שלי' });
+    } catch {
+      // AbortError from the user dismissing the native share sheet is expected and not an error
+      // worth surfacing; any other failure just leaves them able to use the download button instead.
+    }
+  }
 
   const riseupPat = useBoardStore((s) => s.riseupPat);
   // only ever written from the async chain's resolution, never synchronously — same "checking"
@@ -408,7 +449,7 @@ function BoardCanvas() {
         </div>
       </header>
 
-      <div className={styles.canvasWrap}>
+      <div className={styles.canvasWrap} ref={canvasWrapRef}>
         <button
           type="button"
           className={styles.investmentsFab}
@@ -424,6 +465,18 @@ function BoardCanvas() {
           </svg>
           טבלת נכסים
         </button>
+        {layoutMode === 'city' && (
+          <div className={styles.cityExportBar}>
+            <button type="button" className={styles.cityExportBtn} onClick={handleDownloadCity} title="הורדת תמונת העיר באיכות מלאה">
+              ⬇️ הורדת תמונה
+            </button>
+            {canShareFiles && (
+              <button type="button" className={styles.cityExportBtn} onClick={handleShareCity} title="שיתוף תמונת העיר">
+                📤 שיתוף
+              </button>
+            )}
+          </div>
+        )}
         {layoutMode === 'city' ? (
           <CityView
             entities={entities}
