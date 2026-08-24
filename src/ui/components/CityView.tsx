@@ -16,18 +16,21 @@ import { getTerrainHeight } from '../../domain/terrain';
 import { computeValleyFeature } from '../../domain/valley';
 import { computeWaterFeature } from '../../domain/water';
 import { formatCurrency } from '../format';
+import { CityBeehiveMesh } from './CityBeehiveMesh';
 import { CityBuildingItem } from './CityBuildingItem';
 import { CityBuildingMesh } from './CityBuildingMesh';
 import { CityCrystalMesh } from './CityCrystalMesh';
 import { CityDebtChains } from './CityDebtChains';
 import { CityExpenseMesh } from './CityExpenseMesh';
 import { CityFamilyAvatar } from './CityFamilyAvatar';
-import { CityGiftMesh } from './CityGiftMesh';
+import { CityFountainMesh } from './CityFountainMesh';
 import { CityGoalMesh } from './CityGoalMesh';
 import { CityGround } from './CityGround';
 import { CityHouseMesh } from './CityHouseMesh';
 import { CityIncomeFaucet } from './CityIncomeFaucet';
 import { CityIncomeLinks } from './CityIncomeLinks';
+import { CityLanternMesh } from './CityLanternMesh';
+import { CityMedalBadge } from './CityMedalBadge';
 import { CityMortgageMesh } from './CityMortgageMesh';
 import { CityRiskAura } from './CityRiskAura';
 import { CityRiseupMismatchBadge } from './CityRiseupMismatchBadge';
@@ -139,6 +142,31 @@ export function CityView({ entities, familyMembers, riseupMismatchIds, riseupHis
     }
     return totals;
   }, [entities]);
+  // the top-3 largest growth holdings overall — savings/investment/pension/studyFund ranked
+  // together against each other by amount, not per-category, so e.g. two pensions could both
+  // outrank the single biggest savings account.
+  const topGrowthMedals = useMemo(() => {
+    const ranked = buildings
+      .filter((b) => GROWTH_ASSET_KINDS.has(entities.find((e) => e.id === b.id)?.details.kind ?? ''))
+      .sort((a, b) => {
+        const weightA = getWeight(entities.find((e) => e.id === a.id)!);
+        const weightB = getWeight(entities.find((e) => e.id === b.id)!);
+        return weightB - weightA;
+      });
+    return ranked.slice(0, 3).map((b, i) => ({
+      id: b.id,
+      x: b.x,
+      z: b.z,
+      // the growth trees' own rendered height is capped/dampened well below the raw domain
+      // `height` (see CityTreeMesh's sizeScale) — using the uncapped value here, like the family
+      // avatar's own Y calc does for towers, floated the medal far above a tree's actual canopy
+      // for any entity ranked near the top of the whole city's height scale, not just this
+      // category's. Capped the same way, with enough clearance to sit above the tree's own
+      // name/amount label (not just above the canopy) even for the tallest oak/pine at max scale.
+      y: getTerrainHeight(b.x, b.z) + Math.min(b.height, 5.5) + 3,
+      rank: (i + 1) as 1 | 2 | 3,
+    }));
+  }, [buildings, entities]);
   const incomeFaucetTarget = useMemo(() => {
     const incomeBuildings = buildings.filter((b) => b.category === 'income');
     if (incomeBuildings.length === 0) return null;
@@ -311,6 +339,9 @@ export function CityView({ entities, familyMembers, riseupMismatchIds, riseupHis
             y={getTerrainHeight(b.x, b.z) + b.height + 2.4}
           />
         ))}
+      {topGrowthMedals.map((m) => (
+        <CityMedalBadge key={`medal-${m.id}`} x={m.x} z={m.z} y={m.y} rank={m.rank} />
+      ))}
       {familyAvatarTargets.map((t) => (
         <CityFamilyAvatar key={t.id} x={t.x} z={t.z} y={t.y} name={t.name} photoUrl={t.photoUrl} />
       ))}
@@ -331,7 +362,13 @@ export function CityView({ entities, familyMembers, riseupMismatchIds, riseupHis
         const renderMesh = (x: number, z: number) => {
           const commonProps = { x, z, height: b.height, footprint: b.footprint, color: b.color, name: b.name, amount };
           if (b.category === 'donation') {
-            return <CityGiftMesh {...commonProps} onOpen={onOpenThis} />;
+            return <CityLanternMesh {...commonProps} onOpen={onOpenThis} />;
+          }
+          if (entity.details.kind === 'income') {
+            return <CityBeehiveMesh {...commonProps} onOpen={onOpenThis} />;
+          }
+          if (entity.details.kind === 'source') {
+            return <CityFountainMesh {...commonProps} onOpen={onOpenThis} />;
           }
           if (entity.details.kind === 'investment' && entity.details.assetType === 'alternative') {
             return <CityCrystalMesh {...commonProps} onOpen={onOpenThis} />;

@@ -58,12 +58,31 @@ export function CityRiseupTrend({ x, z, history }: Props) {
         // see domain/city.ts's baseX) — so the *current* month (last in the array) needs the
         // lowest x to land on the left, with earlier months increasing in x toward the right.
         const bx = (history.length - 1 - i) * (BAR_WIDTH + BAR_GAP);
+        // one flat dim shade for every past month, not a gradient — the point is "current vs.
+        // everything else", not a ranking of how old each past month is.
+        const isCurrent = i === history.length - 1;
+        const opacity = isCurrent ? 1 : 0.35;
         return (
           <group key={h.month} position={[bx, 0, 0]}>
             <mesh position={[0, barHeight / 2, 0]} frustumCulled={false}>
               <boxGeometry args={[BAR_WIDTH, barHeight, BAR_WIDTH]} />
-              <meshStandardMaterial color="#171a22" emissive={color} emissiveIntensity={0.85} roughness={0.5} />
+              <meshStandardMaterial
+                color="#171a22"
+                emissive={color}
+                emissiveIntensity={isCurrent ? 1.2 : 0.85}
+                roughness={0.5}
+                transparent
+                opacity={opacity}
+              />
             </mesh>
+            {/* a bright wireframe rim on the bar's own edges — the same trick every other faceted
+                mesh in the city (shield/trophy/fountain/lantern) uses so it reads as an actual box
+                with depth instead of a flat painted rectangle. */}
+            <mesh position={[0, barHeight / 2, 0]} scale={[1.05, 1.02, 1.05]} frustumCulled={false}>
+              <boxGeometry args={[BAR_WIDTH, barHeight, BAR_WIDTH]} />
+              <meshBasicMaterial color={color} wireframe transparent opacity={opacity} depthWrite={false} />
+            </mesh>
+            {isCurrent && <pointLight position={[0, barHeight * 0.6, 0]} color={color} intensity={0.6} distance={3} decay={2} />}
             {/* gold, not the bar's own green/red — the bar already carries that signal, and a
                 green label on a green bar (or red-on-red) was nearly unreadable. Gold matches
                 every other floating money label in the city (CityBuildingMesh, CityGoalMesh,
@@ -87,10 +106,10 @@ export function CityRiseupTrend({ x, z, history }: Props) {
                 original negative-y placement sat at/under the ground plane's surface and was
                 getting hidden by it (not actually missing, just invisible), and directly below
                 the bar's center risked clipping into its own box geometry. */}
-            <Billboard position={[0, 0.15, 0.95]}>
+            <Billboard position={[0, 0.15, 1.9]}>
               <Text
-                fontSize={0.32}
-                color="#e4e7ee"
+                fontSize={0.52}
+                color="#ffffff"
                 anchorX="center"
                 anchorY="middle"
                 outlineWidth={0.016}
