@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type ElementRef } from 'react';
+import { useMemo, useState, type ElementRef, type RefObject } from 'react';
 import * as THREE from 'three';
 import { Canvas } from '@react-three/fiber';
 import { Billboard, OrbitControls, Text } from '@react-three/drei';
@@ -7,8 +7,9 @@ import type { MonthHistoryPoint } from '../../app/riseupHistory';
 import { computeCityAtmosphere } from '../../domain/atmosphere';
 import { computeCityLayout, depthBaseZ, depthIndex, DISTRICT_SPACING } from '../../domain/city';
 import { computeGroundBounds, type CircularExtent } from '../../domain/cityGrid';
+import type { GrowthProjectionPoint } from '../../domain/compoundInterest';
 import { computeDebtLinkPaths } from '../../domain/debtLinks';
-import { CATEGORY_LABELS, ENTITY_CATEGORIES, getWeight, type FinancialEntity } from '../../domain/entity';
+import { CATEGORY_LABELS, ENTITY_CATEGORIES, getWeight, isGrowthAssetDetails, type FinancialEntity } from '../../domain/entity';
 import type { FamilyMember } from '../../domain/familyMember';
 import { computeIncomeLinkPaths } from '../../domain/incomeLinks';
 import { computeNetWorthBreakdown } from '../../domain/netWorth';
@@ -19,6 +20,7 @@ import { formatCurrency } from '../format';
 import { CityBeehiveMesh } from './CityBeehiveMesh';
 import { CityBuildingItem } from './CityBuildingItem';
 import { CityBuildingMesh } from './CityBuildingMesh';
+import { CityCameraFocus } from './CityCameraFocus';
 import { CityCrystalMesh } from './CityCrystalMesh';
 import { CityDebtChains } from './CityDebtChains';
 import { CityExpenseMesh } from './CityExpenseMesh';
@@ -27,6 +29,7 @@ import { CityFountainMesh } from './CityFountainMesh';
 import { CityGivingPillarMesh } from './CityGivingPillarMesh';
 import { CityGoalMesh } from './CityGoalMesh';
 import { CityGround } from './CityGround';
+import { CityGrowthRings } from './CityGrowthRings';
 import { CityHourglassMesh } from './CityHourglassMesh';
 import { CityHouseMesh } from './CityHouseMesh';
 import { CityIncomeFaucet } from './CityIncomeFaucet';
@@ -38,8 +41,10 @@ import { CityRiseupMismatchBadge } from './CityRiseupMismatchBadge';
 import { CityRiseupTrend } from './CityRiseupTrend';
 import { CityShieldMesh } from './CityShieldMesh';
 import { CitySun } from './CitySun';
-import { CityTreeMesh, type TreeVariant } from './CityTreeMesh';
-import styles from './CityView.module.css';
+import { CityTreeMesh } from './CityTreeMesh';
+import { CityWalkControls } from './CityWalkControls';
+import type { LockedCamera } from './cityCameraLock';
+import { computeCrystalLabelY, computeTreeLabelY, type TreeVariant } from './cityGrowthGeometry';
 
 interface Props {
   entities: FinancialEntity[];
@@ -51,6 +56,17 @@ interface Props {
   // last few months of real RiseUp totals, oldest first — drives the in-city trend chart; empty
   // when disconnected or still loading, which just skips rendering it.
   riseupHistory: MonthHistoryPoint[];
+  // owned by BoardScreen (not this component) so the new left-side CityControlPanel — which lives
+  // outside the Canvas tree — can trigger a lock/reset without needing an imperative handle back
+  // into here; a plain ref works across that boundary just fine since it's dereferenced lazily.
+  controlsRef: RefObject<ElementRef<typeof OrbitControls> | null>;
+  lockedCamera: LockedCamera | null;
+  // the entity currently open in the growth-forecast calculator (CityControlPanel), and its
+  // already-computed projection — both null when the calculator is closed. Computed once in
+  // BoardScreen (not here) so the same points feed both the panel's headline numbers and these
+  // rings without risking the two drifting apart.
+  growthForecastEntityId: string | null;
+  growthForecastPoints: GrowthProjectionPoint[] | null;
   onOpen: (id: string) => void;
 }
 
@@ -63,11 +79,6 @@ const DEPTH_LABELS: { text: string; color: string }[] = [
   { text: 'נזיל / שוטף', color: '#ee6b6b' },
 ];
 
-// only the actual growth/savings vehicles — not debt, goals, checking, etc. — even though those
-// share the same depth tiers. Showing "how much is actually growing at this horizon" is the point;
-// mixing in liabilities or a checking balance would make the number meaningless.
-const GROWTH_ASSET_KINDS = new Set(['savings', 'investment', 'pension', 'studyFund']);
-
 // the four growth categories render as trees, not towers — each gets its own species so they stay
 // visually distinct from one another (investment's 'alternative' assetType is handled separately,
 // as CityCrystalMesh, before this map is even consulted).
@@ -78,49 +89,21 @@ const TREE_VARIANT_BY_KIND: Partial<Record<string, TreeVariant>> = {
   studyFund: 'fruit',
 };
 
-// per-browser, not synced — the camera angle is a viewing preference for this screen, not board
-// data, so it lives in localStorage the same way a scroll position or zoom level would.
-const CAMERA_LOCK_KEY = 'financevisual:cityCameraLock';
-
-interface LockedCamera {
-  position: [number, number, number];
-  target: [number, number, number];
-}
-
-function loadLockedCamera(): LockedCamera | null {
-  const raw = localStorage.getItem(CAMERA_LOCK_KEY);
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw) as LockedCamera;
-  } catch {
-    return null;
-  }
-}
-
-export function CityView({ entities, familyMembers, riseupMismatchIds, riseupHistory, onOpen }: Props) {
+export function CityView({
+  entities,
+  familyMembers,
+  riseupMismatchIds,
+  riseupHistory,
+  controlsRef,
+  lockedCamera,
+  growthForecastEntityId,
+  growthForecastPoints,
+  onOpen,
+}: Props) {
   const hideAmounts = useBoardStore((s) => s.hideAmounts);
   const usdRate = useBoardStore((s) => s.usdRate);
   const cityPositions = useBoardStore((s) => s.cityPositions);
   const [controlsEnabled, setControlsEnabled] = useState(true);
-  const controlsRef = useRef<ElementRef<typeof OrbitControls>>(null);
-  const [lockedCamera, setLockedCamera] = useState(() => loadLockedCamera());
-
-  function handleLockCamera() {
-    const controls = controlsRef.current;
-    if (!controls) return;
-    const camera = controls.object;
-    const value: LockedCamera = {
-      position: [camera.position.x, camera.position.y, camera.position.z],
-      target: [controls.target.x, controls.target.y, controls.target.z],
-    };
-    localStorage.setItem(CAMERA_LOCK_KEY, JSON.stringify(value));
-    setLockedCamera(value);
-  }
-
-  function handleResetCamera() {
-    localStorage.removeItem(CAMERA_LOCK_KEY);
-    setLockedCamera(null);
-  }
   const buildings = useMemo(() => computeCityLayout(entities, cityPositions), [entities, cityPositions]);
   const water = useMemo(() => computeWaterFeature(buildings), [buildings]);
   const valley = useMemo(() => computeValleyFeature(buildings, entities), [buildings, entities]);
@@ -138,7 +121,7 @@ export function CityView({ entities, familyMembers, riseupMismatchIds, riseupHis
   const growthTotalByDepth = useMemo(() => {
     const totals = [0, 0, 0];
     for (const e of entities) {
-      if (!GROWTH_ASSET_KINDS.has(e.details.kind)) continue;
+      if (!isGrowthAssetDetails(e.details)) continue;
       totals[depthIndex(e)] = (totals[depthIndex(e)] ?? 0) + getWeight(e);
     }
     return totals;
@@ -148,7 +131,10 @@ export function CityView({ entities, familyMembers, riseupMismatchIds, riseupHis
   // outrank the single biggest savings account.
   const topGrowthMedals = useMemo(() => {
     const ranked = buildings
-      .filter((b) => GROWTH_ASSET_KINDS.has(entities.find((e) => e.id === b.id)?.details.kind ?? ''))
+      .filter((b) => {
+        const details = entities.find((e) => e.id === b.id)?.details;
+        return details ? isGrowthAssetDetails(details) : false;
+      })
       .sort((a, b) => {
         const weightA = getWeight(entities.find((e) => e.id === a.id)!);
         const weightB = getWeight(entities.find((e) => e.id === b.id)!);
@@ -157,19 +143,21 @@ export function CityView({ entities, familyMembers, riseupMismatchIds, riseupHis
     return ranked.slice(0, 3).map((b, i) => {
       const entity = entities.find((e) => e.id === b.id)!;
       const weight = getWeight(entity);
+      // the anchor for the *name* — the bottom of CityMedalBadge's own stack — has to match
+      // whichever mesh this entity actually renders as (the growth trees or, for an alternative
+      // investment, the crystal/predator tree) *exactly*, or the medal floats detached from the
+      // canopy instead of sitting right above it. A separate hand-tuned formula here drifted out
+      // of sync with the mesh's own geometry once that geometry's own sizing changed, so this
+      // calls the same functions the mesh itself uses instead of re-deriving the number.
+      const isAlternativeInvestment = entity.details.kind === 'investment' && entity.details.assetType === 'alternative';
+      const labelY = isAlternativeInvestment
+        ? computeCrystalLabelY(b.height, b.footprint)
+        : computeTreeLabelY(b.height, b.footprint, TREE_VARIANT_BY_KIND[entity.details.kind] ?? 'oak');
       return {
         id: b.id,
         x: b.x,
         z: b.z,
-        // the anchor for the *name* — the bottom of CityMedalBadge's own stack, so this only
-        // needs to clear the canopy the way the tree's own (now-hidden) label used to, not the
-        // whole trophy+amount stack above it (that headroom lives inside CityMedalBadge itself).
-        // The growth trees' own rendered height is capped/dampened well below the raw domain
-        // `height` (see CityTreeMesh's sizeScale) — using the uncapped value here, like the
-        // family avatar's own Y calc does for towers, would float this far above a tree's actual
-        // canopy for any entity ranked near the top of the whole city's height scale, not just
-        // this category's, hence the cap.
-        y: getTerrainHeight(b.x, b.z) + Math.min(b.height, 4.5) + 2.5,
+        y: getTerrainHeight(b.x, b.z) + labelY,
         rank: (i + 1) as 1 | 2 | 3,
         name: b.name,
         amount: weight === 0 || hideAmounts ? '' : formatCurrency(weight, entity.currency, usdRate),
@@ -179,6 +167,23 @@ export function CityView({ entities, familyMembers, riseupMismatchIds, riseupHis
   // the mesh's own label is suppressed for these entities — CityMedalBadge renders the full
   // name/amount stack itself, with the trophy sitting between the two.
   const medalEntityIds = useMemo(() => new Set(topGrowthMedals.map((m) => m.id)), [topGrowthMedals]);
+  // where the growth-forecast rings float and where the camera glides to — same labelY-matching
+  // trick as topGrowthMedals above. A medaled entity needs much more clearance: CityMedalBadge
+  // stacks its own trophy+rank+amount well above that same labelY anchor, and the rings would
+  // otherwise render right through the middle of it.
+  const growthForecastTarget = useMemo(() => {
+    if (!growthForecastEntityId) return null;
+    const b = buildings.find((building) => building.id === growthForecastEntityId);
+    const entity = entities.find((e) => e.id === growthForecastEntityId);
+    if (!b || !entity) return null;
+    const isAlternativeInvestment = entity.details.kind === 'investment' && entity.details.assetType === 'alternative';
+    const labelY = isAlternativeInvestment
+      ? computeCrystalLabelY(b.height, b.footprint)
+      : computeTreeLabelY(b.height, b.footprint, TREE_VARIANT_BY_KIND[entity.details.kind] ?? 'oak');
+    const terrainY = getTerrainHeight(b.x, b.z);
+    const clearance = medalEntityIds.has(growthForecastEntityId) ? 4.6 : 1.6;
+    return { x: b.x, z: b.z, y: terrainY + labelY + clearance, color: b.color };
+  }, [growthForecastEntityId, buildings, entities, medalEntityIds]);
   const incomeFaucetTarget = useMemo(() => {
     const incomeBuildings = buildings.filter((b) => b.category === 'income');
     if (incomeBuildings.length === 0) return null;
@@ -237,7 +242,6 @@ export function CityView({ entities, familyMembers, riseupMismatchIds, riseupHis
   const orbitTarget = lockedCamera?.target ?? [width / 2, 1, groundCenter[1]];
 
   return (
-    <>
     <Canvas
       camera={{ position: initialCameraPosition, fov: 32 }}
       dir="rtl"
@@ -432,18 +436,18 @@ export function CityView({ entities, familyMembers, riseupMismatchIds, riseupHis
         maxDistance={200}
         maxPolarAngle={Math.PI / 2.15}
       />
-    </Canvas>
-    <div className={styles.cameraLockBar}>
-      {lockedCamera ? (
-        <button type="button" className={`${styles.cameraLockBtn} ${styles.cameraLockBtnActive}`} onClick={handleResetCamera}>
-          🔓 בטל קיבוע מצלמה
-        </button>
-      ) : (
-        <button type="button" className={styles.cameraLockBtn} onClick={handleLockCamera} title="שומר את הזווית והגובה הנוכחיים ומחזיר אליהם בכל טעינה מחדש">
-          📌 קבע זווית מצלמה
-        </button>
+      <CityWalkControls controlsRef={controlsRef} enabled={controlsEnabled} />
+      <CityCameraFocus controlsRef={controlsRef} target={growthForecastTarget} />
+      {growthForecastTarget && growthForecastPoints && (
+        <CityGrowthRings
+          x={growthForecastTarget.x}
+          z={growthForecastTarget.z}
+          baseY={growthForecastTarget.y}
+          points={growthForecastPoints}
+          color={growthForecastTarget.color}
+          formatAmount={(v) => (hideAmounts ? '' : formatCurrency(v))}
+        />
       )}
-    </div>
-    </>
+    </Canvas>
   );
 }

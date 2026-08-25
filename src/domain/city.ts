@@ -1,7 +1,7 @@
 import { ENTITY_CATEGORIES, getWeight, type EntityCategory, type FinancialEntity } from './entity';
 import { getHorizonBucket } from './layout';
 import { buildHealthContext, computeHealth, getDisplayHealthOverride, HEALTH_COLORS, type HealthStatus } from './health';
-import { computeRankSizes } from './sizing';
+import { computeMagnitudeShare } from './sizing';
 
 export interface CityPosition {
   x: number;
@@ -129,17 +129,23 @@ const CATEGORY_INDEX: Record<EntityCategory, number> = Object.fromEntries(
 ) as Record<EntityCategory, number>;
 
 /**
- * Neighborhoods (categories) laid out along X, depth (liquidity/horizon) along Z, building
- * height is the amount — ranked against every other building in the city (not a shared magnitude
- * scale), so two buildings of similar-but-not-identical value still read as different heights.
+ * Neighborhoods (categories) laid out along X, depth (liquidity/horizon) along Z, building height
+ * is the amount — on a fixed ₪100–₪10,000,000 order-of-magnitude scale (computeMagnitudeShare),
+ * not ranked against whatever else happens to be on this specific board. Rank-based sizing was
+ * tried first, but its range gets shared across every entity's own pairwise gap — the more
+ * entities on the board, the more it diluted any *specific* pair's difference, so a ₪1,000,000
+ * pension next to a ₪25,000 one could end up looking only modestly taller once enough other
+ * entities existed to eat up the "step budget". A fixed scale means a building's height reflects
+ * what it's actually worth, stable regardless of how many other entities exist.
  */
 export function computeCityLayout(entities: FinancialEntity[], overrides: Record<string, CityPosition> = {}): CityBuilding[] {
   const ctx = buildHealthContext(entities);
-  const weights = entities.map((e) => Math.abs(getWeight(e)));
-  const rankedHeights = computeRankSizes(weights, MIN_HEIGHT, MAX_HEIGHT);
-  const rankedFootprints = computeRankSizes(weights, MIN_FOOTPRINT, MAX_FOOTPRINT);
-  const heightByEntity = new Map(entities.map((e, i) => [e.id, rankedHeights[i]]));
-  const footprintByEntity = new Map(entities.map((e, i) => [e.id, rankedFootprints[i]]));
+  const heightByEntity = new Map(
+    entities.map((e) => [e.id, MIN_HEIGHT + computeMagnitudeShare(Math.abs(getWeight(e))) * (MAX_HEIGHT - MIN_HEIGHT)]),
+  );
+  const footprintByEntity = new Map(
+    entities.map((e) => [e.id, MIN_FOOTPRINT + computeMagnitudeShare(Math.abs(getWeight(e))) * (MAX_FOOTPRINT - MIN_FOOTPRINT)]),
+  );
 
   const grouped = new Map<string, FinancialEntity[]>();
   for (const e of entities) {

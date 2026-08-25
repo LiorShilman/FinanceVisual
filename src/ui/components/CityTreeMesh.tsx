@@ -1,8 +1,7 @@
 import { useMemo } from 'react';
 import { Billboard, Text } from '@react-three/drei';
 import type { ThreeEvent } from '@react-three/fiber';
-
-export type TreeVariant = 'sapling' | 'oak' | 'pine' | 'fruit';
+import { computeCanopyRadius, computeTreeLabelY, computeTrunkHeight, TREE_SIZE_SCALE, type TreeVariant } from './cityGrowthGeometry';
 
 interface Props {
   x: number;
@@ -35,11 +34,6 @@ const CANOPY_PALETTE: Record<TreeVariant, { base: string; light: string; bark: s
   fruit: { base: '#3f8a4a', light: '#6bb35e', bark: '#5f4128' },
 };
 
-// blob count and color alone read as too similar at typical city-view distance — an overall size
-// difference is the one cue that still holds up as a small silhouette. Savings stays a visibly
-// young, small sapling; investment grows into a noticeably bigger, broader tree.
-const SIZE_SCALE: Record<TreeVariant, number> = { sapling: 0.62, oak: 1.2, pine: 1, fruit: 1 };
-
 function hash(seed: number): number {
   const s = Math.sin(seed * 12.9898) * 43758.5453;
   return s - Math.floor(s);
@@ -52,11 +46,10 @@ export function CityTreeMesh({ x, z, height, footprint, color, name, amount, var
   };
 
   const palette = CANOPY_PALETTE[variant];
-  const sizeScale = SIZE_SCALE[variant];
-  const trunkHeight = Math.max(0.8, Math.min(3.4, height * 0.5)) * sizeScale;
-  const trunkRadiusBottom = Math.max(0.1, Math.min(0.24, footprint * 0.13)) * sizeScale;
+  const trunkHeight = computeTrunkHeight(height, variant);
+  const trunkRadiusBottom = Math.max(0.1, Math.min(0.24, footprint * 0.13)) * TREE_SIZE_SCALE[variant];
   const trunkRadiusTop = trunkRadiusBottom * 0.7;
-  const canopyRadius = Math.max(0.55, Math.min(1.55, footprint * 0.8 + height * 0.05)) * sizeScale;
+  const canopyRadius = computeCanopyRadius(height, footprint, variant);
 
   // deterministic per-building jitter (position-seeded, not Math.random()) so the canopy clumps
   // stay stable across re-renders instead of reshuffling every frame.
@@ -105,7 +98,7 @@ export function CityTreeMesh({ x, z, height, footprint, color, name, amount, var
   }, [seed, canopyRadius, variant, blobs]);
 
   const canopyBaseY = trunkHeight + canopyRadius * 0.15;
-  const labelY = variant === 'pine' ? trunkHeight + canopyRadius * 1.9 + 0.4 : canopyBaseY + canopyRadius * 1.15 + 0.4;
+  const labelY = computeTreeLabelY(height, footprint, variant);
 
   return (
     <group position={[x, 0, z]}>

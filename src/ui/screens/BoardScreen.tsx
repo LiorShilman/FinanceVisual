@@ -1,12 +1,22 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type ElementRef } from 'react';
 import { Background, Controls, MiniMap, ReactFlow, useNodesState, useReactFlow, type Connection, type Edge } from '@xyflow/react';
+import { OrbitControls } from '@react-three/drei';
 import { useBoardStore, useBoardLayout } from '../../app/boardStore';
 import { exportBoardToFile, importBoardFromFile } from '../../app/boardTransfer';
 import { fetchBudgetStatus, fetchTransactions, type RiseupTransaction } from '../../app/riseupConnection';
 import { fetchRiseupHistory, type MonthHistoryPoint } from '../../app/riseupHistory';
 import { sumRiseupForBusinesses } from '../../app/riseupSync';
 import { signOutUser } from '../../app/useAuth';
-import { getLinkedFieldValue, getWeight, type EntityCategory, type EntityDetails, type FinancialEntity } from '../../domain/entity';
+import {
+  getGrowthMonthlyContribution,
+  getLinkedFieldValue,
+  getWeight,
+  isGrowthAssetDetails,
+  type EntityCategory,
+  type EntityDetails,
+  type FinancialEntity,
+} from '../../domain/entity';
+import { computeGrowthProjection } from '../../domain/compoundInterest';
 import { computeHealth, buildHealthContext, getMissingEssentials } from '../../domain/health';
 import { computeNodeSize, computeTotalWeight } from '../../domain/sizing';
 import { getEntityBucketKey, getOrderedBucketIds, type LayoutMode, type PyramidBand } from '../../domain/layout';
@@ -18,10 +28,13 @@ import { LabelNode } from '../components/LabelNode';
 import { TierBandNode } from '../components/TierBandNode';
 import { EntityFormPanel } from '../components/EntityFormPanel';
 import { FamilyPanel } from '../components/FamilyPanel';
+import { CityControlPanel } from '../components/CityControlPanel';
 import { CityView } from '../components/CityView';
+import { clearLockedCamera, loadLockedCamera, saveLockedCamera, type LockedCamera } from '../components/cityCameraLock';
 import { CurrencyControl } from '../components/CurrencyControl';
 import { InvestmentsTablePanel } from '../components/InvestmentsTablePanel';
 import { RiseupTransactionsPanel } from '../components/RiseupTransactionsPanel';
+import { formatCurrency } from '../format';
 import type { EntityFlowNode, GhostFlowNode } from '../nodeTypes';
 import type { LabelFlowNode } from '../components/LabelNode';
 import type { TierBandFlowNode } from '../components/TierBandNode';
@@ -92,6 +105,73 @@ function BoardCanvas() {
   const [menuOpen, setMenuOpen] = useState(false);
   const importInputRef = useRef<HTMLInputElement>(null);
   const canvasWrapRef = useRef<HTMLDivElement>(null);
+
+  // owned here (not inside CityView) so the left-side CityControlPanel — rendered outside the
+  // Canvas tree — can trigger a lock/reset directly; a plain ref works across that boundary since
+  // it's only ever dereferenced lazily, after the Canvas has mounted and attached it.
+  const controlsRef = useRef<ElementRef<typeof OrbitControls>>(null);
+  const [lockedCamera, setLockedCamera] = useState<LockedCamera | null>(() => loadLockedCamera());
+
+  function handleLockCamera() {
+    const controls = controlsRef.current;
+    if (!controls) return;
+    const camera = controls.object;
+    const value: LockedCamera = {
+      position: [camera.position.x, camera.position.y, camera.position.z],
+      target: [controls.target.x, controls.target.y, controls.target.z],
+    };
+    saveLockedCamera(value);
+    setLockedCamera(value);
+  }
+
+  function handleResetCamera() {
+    clearLockedCamera();
+    setLockedCamera(null);
+  }
+
+  // years and monthly-deposit are "what if" scenario knobs, local to this calculator session —
+  // the assumed return % is the one number saved back onto the entity itself (see
+  // handleChangeForecastReturnPct), since that's a real belief about the account worth
+  // remembering, not a throwaway exploration input.
+  const [growthForecast, setGrowthForecast] = useState<{ entityId: string; years: number; monthlyDeposit: number } | null>(
+    null,
+  );
+
+  function handleOpenGrowthForecast(entityId: string) {
+    const entity = entities.find((e) => e.id === entityId);
+    if (!entity || !isGrowthAssetDetails(entity.details)) return;
+    setGrowthForecast({ entityId, years: 15, monthlyDeposit: getGrowthMonthlyContribution(entity.details) });
+    setLayoutMode('city');
+    setEditingId(null);
+    setCreating(null);
+  }
+
+  const growthForecastEntity = growthForecast ? entities.find((e) => e.id === growthForecast.entityId) ?? null : null;
+  const growthForecastDetails =
+    growthForecastEntity && isGrowthAssetDetails(growthForecastEntity.details) ? growthForecastEntity.details : null;
+
+  const growthForecastPoints = useMemo(() => {
+    if (!growthForecast || !growthForecastDetails) return null;
+    return computeGrowthProjection(
+      growthForecastDetails.balance,
+      growthForecast.monthlyDeposit,
+      growthForecastDetails.expectedAnnualReturnPct,
+      growthForecast.years,
+    );
+  }, [growthForecast, growthForecastDetails]);
+
+  const growthForecastPanelData =
+    growthForecast && growthForecastEntity && growthForecastDetails && growthForecastPoints
+      ? {
+          entityId: growthForecast.entityId,
+          entityName: growthForecastEntity.name,
+          balance: growthForecastDetails.balance,
+          monthlyDeposit: growthForecast.monthlyDeposit,
+          annualReturnPct: growthForecastDetails.expectedAnnualReturnPct,
+          years: growthForecast.years,
+          finalBalance: growthForecastPoints.at(-1)?.balance ?? growthForecastDetails.balance,
+        }
+      : null;
 
   const canShareFiles = typeof navigator.share === 'function' && typeof navigator.canShare === 'function';
 
@@ -450,39 +530,36 @@ function BoardCanvas() {
       </header>
 
       <div className={styles.canvasWrap} ref={canvasWrapRef}>
-        <button
-          type="button"
-          className={styles.investmentsFab}
-          onClick={() => setShowInvestmentsTable(true)}
-          title="טבלת נכסים צומחים מפורטת"
-        >
-          <svg className={styles.investmentsFabIcon} viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <rect x="3" y="13.5" width="4.2" height="7.5" rx="1.2" fill="currentColor" opacity="0.5" />
-            <rect x="9.9" y="8.5" width="4.2" height="12.5" rx="1.2" fill="currentColor" opacity="0.78" />
-            <rect x="16.8" y="3" width="4.2" height="18" rx="1.2" fill="currentColor" />
-            <path d="M3 10.5 9 6l3.5 2.8L21 2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" opacity="0.9" />
-            <path d="M16.5 2h4.5v4.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" opacity="0.9" />
-          </svg>
-          טבלת נכסים
-        </button>
-        {layoutMode === 'city' && (
-          <div className={styles.cityExportBar}>
-            <button type="button" className={styles.cityExportBtn} onClick={handleDownloadCity} title="הורדת תמונת העיר באיכות מלאה">
-              ⬇️ הורדת תמונה
-            </button>
-            {canShareFiles && (
-              <button type="button" className={styles.cityExportBtn} onClick={handleShareCity} title="שיתוף תמונת העיר">
-                📤 שיתוף
-              </button>
-            )}
-          </div>
-        )}
+        <CityControlPanel
+          isCityMode={layoutMode === 'city'}
+          isCameraLocked={lockedCamera !== null}
+          onLockCamera={handleLockCamera}
+          onResetCamera={handleResetCamera}
+          onDownloadImage={handleDownloadCity}
+          onShareImage={handleShareCity}
+          canShareImage={canShareFiles}
+          onOpenAssetTable={() => setShowInvestmentsTable(true)}
+          growthForecast={growthForecastPanelData}
+          onChangeForecastYears={(years) => setGrowthForecast((f) => (f ? { ...f, years } : f))}
+          onChangeForecastMonthlyDeposit={(monthlyDeposit) => setGrowthForecast((f) => (f ? { ...f, monthlyDeposit } : f))}
+          onChangeForecastReturnPct={(pct) => {
+            if (growthForecastEntity && growthForecastDetails) {
+              updateEntity(growthForecastEntity.id, { details: { ...growthForecastDetails, expectedAnnualReturnPct: pct } });
+            }
+          }}
+          onCloseForecast={() => setGrowthForecast(null)}
+          formatAmount={(v) => (hideAmounts ? '' : formatCurrency(v))}
+        />
         {layoutMode === 'city' ? (
           <CityView
             entities={entities}
             familyMembers={familyMembers}
             riseupMismatchIds={riseupMismatchIds}
             riseupHistory={riseupHistory}
+            controlsRef={controlsRef}
+            lockedCamera={lockedCamera}
+            growthForecastEntityId={growthForecast?.entityId ?? null}
+            growthForecastPoints={growthForecastPoints}
             onOpen={openEditor}
           />
         ) : (
@@ -510,6 +587,7 @@ function BoardCanvas() {
           presetCategory={creating?.category}
           presetDetailOverrides={creating?.overrides}
           riseupTransactions={riseupTransactions}
+          onOpenGrowthForecast={handleOpenGrowthForecast}
           onClose={() => {
             setEditingId(null);
             setCreating(null);

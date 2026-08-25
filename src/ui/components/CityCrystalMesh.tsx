@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { Billboard, Text } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
 import type { ThreeEvent } from '@react-three/fiber';
+import { computeCrownMouthRadius, computeCrystalLabelY, computeCrystalTrunkHeight } from './cityGrowthGeometry';
 
 interface Props {
   x: number;
@@ -47,10 +48,9 @@ export function CityCrystalMesh({ x, z, height, footprint, color, name, amount, 
     onOpen();
   };
 
-  const trunkHeight = Math.max(0.8, Math.min(2.6, height * 0.42));
+  const trunkHeight = computeCrystalTrunkHeight(height);
   const trunkRadiusBottom = Math.max(0.09, Math.min(0.2, footprint * 0.12));
-  const crownMouthRadius = Math.max(0.4, Math.min(1.05, height * 0.24 + footprint * 0.26));
-  const crownY = trunkHeight + crownMouthRadius * 0.5;
+  const crownMouthRadius = computeCrownMouthRadius(height, footprint);
 
   // deterministic per-position seed (not Math.random — impure during render, and would reshuffle
   // on every re-render anyway) so a building's branch layout and breathing phase stay stable.
@@ -163,7 +163,7 @@ export function CityCrystalMesh({ x, z, height, footprint, color, name, amount, 
       <group position={[0, trunkHeight, 0]}>{renderMouth(crownMouthRadius, 0, crownMouthTiltX, crownMouthTiltZ)}</group>
 
       {!hideLabel && (
-        <Billboard position={[0, crownY + crownMouthRadius + 0.7, 0]}>
+        <Billboard position={[0, computeCrystalLabelY(height, footprint), 0]}>
           {amount !== '' && (
             <Text
               position={[0, 0.62, 0]}

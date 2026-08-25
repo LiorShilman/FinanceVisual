@@ -11,6 +11,7 @@ import {
   getLinkedFieldValue,
   INSURANCE_TYPES,
   INSURANCE_TYPE_LABELS,
+  isGrowthAssetDetails,
   LINKABLE_FIELDS,
   LIQUIDITY_LABELS,
   LIQUIDITY_LEVELS,
@@ -46,13 +47,13 @@ function defaultDetails(category: EntityCategory): EntityDetails {
     case 'checking':
       return { kind: 'checking', balance: 0, availableForInvestment: 0 };
     case 'savings':
-      return { kind: 'savings', balance: 0, isEmergencyFund: false };
+      return { kind: 'savings', balance: 0, isEmergencyFund: false, expectedAnnualReturnPct: 1 };
     case 'investment':
-      return { kind: 'investment', balance: 0, monthlyContribution: 0, assetType: 'traditional' };
+      return { kind: 'investment', balance: 0, monthlyContribution: 0, assetType: 'traditional', expectedAnnualReturnPct: 7 };
     case 'pension':
-      return { kind: 'pension', balance: 0, monthlyContribution: 0 };
+      return { kind: 'pension', balance: 0, monthlyContribution: 0, expectedAnnualReturnPct: 5 };
     case 'studyFund':
-      return { kind: 'studyFund', balance: 0, monthlyContribution: 0 };
+      return { kind: 'studyFund', balance: 0, monthlyContribution: 0, expectedAnnualReturnPct: 5 };
     case 'insurance':
       return { kind: 'insurance', coverageAmount: 0, monthlyPremium: 0, insuranceType: 'life' };
     case 'debt':
@@ -109,10 +110,21 @@ interface Props {
   // this month's real RiseUp transactions, for the linked-field discrepancy indicator below —
   // empty when disconnected or still loading, which just hides the indicator.
   riseupTransactions: RiseupTransaction[];
+  // opens the growth-forecast calculator (in the left-side CityControlPanel) for this saved
+  // entity — absent for a not-yet-created entity, since there's nothing to project until it
+  // exists.
+  onOpenGrowthForecast?: (entityId: string) => void;
   onClose: () => void;
 }
 
-export function EntityFormPanel({ entityId, presetCategory, presetDetailOverrides, riseupTransactions, onClose }: Props) {
+export function EntityFormPanel({
+  entityId,
+  presetCategory,
+  presetDetailOverrides,
+  riseupTransactions,
+  onOpenGrowthForecast,
+  onClose,
+}: Props) {
   const entities = useBoardStore((s) => s.entities);
   const familyMembers = useBoardStore((s) => s.familyMembers);
   const addEntity = useBoardStore((s) => s.addEntity);
@@ -473,6 +485,24 @@ export function EntityFormPanel({ entityId, presetCategory, presetDetailOverride
               />
             </label>
           </div>
+        )}
+
+        {isGrowthAssetDetails(d) && (
+          <label className={styles.field}>
+            <span className={styles.label}>תשואה שנתית צפויה (%)</span>
+            <input
+              type="number"
+              className={styles.input}
+              value={d.expectedAnnualReturnPct}
+              onChange={(e) => updateDetail({ expectedAnnualReturnPct: Number(e.target.value) })}
+            />
+          </label>
+        )}
+
+        {existing && isGrowthAssetDetails(d) && onOpenGrowthForecast && (
+          <button type="button" className={styles.btn} onClick={() => onOpenGrowthForecast(existing.id)}>
+            📈 תחזית צמיחה
+          </button>
         )}
 
         {d.kind === 'investment' && (

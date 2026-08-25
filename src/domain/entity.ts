@@ -44,6 +44,11 @@ const SavingsDetails = z.object({
   kind: z.literal('savings'),
   balance: z.number().nonnegative(),
   isEmergencyFund: z.boolean().default(false),
+  // the growth-forecast calculator's own assumed annual return — kept on the entity (not a
+  // scratch calculator input) so it's remembered per-entity across sessions, the same as any
+  // other real assumption about the account. A savings account is usually near-zero real growth,
+  // hence the low default; every growth kind below has the same field, just a different default.
+  expectedAnnualReturnPct: z.number().min(0).max(100).default(1),
 });
 // A broad "alternative" bucket, not an enumerated list of specific instruments — crypto and
 // forex are examples, not the only members, and hard-coding just those two would leave every
@@ -64,11 +69,13 @@ const InvestmentDetails = z.object({
   // `.default`) so an entity saved under a since-removed enum value (e.g. the old 'crypto'/'forex'
   // split) still loads as 'traditional' instead of failing validation outright.
   assetType: z.enum(ASSET_TYPES).catch('traditional'),
+  expectedAnnualReturnPct: z.number().min(0).max(100).default(7),
 });
 const PensionDetails = z.object({
   kind: z.literal('pension'),
   balance: z.number().nonnegative(),
   monthlyContribution: z.number().nonnegative().default(0),
+  expectedAnnualReturnPct: z.number().min(0).max(100).default(5),
 });
 // same shape as pension — a keren hishtalmut is employer-linked and locked the same way, but
 // tracked separately since it isn't legally a pension and shouldn't be counted as one.
@@ -76,6 +83,7 @@ const StudyFundDetails = z.object({
   kind: z.literal('studyFund'),
   balance: z.number().nonnegative(),
   monthlyContribution: z.number().nonnegative().default(0),
+  expectedAnnualReturnPct: z.number().min(0).max(100).default(5),
 });
 export const INSURANCE_TYPES = ['life', 'health', 'mortgage', 'disability', 'vehicle', 'other'] as const;
 export type InsuranceType = (typeof INSURANCE_TYPES)[number];
@@ -159,6 +167,24 @@ export const EntityDetailsSchema = z.discriminatedUnion('kind', [
 ]);
 export type EntityDetails = z.infer<typeof EntityDetailsSchema>;
 export type EntityCategory = EntityDetails['kind'];
+
+// the four kinds that actually accumulate over time (as opposed to a static balance like
+// checking, or a liability like debt) — the only ones with a real "balance grows via
+// contributions + return" story, so the only ones the growth-forecast calculator applies to.
+export const GROWTH_ASSET_KINDS = ['savings', 'investment', 'pension', 'studyFund'] as const;
+export type GrowthAssetKind = (typeof GROWTH_ASSET_KINDS)[number];
+type GrowthAssetDetails = Extract<EntityDetails, { kind: GrowthAssetKind }>;
+
+export function isGrowthAssetDetails(details: EntityDetails): details is GrowthAssetDetails {
+  return (GROWTH_ASSET_KINDS as readonly string[]).includes(details.kind);
+}
+
+// savings has no monthlyContribution field at all (a savings account isn't modeled as having
+// recurring deposits) — every other growth kind does, so this is the one place that needs to
+// paper over that gap for code that treats all four kinds generically.
+export function getGrowthMonthlyContribution(details: GrowthAssetDetails): number {
+  return details.kind === 'savings' ? 0 : details.monthlyContribution;
+}
 
 export const ENTITY_CATEGORIES: readonly EntityCategory[] = [
   'source',
