@@ -104,9 +104,9 @@ export function CityMedalBadge({ x, z, y, rank, name, amount }: Props) {
           <meshBasicMaterial color={style.metal} wireframe transparent opacity={0.45} />
         </mesh>
 
-        <Billboard position={[0, trophyTopY + 0.55, 0]}>
+        <Billboard position={[0, trophyTopY + 0.95, 0]}>
           <Text
-            fontSize={0.85}
+            fontSize={1.05}
             color={style.metal}
             anchorX="center"
             anchorY="middle"
@@ -120,7 +120,7 @@ export function CityMedalBadge({ x, z, y, rank, name, amount }: Props) {
         </Billboard>
 
         {amount !== '' && (
-          <Billboard position={[0, trophyTopY + 1.55, 0]}>
+          <Billboard position={[0, trophyTopY + 2.0, 0]}>
             <Text
               fontSize={0.62}
               color="#ffd166"

@@ -27,6 +27,7 @@ import { CityFountainMesh } from './CityFountainMesh';
 import { CityGivingPillarMesh } from './CityGivingPillarMesh';
 import { CityGoalMesh } from './CityGoalMesh';
 import { CityGround } from './CityGround';
+import { CityHourglassMesh } from './CityHourglassMesh';
 import { CityHouseMesh } from './CityHouseMesh';
 import { CityIncomeFaucet } from './CityIncomeFaucet';
 import { CityIncomeLinks } from './CityIncomeLinks';
@@ -398,8 +399,12 @@ export function CityView({ entities, familyMembers, riseupMismatchIds, riseupHis
             const progress = targetAmount > 0 ? Math.max(0, Math.min(1, currentAmount / targetAmount)) : 0;
             return <CityGoalMesh {...commonProps} progress={progress} onOpen={onOpenThis} />;
           }
-          if (entity.details.kind === 'debt' && entity.details.isMortgage) {
-            return <CityMortgageMesh {...commonProps} onOpen={onOpenThis} />;
+          if (entity.details.kind === 'debt') {
+            return entity.details.isMortgage ? (
+              <CityMortgageMesh {...commonProps} onOpen={onOpenThis} />
+            ) : (
+              <CityHourglassMesh {...commonProps} onOpen={onOpenThis} />
+            );
           }
           const treeVariant = TREE_VARIANT_BY_KIND[entity.details.kind];
           if (treeVariant) {
