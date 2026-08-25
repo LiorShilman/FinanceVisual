@@ -53,6 +53,13 @@ export function CityBuildingItem({ building, renderMesh, onOpen, setControlsEnab
   const [dragPos, setDragPos] = useState<CityPosition | null>(null);
   const draggingRef = useRef(false);
   const activeRef = useRef(false);
+  // where the pointer itself first hit the ground, not the building's own center — a click
+  // rarely lands exactly on-center (the hitbox is deliberately oversized), so driving the drag
+  // position straight off the raw pointer position snapped the building to wherever the pointer
+  // happened to be the instant the threshold was crossed. Tracking the pointer's own start and
+  // moving the building by the same *delta* the pointer has since traveled keeps whatever offset
+  // was clicked, so the building follows the cursor smoothly instead of jumping to meet it.
+  const dragStartRef = useRef<{ pointerX: number; pointerZ: number } | null>(null);
 
   const terrainYTouch = getTerrainHeight(building.x, building.z);
   if (isTouch) {
@@ -70,26 +77,31 @@ export function CityBuildingItem({ building, renderMesh, onOpen, setControlsEnab
   const handlePointerDown = (e: ThreeEvent<PointerEvent>) => {
     e.stopPropagation();
     (e.target as Element).setPointerCapture?.(e.pointerId);
+    const point = new THREE.Vector3();
+    dragStartRef.current = e.ray.intersectPlane(GROUND_PLANE, point) ? { pointerX: point.x, pointerZ: point.z } : null;
     activeRef.current = true;
     draggingRef.current = false;
     setControlsEnabled(false);
   };
 
   const handlePointerMove = (e: ThreeEvent<PointerEvent>) => {
-    if (!activeRef.current) return;
+    if (!activeRef.current || !dragStartRef.current) return;
     const point = new THREE.Vector3();
     if (!e.ray.intersectPlane(GROUND_PLANE, point)) return;
+    const dx = point.x - dragStartRef.current.pointerX;
+    const dz = point.z - dragStartRef.current.pointerZ;
     if (!draggingRef.current) {
-      if (Math.hypot(point.x - building.x, point.z - building.z) < DRAG_THRESHOLD) return;
+      if (Math.hypot(dx, dz) < DRAG_THRESHOLD) return;
       draggingRef.current = true;
     }
-    setDragPos(snapCityPosition(point.x, point.z, baseX, baseZ, building.cellBounds));
+    setDragPos(snapCityPosition(building.x + dx, building.z + dz, baseX, baseZ, building.cellBounds));
   };
 
   const handlePointerUp = (e: ThreeEvent<PointerEvent>) => {
     (e.target as Element).releasePointerCapture?.(e.pointerId);
     setControlsEnabled(true);
     activeRef.current = false;
+    dragStartRef.current = null;
     if (draggingRef.current) {
       if (dragPos) setCityPosition(building.id, dragPos);
       setDragPos(null);
@@ -101,7 +113,10 @@ export function CityBuildingItem({ building, renderMesh, onOpen, setControlsEnab
 
   const terrainY = getTerrainHeight(displayX, displayZ);
   const hitHeight = building.height + 2;
-  const hitFootprint = building.footprint * 1.4;
+  // padded for a forgiving click target, but not so much that two buildings a normal LOT_SIZE
+  // apart end up with overlapping hitboxes — 1.4x let a click near a shared edge grab the wrong
+  // neighbor instead of the one actually under the cursor.
+  const hitFootprint = building.footprint * 1.15;
 
   return (
     <group position={[0, terrainY, 0]}>

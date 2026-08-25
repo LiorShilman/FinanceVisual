@@ -7,7 +7,7 @@ interface Props {
   paths: IncomeLinkPath[];
 }
 
-const RADIUS = 0.07;
+const RADIUS = 0.11;
 const COLOR = '#ffd166';
 const Y_OFFSET = 0.03;
 
@@ -41,9 +41,19 @@ export function CityIncomeLinks({ paths }: Props) {
   return (
     <group>
       {geometries.map((geometry, i) => (
-        <mesh key={i} geometry={geometry} frustumCulled={false}>
-          <meshStandardMaterial color={COLOR} emissive={COLOR} emissiveIntensity={0.55} roughness={0.25} metalness={0.15} />
-        </mesh>
+        <group key={i}>
+          {/* flatShading (not the default smooth shading) so the tube's own 6 flat facets — it's
+              a hexagonal, not round, cross-section — actually show as distinct faces catching
+              light differently, instead of blending into what reads as a smooth round wire. */}
+          <mesh geometry={geometry} frustumCulled={false}>
+            <meshStandardMaterial color={COLOR} emissive={COLOR} emissiveIntensity={0.55} roughness={0.3} metalness={0.2} flatShading />
+          </mesh>
+          {/* a bright wireframe overlay on the same geometry — the same edge-definition trick
+              every other faceted mesh in the city (shield/trophy/fountain/lantern) uses. */}
+          <mesh geometry={geometry} frustumCulled={false}>
+            <meshBasicMaterial color="#fff3d0" wireframe transparent opacity={0.35} depthWrite={false} />
+          </mesh>
+        </group>
       ))}
     </group>
   );

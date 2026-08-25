@@ -24,12 +24,12 @@ import { CityDebtChains } from './CityDebtChains';
 import { CityExpenseMesh } from './CityExpenseMesh';
 import { CityFamilyAvatar } from './CityFamilyAvatar';
 import { CityFountainMesh } from './CityFountainMesh';
+import { CityGivingPillarMesh } from './CityGivingPillarMesh';
 import { CityGoalMesh } from './CityGoalMesh';
 import { CityGround } from './CityGround';
 import { CityHouseMesh } from './CityHouseMesh';
 import { CityIncomeFaucet } from './CityIncomeFaucet';
 import { CityIncomeLinks } from './CityIncomeLinks';
-import { CityLanternMesh } from './CityLanternMesh';
 import { CityMedalBadge } from './CityMedalBadge';
 import { CityMortgageMesh } from './CityMortgageMesh';
 import { CityRiskAura } from './CityRiskAura';
@@ -153,20 +153,31 @@ export function CityView({ entities, familyMembers, riseupMismatchIds, riseupHis
         const weightB = getWeight(entities.find((e) => e.id === b.id)!);
         return weightB - weightA;
       });
-    return ranked.slice(0, 3).map((b, i) => ({
-      id: b.id,
-      x: b.x,
-      z: b.z,
-      // the growth trees' own rendered height is capped/dampened well below the raw domain
-      // `height` (see CityTreeMesh's sizeScale) — using the uncapped value here, like the family
-      // avatar's own Y calc does for towers, floated the medal far above a tree's actual canopy
-      // for any entity ranked near the top of the whole city's height scale, not just this
-      // category's. Capped the same way, with enough clearance to sit above the tree's own
-      // name/amount label (not just above the canopy) even for the tallest oak/pine at max scale.
-      y: getTerrainHeight(b.x, b.z) + Math.min(b.height, 5.5) + 3,
-      rank: (i + 1) as 1 | 2 | 3,
-    }));
-  }, [buildings, entities]);
+    return ranked.slice(0, 3).map((b, i) => {
+      const entity = entities.find((e) => e.id === b.id)!;
+      const weight = getWeight(entity);
+      return {
+        id: b.id,
+        x: b.x,
+        z: b.z,
+        // the anchor for the *name* — the bottom of CityMedalBadge's own stack, so this only
+        // needs to clear the canopy the way the tree's own (now-hidden) label used to, not the
+        // whole trophy+amount stack above it (that headroom lives inside CityMedalBadge itself).
+        // The growth trees' own rendered height is capped/dampened well below the raw domain
+        // `height` (see CityTreeMesh's sizeScale) — using the uncapped value here, like the
+        // family avatar's own Y calc does for towers, would float this far above a tree's actual
+        // canopy for any entity ranked near the top of the whole city's height scale, not just
+        // this category's, hence the cap.
+        y: getTerrainHeight(b.x, b.z) + Math.min(b.height, 4.5) + 2.5,
+        rank: (i + 1) as 1 | 2 | 3,
+        name: b.name,
+        amount: weight === 0 || hideAmounts ? '' : formatCurrency(weight, entity.currency, usdRate),
+      };
+    });
+  }, [buildings, entities, hideAmounts, usdRate]);
+  // the mesh's own label is suppressed for these entities — CityMedalBadge renders the full
+  // name/amount stack itself, with the trophy sitting between the two.
+  const medalEntityIds = useMemo(() => new Set(topGrowthMedals.map((m) => m.id)), [topGrowthMedals]);
   const incomeFaucetTarget = useMemo(() => {
     const incomeBuildings = buildings.filter((b) => b.category === 'income');
     if (incomeBuildings.length === 0) return null;
@@ -340,7 +351,7 @@ export function CityView({ entities, familyMembers, riseupMismatchIds, riseupHis
           />
         ))}
       {topGrowthMedals.map((m) => (
-        <CityMedalBadge key={`medal-${m.id}`} x={m.x} z={m.z} y={m.y} rank={m.rank} />
+        <CityMedalBadge key={`medal-${m.id}`} x={m.x} z={m.z} y={m.y} rank={m.rank} name={m.name} amount={m.amount} />
       ))}
       {familyAvatarTargets.map((t) => (
         <CityFamilyAvatar key={t.id} x={t.x} z={t.z} y={t.y} name={t.name} photoUrl={t.photoUrl} />
@@ -362,7 +373,7 @@ export function CityView({ entities, familyMembers, riseupMismatchIds, riseupHis
         const renderMesh = (x: number, z: number) => {
           const commonProps = { x, z, height: b.height, footprint: b.footprint, color: b.color, name: b.name, amount };
           if (b.category === 'donation') {
-            return <CityLanternMesh {...commonProps} onOpen={onOpenThis} />;
+            return <CityGivingPillarMesh {...commonProps} onOpen={onOpenThis} />;
           }
           if (entity.details.kind === 'income') {
             return <CityBeehiveMesh {...commonProps} onOpen={onOpenThis} />;
@@ -371,7 +382,7 @@ export function CityView({ entities, familyMembers, riseupMismatchIds, riseupHis
             return <CityFountainMesh {...commonProps} onOpen={onOpenThis} />;
           }
           if (entity.details.kind === 'investment' && entity.details.assetType === 'alternative') {
-            return <CityCrystalMesh {...commonProps} onOpen={onOpenThis} />;
+            return <CityCrystalMesh {...commonProps} hideLabel={medalEntityIds.has(b.id)} onOpen={onOpenThis} />;
           }
           if (entity.details.kind === 'expense') {
             return <CityExpenseMesh {...commonProps} expenseType={entity.details.expenseType} onOpen={onOpenThis} />;
@@ -392,7 +403,7 @@ export function CityView({ entities, familyMembers, riseupMismatchIds, riseupHis
           }
           const treeVariant = TREE_VARIANT_BY_KIND[entity.details.kind];
           if (treeVariant) {
-            return <CityTreeMesh {...commonProps} variant={treeVariant} onOpen={onOpenThis} />;
+            return <CityTreeMesh {...commonProps} variant={treeVariant} hideLabel={medalEntityIds.has(b.id)} onOpen={onOpenThis} />;
           }
           return <CityBuildingMesh {...commonProps} onOpen={onOpenThis} />;
         };

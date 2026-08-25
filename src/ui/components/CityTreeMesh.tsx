@@ -13,6 +13,10 @@ interface Props {
   name: string;
   amount: string;
   variant: TreeVariant;
+  /** Suppressed for a top-3 medaled entity — CityMedalBadge owns its whole name/amount label
+   * stack instead (with the trophy sitting between the two), so this mesh's own label would
+   * otherwise duplicate it right next to the canopy. */
+  hideLabel?: boolean;
   onOpen: () => void;
 }
 
@@ -41,7 +45,7 @@ function hash(seed: number): number {
   return s - Math.floor(s);
 }
 
-export function CityTreeMesh({ x, z, height, footprint, color, name, amount, variant, onOpen }: Props) {
+export function CityTreeMesh({ x, z, height, footprint, color, name, amount, variant, hideLabel, onOpen }: Props) {
   const handleClick = (e: ThreeEvent<MouseEvent>) => {
     e.stopPropagation();
     onOpen();
@@ -154,36 +158,38 @@ export function CityTreeMesh({ x, z, height, footprint, color, name, amount, var
         </>
       )}
 
-      <Billboard position={[0, labelY, 0]}>
-        {amount !== '' && (
+      {!hideLabel && (
+        <Billboard position={[0, labelY, 0]}>
+          {amount !== '' && (
+            <Text
+              position={[0, 0.62, 0]}
+              fontSize={0.42}
+              color="#ffd166"
+              anchorX="center"
+              anchorY="bottom"
+              outlineWidth={0.022}
+              outlineColor="#7a4a00"
+              outlineBlur={0.03}
+              fontWeight="bold"
+              frustumCulled={false}
+            >
+              {amount}
+            </Text>
+          )}
           <Text
-            position={[0, 0.62, 0]}
-            fontSize={0.42}
-            color="#ffd166"
+            fontSize={0.46}
+            color="#f1f3f8"
             anchorX="center"
             anchorY="bottom"
-            outlineWidth={0.022}
-            outlineColor="#7a4a00"
-            outlineBlur={0.03}
+            outlineWidth={0.02}
+            outlineColor="#0a0c11"
             fontWeight="bold"
             frustumCulled={false}
           >
-            {amount}
+            {name}
           </Text>
-        )}
-        <Text
-          fontSize={0.46}
-          color="#f1f3f8"
-          anchorX="center"
-          anchorY="bottom"
-          outlineWidth={0.02}
-          outlineColor="#0a0c11"
-          fontWeight="bold"
-          frustumCulled={false}
-        >
-          {name}
-        </Text>
-      </Billboard>
+        </Billboard>
+      )}
     </group>
   );
 }

@@ -159,8 +159,8 @@ function buildInflowCurve(targetX: number, targetZ: number, targetRadius: number
 // reflect the amount. frustumCulled is disabled explicitly: this project hit a render-loop crash
 // once from a custom geometry whose bounding sphere never got excluded from the culling check —
 // cheap insurance against the same class of bug recurring.
-const MIN_STREAM_RADIUS = 0.09;
-const MAX_STREAM_RADIUS = 0.42;
+const MIN_STREAM_RADIUS = 0.08;
+const MAX_STREAM_RADIUS = 0.36;
 
 // Direct magnitude, not rank — rank-based sizing (used for buildings/pyramid) deliberately
 // guarantees every item looks different even when two values are nearly equal, which is exactly
@@ -174,72 +174,66 @@ function buildStreamTubeGeometry(curve: THREE.CatmullRomCurve3, radius: number):
   return new THREE.TubeGeometry(curve, 48, radius, 8, false);
 }
 
-// Sunk below grade and flattened (via the mesh's own scale-y/position-y, not the geometry
-// itself) so streams read as water sitting inside a dug channel rather than a pipe laid on top of
-// the lawn — no separate dark "bank" layer (that read as solid black, swallowing the water color
-// entirely), just the same bright water tube, lower and flatter.
-//
-// The exposed sliver's height is a fixed *fraction* of each stream's own radius, not a flat
-// offset — a flat offset made every stream (thin or thick) show the exact same absolute sliver,
-// which erased the width-reflects-amount cue the streams exist to show. Scaling the sink with
-// radius keeps the visible cap's width proportional to the full tube width (near the top of an
-// ellipse a small height reveals most of its width), so a thick stream still visibly reads as
-// thicker than a thin one, while most of every tube's bulk still sits below the grass line.
-const WATER_SQUASH = 0.4;
-const GROUND_Y_OFFSET = -0.02;
-const EXPOSED_RADIUS_FRACTION = 0.16;
+// Experiment: raised clear of the ground as full round tubes (an elevated flowing channel) —
+// now that every building on the map has real volume/depth, seeing whether the streams read
+// better hovering above grade instead of sunk into it like a dug riverbed.
+const STREAM_HOVER_HEIGHT = 0.42;
 /** `terrainY` is the local ground height at the stream's own position — without it, a stream
- * would sink into or float above the hill/valley the terrain now has right under it. */
-function sinkYForRadius(radius: number, terrainY: number): number {
-  return terrainY + GROUND_Y_OFFSET + radius * (EXPOSED_RADIUS_FRACTION - WATER_SQUASH);
+ * would sink into or float unevenly above the hill/valley the terrain now has right under it. */
+function floatYForRadius(radius: number, terrainY: number): number {
+  return terrainY + STREAM_HOVER_HEIGHT + radius;
 }
 
 export function CityGround({ groundCenter, groundSize, water, valley }: Props) {
   const groundTexture = useMemo(() => createGroundTexture(), []);
+  // a deeper, more muted sapphire-teal — the old bright cyan read as a swimming pool rather
+  // than a body of water holding value.
   const lakeTexture = useMemo(
     () =>
       createWaterTexture(
         [
-          [0, '#a9defc'],
-          [0.35, '#3fb0f7'],
-          [0.7, '#1467c9'],
-          [1, '#082a5c'],
+          [0, '#7fc4d8'],
+          [0.35, '#2f8fb8'],
+          [0.7, '#155a82'],
+          [1, '#0a2c40'],
         ],
-        'rgba(255,255,255,0.55)',
+        'rgba(255,255,255,0.4)',
       ),
     [],
   );
-  // the ring's own *center* sits underneath the inner lake mesh and is never actually seen — only
-  // the outer band (near UV=1) is visible — so unlike the lake, the bright tone has to sit at the
-  // outer stop or the ring reads as a dark, unrecognizable rim instead of lavender.
+  // pension money reads as "the golden years" better than lavender — purple had no real
+  // financial association here, just a hue that hadn't been used elsewhere in the city yet.
+  // The ring's own *center* sits underneath the inner lake mesh and is never actually seen —
+  // only the outer band (near UV=1) is visible — so the bright tone still has to sit at the
+  // outer stop or the ring reads as a dark, unrecognizable rim.
   const ringTexture = useMemo(
     () =>
       createWaterTexture(
         [
-          [0, '#3a2d70'],
-          [0.5, '#7457d6'],
-          [0.78, '#ab8ef2'],
-          [1, '#ddc9ff'],
+          [0, '#4a3a1a'],
+          [0.5, '#a9822f'],
+          [0.78, '#c9a24a'],
+          [1, '#e8cf8a'],
         ],
-        'rgba(255,255,255,0.5)',
+        'rgba(255,244,214,0.45)',
       ),
     [],
   );
-  // a canyon, not a pool — glowing embers rather than gentle ripples, but still bright enough at
-  // the edges (most of the visible area, since area grows with r²) to read as alive, not a black
-  // hole. Kept in the same red family as the expense buildings' own health-risk color (#e05a5a),
-  // not orange/amber — that hue is already claimed by every warning-status savings/investment/
-  // pension building, and an orange valley next to them read as ambiguous.
+  // a canyon, not a pool — glowing embers rather than gentle ripples, but muted rather than
+  // neon so it doesn't outshine everything else in the district. Kept in the same red family as
+  // the expense buildings' own health-risk color (#e05a5a), not orange/amber — that hue is
+  // already claimed by every warning-status savings/investment/pension building, and an orange
+  // valley next to them read as ambiguous.
   const valleyTexture = useMemo(
     () =>
       createWaterTexture(
         [
-          [0, '#ff8a7a'],
-          [0.35, '#e05a5a'],
-          [0.7, '#a02f38'],
-          [1, '#4a1218'],
+          [0, '#d9897e'],
+          [0.35, '#b84a4a'],
+          [0.7, '#7a2530'],
+          [1, '#3a1015'],
         ],
-        'rgba(255,140,130,0.4)',
+        'rgba(230,140,130,0.3)',
       ),
     [],
   );
@@ -308,21 +302,15 @@ export function CityGround({ groundCenter, groundSize, water, valley }: Props) {
       </mesh>
 
       <mesh geometry={pensionRingGeometry} rotation-x={-Math.PI / 2} position={[lakeX, lakeTerrainY + 0.012, lakeZ]} frustumCulled={false}>
-        <meshStandardMaterial map={ringTexture} emissive="#7457d6" emissiveIntensity={0.45} roughness={0.15} metalness={0.12} side={THREE.DoubleSide} />
+        <meshStandardMaterial map={ringTexture} emissive="#c9a24a" emissiveIntensity={0.3} roughness={0.15} metalness={0.12} side={THREE.DoubleSide} />
       </mesh>
 
       {waterStreamGeometries.map(({ kind, radius, terrainY, geometry }, i) => (
-        <mesh
-          key={i}
-          geometry={geometry}
-          position={[0, sinkYForRadius(radius, terrainY), 0]}
-          scale={[1, WATER_SQUASH, 1]}
-          frustumCulled={false}
-        >
+        <mesh key={i} geometry={geometry} position={[0, floatYForRadius(radius, terrainY), 0]} frustumCulled={false}>
           <meshStandardMaterial
-            color={kind === 'pension' ? '#a397e8' : '#5aa8e0'}
-            emissive={kind === 'pension' ? '#a397e8' : '#5aa8e0'}
-            emissiveIntensity={0.5}
+            color={kind === 'pension' ? '#c9a24a' : '#4a90b8'}
+            emissive={kind === 'pension' ? '#c9a24a' : '#4a90b8'}
+            emissiveIntensity={0.32}
             roughness={0.25}
             metalness={0.1}
           />
@@ -330,23 +318,17 @@ export function CityGround({ groundCenter, groundSize, water, valley }: Props) {
       ))}
 
       <mesh geometry={lakeGeometry} rotation-x={-Math.PI / 2} position={[lakeX, lakeTerrainY + 0.018, lakeZ]} frustumCulled={false}>
-        <meshStandardMaterial map={lakeTexture} emissive="#1467c9" emissiveIntensity={0.4} roughness={0.12} metalness={0.15} side={THREE.DoubleSide} />
+        <meshStandardMaterial map={lakeTexture} emissive="#155a82" emissiveIntensity={0.28} roughness={0.12} metalness={0.15} side={THREE.DoubleSide} />
       </mesh>
 
       {valleyStreamGeometries.map(({ radius, terrainY, geometry }, i) => (
-        <mesh
-          key={i}
-          geometry={geometry}
-          position={[0, sinkYForRadius(radius, terrainY), 0]}
-          scale={[1, WATER_SQUASH, 1]}
-          frustumCulled={false}
-        >
-          <meshStandardMaterial color="#e05a5a" emissive="#e05a5a" emissiveIntensity={0.5} roughness={0.25} metalness={0.1} />
+        <mesh key={i} geometry={geometry} position={[0, floatYForRadius(radius, terrainY), 0]} frustumCulled={false}>
+          <meshStandardMaterial color="#b84a4a" emissive="#b84a4a" emissiveIntensity={0.32} roughness={0.25} metalness={0.1} />
         </mesh>
       ))}
 
       <mesh geometry={valleyGeometry} rotation-x={-Math.PI / 2} position={[valleyX, valleyTerrainY + 0.014, valleyZ]} frustumCulled={false}>
-        <meshStandardMaterial map={valleyTexture} emissive="#e05a5a" emissiveIntensity={0.65} roughness={0.3} metalness={0.05} side={THREE.DoubleSide} />
+        <meshStandardMaterial map={valleyTexture} emissive="#b84a4a" emissiveIntensity={0.42} roughness={0.3} metalness={0.05} side={THREE.DoubleSide} />
       </mesh>
     </group>
   );
