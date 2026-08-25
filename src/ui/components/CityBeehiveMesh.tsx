@@ -45,8 +45,8 @@ export function CityBeehiveMesh({ x, z, height, footprint, color, name, amount, 
     onOpen();
   };
 
-  const hiveHeight = Math.min(2.2, Math.max(1.0, height * 0.45));
-  const baseRadius = Math.max(0.5, Math.min(1.1, footprint * 0.85));
+  const hiveHeight = Math.min(3.7, Math.max(1.7, height * 0.76));
+  const baseRadius = Math.max(0.85, Math.min(1.85, footprint * 1.45));
 
   const bands = useMemo(
     () =>

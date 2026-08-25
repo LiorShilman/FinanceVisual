@@ -38,9 +38,9 @@ export function CityFountainMesh({ x, z, height, footprint, color, name, amount,
     onOpen();
   };
 
-  const basinRadius = Math.max(0.9, Math.min(1.8, footprint * 1.3));
-  const basinHeight = Math.max(0.45, Math.min(0.85, height * 0.16));
-  const pillarHeight = Math.max(0.9, Math.min(2.1, height * 0.5));
+  const basinRadius = Math.max(1.5, Math.min(2.9, footprint * 2.1));
+  const basinHeight = Math.max(0.7, Math.min(1.3, height * 0.24));
+  const pillarHeight = Math.max(1.5, Math.min(3.4, height * 0.8));
 
   // deterministic per-position phase (not Math.random — impure during render, and would
   // reshuffle every drop's timing on each re-render anyway).
