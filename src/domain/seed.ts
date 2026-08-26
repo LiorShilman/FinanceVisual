@@ -27,7 +27,7 @@ export const SEED_ENTITIES: FinancialEntity[] = [
     currency: 'ils',
     liquidity: 'immediate',
     linkedEntityIds: [],
-    details: { kind: 'savings', balance: 15000, isEmergencyFund: true, expectedAnnualReturnPct: 1 },
+    details: { kind: 'savings', balance: 15000, isEmergencyFund: true, expectedAnnualReturnPct: 1, monthlyContribution: 0, fromIncome: true },
   },
   {
     id: 'investment-index',
@@ -36,7 +36,7 @@ export const SEED_ENTITIES: FinancialEntity[] = [
     currency: 'ils',
     liquidity: 'shortTerm',
     linkedEntityIds: [],
-    details: { kind: 'investment', balance: 60000, monthlyContribution: 1000, assetType: 'traditional', expectedAnnualReturnPct: 7 },
+    details: { kind: 'investment', balance: 60000, monthlyContribution: 1000, assetType: 'traditional', expectedAnnualReturnPct: 7, fromIncome: true },
   },
   {
     id: 'pension-main',
@@ -45,7 +45,7 @@ export const SEED_ENTITIES: FinancialEntity[] = [
     currency: 'ils',
     liquidity: 'locked',
     linkedEntityIds: [],
-    details: { kind: 'pension', balance: 220000, monthlyContribution: 1800, expectedAnnualReturnPct: 5 },
+    details: { kind: 'pension', balance: 220000, monthlyContribution: 1800, expectedAnnualReturnPct: 5, fromIncome: false },
   },
   {
     id: 'insurance-life',

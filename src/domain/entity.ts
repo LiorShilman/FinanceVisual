@@ -49,6 +49,11 @@ const SavingsDetails = z.object({
   // other real assumption about the account. A savings account is usually near-zero real growth,
   // hence the low default; every growth kind below has the same field, just a different default.
   expectedAnnualReturnPct: z.number().min(0).max(100).default(1),
+  // same shape as InvestmentDetails.monthlyContribution/fromIncome — a plain savings account can
+  // get a regular monthly deposit too, and (like investment) there's no employer-match concept
+  // here, so it defaults to counting toward the 20% savings figure (see domain/savingsRate.ts).
+  monthlyContribution: z.number().nonnegative().default(0),
+  fromIncome: z.boolean().default(true),
 });
 // A broad "alternative" bucket, not an enumerated list of specific instruments — crypto and
 // forex are examples, not the only members, and hard-coding just those two would leave every
@@ -70,12 +75,22 @@ const InvestmentDetails = z.object({
   // split) still loads as 'traditional' instead of failing validation outright.
   assetType: z.enum(ASSET_TYPES).catch('traditional'),
   expectedAnnualReturnPct: z.number().min(0).max(100).default(7),
+  // whether this monthlyContribution is money that actually came out of the household's own
+  // tracked income (vs. e.g. a lump sum from elsewhere) — drives the 50/30/20-style "20% savings"
+  // figure (see domain/savingsRate.ts). An investment contribution has no employer-match concept,
+  // so it defaults to counting.
+  fromIncome: z.boolean().default(true),
 });
 const PensionDetails = z.object({
   kind: z.literal('pension'),
   balance: z.number().nonnegative(),
   monthlyContribution: z.number().nonnegative().default(0),
   expectedAnnualReturnPct: z.number().min(0).max(100).default(5),
+  // see InvestmentDetails.fromIncome. Defaults to NOT counting — a pension's own
+  // monthlyContribution is typically entered as employee+employer combined (confirmed with the
+  // user), and per explicit user judgment call it shouldn't count toward the 20% by default any
+  // more than a keren hishtalmut's employer share does.
+  fromIncome: z.boolean().default(false),
 });
 // same shape as pension — a keren hishtalmut is employer-linked and locked the same way, but
 // tracked separately since it isn't legally a pension and shouldn't be counted as one.
@@ -84,6 +99,11 @@ const StudyFundDetails = z.object({
   balance: z.number().nonnegative(),
   monthlyContribution: z.number().nonnegative().default(0),
   expectedAnnualReturnPct: z.number().min(0).max(100).default(5),
+  // see InvestmentDetails.fromIncome. Defaults to NOT counting (unlike investment/pension) — a
+  // keren hishtalmut's employer share is usually the larger part of the deposit and doesn't read
+  // as "money I chose to save out of my paycheck" the way an active investment or pension
+  // contribution does (per explicit user judgment call, not a universal accounting rule).
+  fromIncome: z.boolean().default(false),
 });
 export const INSURANCE_TYPES = ['life', 'health', 'mortgage', 'disability', 'vehicle', 'other'] as const;
 export type InsuranceType = (typeof INSURANCE_TYPES)[number];

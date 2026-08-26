@@ -2,6 +2,7 @@ import { useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { Billboard, Text } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
+import { RECOMMENDED_MIN_MONTHS } from '../../domain/emergencyFund';
 
 interface Props {
   x: number;
@@ -9,6 +10,9 @@ interface Props {
   // just above the emergency-fund tree's own canopy/label.
   baseY: number;
   monthsOfRunway: number | null;
+  // ₪ still needed to reach RECOMMENDED_MIN_MONTHS — 0 once already there, null with no data.
+  // '' (via hideAmounts upstream) hides the line entirely rather than showing a blank amount.
+  gapLabel: string;
 }
 
 const RADIUS = 1.5;
@@ -20,8 +24,10 @@ const MAX_MONTHS = 6;
 // the standard advice is "3–6 months," not "3 is risky, 6 is safe" — reaching 3 already means
 // you're inside the recommended range, so the dial has just two zones (under the minimum vs. at
 // or past it), not three; a middle amber band made hitting 6 months still read as "barely
-// escaping orange" instead of the solidly-good result it actually is.
-const RED_END = 3;
+// escaping orange" instead of the solidly-good result it actually is. Shared with
+// domain/emergencyFund.ts's own gap calculation, so the dial's own zone boundary and "how much
+// more ₪" text always agree on what "recommended" means.
+const RED_END = RECOMMENDED_MIN_MONTHS;
 
 // standard "speedometer" convention: 0 at the left end of the arc (angle=PI), max at the right end
 // (angle=0), sweeping clockwise (through the top, angle=PI/2) as the value climbs.
@@ -36,7 +42,7 @@ function angleForValue(v: number): number {
  * the same low-poly/flat-shaded/wireframe-rim recipe used across the rest of the city rather than
  * a smooth solid shape.
  */
-export function CityEmergencyGauge({ x, z, baseY, monthsOfRunway }: Props) {
+export function CityEmergencyGauge({ x, z, baseY, monthsOfRunway, gapLabel }: Props) {
   const needleRef = useRef<THREE.Group>(null);
   const displayMonths = monthsOfRunway ?? 0;
 
@@ -101,6 +107,11 @@ export function CityEmergencyGauge({ x, z, baseY, monthsOfRunway }: Props) {
         <Text fontSize={0.42} color="#f1f3f8" anchorX="center" anchorY="bottom" outlineWidth={0.02} outlineColor="#0a0c11" fontWeight="bold" frustumCulled={false}>
           {monthsOfRunway === null ? 'אין נתוני הוצאות' : `${displayMonths.toFixed(1)} חודשי שרידות`}
         </Text>
+        {gapLabel !== '' && (
+          <Text position={[0, -0.55, 0]} fontSize={0.34} color="#ffe0a3" anchorX="center" anchorY="top" outlineWidth={0.016} outlineColor="#0a0c11" fontWeight="bold" frustumCulled={false}>
+            {gapLabel}
+          </Text>
+        )}
       </Billboard>
     </group>
   );

@@ -10,7 +10,7 @@ import { computeGroundBounds, type CircularExtent } from '../../domain/cityGrid'
 import type { GrowthProjectionPoint } from '../../domain/compoundInterest';
 import { computeDebtLinkPaths } from '../../domain/debtLinks';
 import { computeEmergencyRunway } from '../../domain/emergencyFund';
-import { computeEssentialBurden } from '../../domain/essentialBurden';
+import { computeBudgetSplit } from '../../domain/budgetSplit';
 import { CATEGORY_LABELS, ENTITY_CATEGORIES, getWeight, isGrowthAssetDetails, type FinancialEntity } from '../../domain/entity';
 import type { FamilyMember } from '../../domain/familyMember';
 import { computeIncomeLinkPaths } from '../../domain/incomeLinks';
@@ -214,7 +214,7 @@ export function CityView({
     const y = getTerrainHeight(x, z) + Math.max(...incomeBuildings.map((b) => b.height));
     return { x, z, y };
   }, [buildings]);
-  const essentialBurden = useMemo(() => computeEssentialBurden(entities), [entities]);
+  const budgetSplit = useMemo(() => computeBudgetSplit(entities), [entities]);
   // one avatar per family member, hovering above the centroid of the buildings they own — not
   // one per owned entity, which would clutter the city fast for anyone owning several things.
   // Members who own nothing yet (or aren't tied to any entity) render no avatar at all. The
@@ -335,19 +335,29 @@ export function CityView({
           z={emergencyGaugeTarget.z}
           baseY={emergencyGaugeTarget.y}
           monthsOfRunway={emergencyRunway.monthsOfRunway}
+          gapLabel={
+            hideAmounts || !emergencyRunway.gapToRecommended
+              ? ''
+              : `חסרים ${formatCurrency(emergencyRunway.gapToRecommended)} ל-3 חודשי שרידות`
+          }
         />
       )}
-      {essentialBurden.income > 0 && (
+      {budgetSplit.income > 0 && (
         <CityBudgetBar
           x={budgetBarX}
           z={budgetBarZ}
           y={budgetBarY}
-          ratio={essentialBurden.ratio}
-          incomeLabel={hideAmounts ? '' : `הכנסה חודשית: ${formatCurrency(essentialBurden.income)}`}
-          splitLabel={
+          needsRatio={budgetSplit.needs / budgetSplit.income}
+          wantsRatio={budgetSplit.wants / budgetSplit.income}
+          savingsContributionRatio={budgetSplit.savingsContribution / budgetSplit.income}
+          donationsRatio={budgetSplit.donations / budgetSplit.income}
+          incomeLabel={hideAmounts ? '' : `הכנסה חודשית: ${formatCurrency(budgetSplit.income)}`}
+          breakdownLabel={
             hideAmounts
               ? ''
-              : `פנוי: ${formatCurrency(essentialBurden.income - essentialBurden.essentialExpenses - essentialBurden.debtPayments)}   מחויב: ${formatCurrency(essentialBurden.essentialExpenses + essentialBurden.debtPayments)}`
+              : `צרכים: ${formatCurrency(budgetSplit.needs)}   רצונות: ${formatCurrency(budgetSplit.wants)}   חיסכון: ${formatCurrency(budgetSplit.savingsContribution)}${
+                  budgetSplit.donations > 0 ? `   תרומה: ${formatCurrency(budgetSplit.donations)}` : ''
+                }`
           }
         />
       )}

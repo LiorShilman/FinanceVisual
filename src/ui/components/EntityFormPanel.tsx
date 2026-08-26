@@ -47,13 +47,13 @@ function defaultDetails(category: EntityCategory): EntityDetails {
     case 'checking':
       return { kind: 'checking', balance: 0, availableForInvestment: 0 };
     case 'savings':
-      return { kind: 'savings', balance: 0, isEmergencyFund: false, expectedAnnualReturnPct: 1 };
+      return { kind: 'savings', balance: 0, isEmergencyFund: false, expectedAnnualReturnPct: 1, monthlyContribution: 0, fromIncome: true };
     case 'investment':
-      return { kind: 'investment', balance: 0, monthlyContribution: 0, assetType: 'traditional', expectedAnnualReturnPct: 7 };
+      return { kind: 'investment', balance: 0, monthlyContribution: 0, assetType: 'traditional', expectedAnnualReturnPct: 7, fromIncome: true };
     case 'pension':
-      return { kind: 'pension', balance: 0, monthlyContribution: 0, expectedAnnualReturnPct: 5 };
+      return { kind: 'pension', balance: 0, monthlyContribution: 0, expectedAnnualReturnPct: 5, fromIncome: false };
     case 'studyFund':
-      return { kind: 'studyFund', balance: 0, monthlyContribution: 0, expectedAnnualReturnPct: 5 };
+      return { kind: 'studyFund', balance: 0, monthlyContribution: 0, expectedAnnualReturnPct: 5, fromIncome: false };
     case 'insurance':
       return { kind: 'insurance', coverageAmount: 0, monthlyPremium: 0, insuranceType: 'life' };
     case 'debt':
@@ -447,14 +447,28 @@ export function EntityFormPanel({
 
         {d.kind === 'savings' && (
           <>
-            <label className={styles.field}>
-              <span className={styles.label}>יתרה ({currencySymbol})</span>
-              <NumberField
-                className={styles.input}
-                value={toDisplay(d.balance)}
-                onChange={(v) => updateDetail({ balance: fromDisplay(v) })}
-              />
-            </label>
+            <div className={styles.row}>
+              <label className={styles.field}>
+                <span className={styles.label}>יתרה ({currencySymbol})</span>
+                <NumberField
+                  className={styles.input}
+                  value={toDisplay(d.balance)}
+                  onChange={(v) => updateDetail({ balance: fromDisplay(v) })}
+                />
+              </label>
+              <label className={styles.field}>
+                <span className={styles.label}>הפקדה חודשית ({currencySymbol})</span>
+                <NumberField
+                  className={styles.input}
+                  value={toDisplay(d.monthlyContribution)}
+                  onChange={(v) => updateDetail({ monthlyContribution: fromDisplay(v) })}
+                />
+              </label>
+            </div>
+            <div className={styles.checkboxRow}>
+              <input type="checkbox" checked={d.fromIncome} onChange={(e) => updateDetail({ fromIncome: e.target.checked })} />
+              <span>ההפקדה נחשבת חיסכון מההכנסה (חלק מה-20%)</span>
+            </div>
             <div className={styles.checkboxRow}>
               <input
                 type="checkbox"
@@ -467,24 +481,30 @@ export function EntityFormPanel({
         )}
 
         {(d.kind === 'investment' || d.kind === 'pension' || d.kind === 'studyFund') && (
-          <div className={styles.row}>
-            <label className={styles.field}>
-              <span className={styles.label}>יתרה ({currencySymbol})</span>
-              <NumberField
-                className={styles.input}
-                value={toDisplay(d.balance)}
-                onChange={(v) => updateDetail({ balance: fromDisplay(v) })}
-              />
-            </label>
-            <label className={styles.field}>
-              <span className={styles.label}>הפקדה חודשית ({currencySymbol})</span>
-              <NumberField
-                className={styles.input}
-                value={toDisplay(d.monthlyContribution)}
-                onChange={(v) => updateDetail({ monthlyContribution: fromDisplay(v) })}
-              />
-            </label>
-          </div>
+          <>
+            <div className={styles.row}>
+              <label className={styles.field}>
+                <span className={styles.label}>יתרה ({currencySymbol})</span>
+                <NumberField
+                  className={styles.input}
+                  value={toDisplay(d.balance)}
+                  onChange={(v) => updateDetail({ balance: fromDisplay(v) })}
+                />
+              </label>
+              <label className={styles.field}>
+                <span className={styles.label}>הפקדה חודשית ({currencySymbol})</span>
+                <NumberField
+                  className={styles.input}
+                  value={toDisplay(d.monthlyContribution)}
+                  onChange={(v) => updateDetail({ monthlyContribution: fromDisplay(v) })}
+                />
+              </label>
+            </div>
+            <div className={styles.checkboxRow}>
+              <input type="checkbox" checked={d.fromIncome} onChange={(e) => updateDetail({ fromIncome: e.target.checked })} />
+              <span>ההפקדה נחשבת חיסכון מההכנסה (חלק מה-20%)</span>
+            </div>
+          </>
         )}
 
         {isGrowthAssetDetails(d) && (
