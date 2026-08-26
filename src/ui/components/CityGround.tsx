@@ -183,6 +183,12 @@ const STREAM_HOVER_HEIGHT = 0.42;
 function floatYForRadius(radius: number, terrainY: number): number {
   return terrainY + STREAM_HOVER_HEIGHT + radius;
 }
+// the red (valley/expense-debt) streams cross paths with the blue/gold (lake/pension) streams
+// often enough that whichever draws on top felt arbitrary — this guarantees red always floats
+// clear above the others, at any radius combination: the thinnest valley stream (MIN radius) still
+// clears the thickest water stream (MAX radius) by a comfortable margin, using the same terrainY
+// each stream already samples at its own position.
+const VALLEY_STREAM_LIFT = MAX_STREAM_RADIUS - MIN_STREAM_RADIUS + 0.5;
 
 export function CityGround({ groundCenter, groundSize, water, valley }: Props) {
   const groundTexture = useMemo(() => createGroundTexture(), []);
@@ -322,7 +328,7 @@ export function CityGround({ groundCenter, groundSize, water, valley }: Props) {
       </mesh>
 
       {valleyStreamGeometries.map(({ radius, terrainY, geometry }, i) => (
-        <mesh key={i} geometry={geometry} position={[0, floatYForRadius(radius, terrainY), 0]} frustumCulled={false}>
+        <mesh key={i} geometry={geometry} position={[0, floatYForRadius(radius, terrainY) + VALLEY_STREAM_LIFT, 0]} frustumCulled={false}>
           <meshStandardMaterial color="#b84a4a" emissive="#b84a4a" emissiveIntensity={0.32} roughness={0.25} metalness={0.1} />
         </mesh>
       ))}
