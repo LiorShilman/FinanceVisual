@@ -15,8 +15,11 @@ const DROP_COLOR = '#ffd166';
 const DROP_COUNT = 8;
 const DROP_RADIUS = 0.21;
 const FALL_DURATION = 1.5;
-const FAUCET_Y = 13;
-const ARM_LENGTH = 3.1;
+// exported — the whole valve/arm mechanism sits at this fixed absolute height regardless of the
+// income district's own (much lower, rooftop-relative) targetY, so anything meant to sit
+// alongside or above the faucet itself (not the buildings below it) needs this, not targetY.
+export const FAUCET_Y = 13;
+export const FAUCET_ARM_LENGTH = 3.1;
 const RISER_RADIUS = 0.32;
 const RISER_LENGTH = 4.1;
 const ARM_RADIUS = 0.27;
@@ -38,7 +41,7 @@ export function CityIncomeFaucet({ targetX, targetZ, targetY }: Props) {
   const nozzleX = targetX;
   const nozzleZ = targetZ;
   const nozzleY = FAUCET_Y - 1.9;
-  const faucetX = nozzleX + ARM_LENGTH;
+  const faucetX = nozzleX + FAUCET_ARM_LENGTH;
   const faucetZ = nozzleZ;
   const riserCenterY = (FAUCET_Y + nozzleY) / 2 + 0.9;
 
@@ -90,11 +93,11 @@ export function CityIncomeFaucet({ targetX, targetZ, targetY }: Props) {
       </mesh>
       {/* horizontal spout arm */}
       <mesh
-        position={[faucetX - ARM_LENGTH / 2, nozzleY + 0.7, faucetZ]}
+        position={[faucetX - FAUCET_ARM_LENGTH / 2, nozzleY + 0.7, faucetZ]}
         rotation={[0, 0, Math.PI / 2]}
         frustumCulled={false}
       >
-        <cylinderGeometry args={[ARM_RADIUS, ARM_RADIUS, ARM_LENGTH, 14]} />
+        <cylinderGeometry args={[ARM_RADIUS, ARM_RADIUS, FAUCET_ARM_LENGTH, 14]} />
         <meshStandardMaterial color={FAUCET_COLOR} metalness={0.65} roughness={0.3} />
       </mesh>
       {/* nozzle — a plain cylinder's default axis is already vertical (Y), exactly what a

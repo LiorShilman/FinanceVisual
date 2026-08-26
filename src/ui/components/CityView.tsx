@@ -10,6 +10,7 @@ import { computeGroundBounds, type CircularExtent } from '../../domain/cityGrid'
 import type { GrowthProjectionPoint } from '../../domain/compoundInterest';
 import { computeDebtLinkPaths } from '../../domain/debtLinks';
 import { computeEmergencyRunway } from '../../domain/emergencyFund';
+import { computeEssentialBurden } from '../../domain/essentialBurden';
 import { CATEGORY_LABELS, ENTITY_CATEGORIES, getWeight, isGrowthAssetDetails, type FinancialEntity } from '../../domain/entity';
 import type { FamilyMember } from '../../domain/familyMember';
 import { computeIncomeLinkPaths } from '../../domain/incomeLinks';
@@ -20,6 +21,7 @@ import { computeValleyFeature } from '../../domain/valley';
 import { computeWaterFeature } from '../../domain/water';
 import { formatCurrency } from '../format';
 import { CityBeehiveMesh } from './CityBeehiveMesh';
+import { CityBudgetBar } from './CityBudgetBar';
 import { CityBuildingItem } from './CityBuildingItem';
 import { CityBuildingMesh } from './CityBuildingMesh';
 import { CityCameraFocus } from './CityCameraFocus';
@@ -36,7 +38,7 @@ import { CityGrowthRings } from './CityGrowthRings';
 import { CityIndependenceDome } from './CityIndependenceDome';
 import { CityHourglassMesh } from './CityHourglassMesh';
 import { CityHouseMesh } from './CityHouseMesh';
-import { CityIncomeFaucet } from './CityIncomeFaucet';
+import { CityIncomeFaucet, FAUCET_ARM_LENGTH, FAUCET_Y } from './CityIncomeFaucet';
 import { CityIncomeLinks } from './CityIncomeLinks';
 import { CityMedalBadge } from './CityMedalBadge';
 import { CityMortgageMesh } from './CityMortgageMesh';
@@ -212,6 +214,7 @@ export function CityView({
     const y = getTerrainHeight(x, z) + Math.max(...incomeBuildings.map((b) => b.height));
     return { x, z, y };
   }, [buildings]);
+  const essentialBurden = useMemo(() => computeEssentialBurden(entities), [entities]);
   // one avatar per family member, hovering above the centroid of the buildings they own — not
   // one per owned entity, which would clutter the city fast for anyone owning several things.
   // Members who own nothing yet (or aren't tied to any entity) render no avatar at all. The
@@ -255,6 +258,17 @@ export function CityView({
     { center: water.lakeCenter, radius: water.outerRingRadius } satisfies CircularExtent,
     { center: valley.center, radius: valley.radius } satisfies CircularExtent,
   ]);
+  // to the right of the income faucet's own arm (higher x — see CitySun's own x=width*0.85 for
+  // the same "higher x reads as further right" convention in this RTL city) and level with it —
+  // the faucet's valve/arm mechanism floats at a fixed absolute FAUCET_Y (13), independent of the
+  // income district's own much-lower rooftop height, so parallel placement needs FAUCET_Y, not
+  // incomeFaucetTarget.y (which is what put the bar down at rooftop level, nowhere near the
+  // faucet, in an earlier version of this). Centered vertically on FAUCET_Y so the tube's own
+  // span roughly matches the faucet's; the label stack (see CityBudgetBar.tsx) floats well above
+  // both, clearing the faucet's own valve wheel too.
+  const budgetBarX = (incomeFaucetTarget?.x ?? width * 0.5) + FAUCET_ARM_LENGTH + 1.1;
+  const budgetBarZ = incomeFaucetTarget?.z ?? groundCenter[1];
+  const budgetBarY = FAUCET_Y - 2.2;
   const gridDivisions = Math.round(Math.max(bounds.width, bounds.depth) / 1.6);
   // half the diagonal (not half the width/depth) — a dome sized off just one axis would leave the
   // rectangular footprint's own corners poking out past its curved wall.
@@ -321,6 +335,20 @@ export function CityView({
           z={emergencyGaugeTarget.z}
           baseY={emergencyGaugeTarget.y}
           monthsOfRunway={emergencyRunway.monthsOfRunway}
+        />
+      )}
+      {essentialBurden.income > 0 && (
+        <CityBudgetBar
+          x={budgetBarX}
+          z={budgetBarZ}
+          y={budgetBarY}
+          ratio={essentialBurden.ratio}
+          incomeLabel={hideAmounts ? '' : `הכנסה חודשית: ${formatCurrency(essentialBurden.income)}`}
+          splitLabel={
+            hideAmounts
+              ? ''
+              : `פנוי: ${formatCurrency(essentialBurden.income - essentialBurden.essentialExpenses - essentialBurden.debtPayments)}   מחויב: ${formatCurrency(essentialBurden.essentialExpenses + essentialBurden.debtPayments)}`
+          }
         />
       )}
       <gridHelper
