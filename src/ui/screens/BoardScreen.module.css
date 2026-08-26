@@ -19,7 +19,24 @@
 
 .titleBlock {
   display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.titleText {
+  display: flex;
   flex-direction: column;
+}
+
+.selfAvatar {
+  width: 40px;
+  height: 40px;
+  object-fit: cover;
+  /* deliberately not rounded into a circle — a family crest/logo isn't necessarily square, and
+     cropping it into a circle cut pieces off in an earlier version of this. */
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  flex-shrink: 0;
 }
 
 .menu {
@@ -35,9 +52,11 @@
 }
 
 /* a narrow portrait phone matches the width query; a phone rotated to landscape is wide but
-   short (e.g. ~844×390) so it needs the height+orientation query instead — either one gets the
-   same compact hamburger header. */
-@media (max-width: 760px), (max-height: 500px) and (orientation: landscape) {
+   short (e.g. ~844×390) so it needs the height+orientation query instead; a tablet rotated to
+   landscape (e.g. ~1024×768) is both wide AND tall enough to miss both of those, so it needs its
+   own touch-device check (hover:none + pointer:coarse reliably means "touchscreen", unlike a
+   height/width guess) — all three land on the same compact hamburger header. */
+@media (max-width: 760px), (max-height: 500px) and (orientation: landscape), (orientation: landscape) and (hover: none) and (pointer: coarse) {
   .header {
     padding: 10px 12px;
   }
@@ -73,9 +92,18 @@
 
   .menu {
     display: none;
-    position: absolute;
-    top: 100%;
-    inset-inline: 0;
+    /* fixed, not absolute — in cityMode .header itself collapses to a small floating
+       toggle-button box (see the cityMode rule below), and an absolutely-positioned child sizes
+       itself against *that* shrunken box, not the screen — this was rendering as a sliver just
+       wide enough for the toggle button, with every word inside it wrapped/cut. Fixed positions
+       against the real viewport instead, independent of whatever size .header happens to be. */
+    position: fixed;
+    top: 56px;
+    left: 0;
+    right: 0;
+    width: 100%;
+    box-sizing: border-box;
+    z-index: 30;
     flex-direction: column;
     align-items: stretch;
     gap: 10px;
@@ -83,6 +111,12 @@
     background: var(--surface);
     border-bottom: 1px solid var(--border);
     box-shadow: var(--shadow-panel);
+    /* the dropdown holds every header control at once (layout switcher, currency, hide-amounts,
+       family, import/export, +entity, sign-out) — on a short screen (landscape especially) that's
+       taller than the viewport has room for; without this, everything past the cutoff was simply
+       unreachable, with no scrollbar and no other way to get to it. */
+    max-height: calc(100vh - 60px);
+    overflow-y: auto;
   }
 
   .menu.menuOpen {
@@ -90,10 +124,12 @@
   }
 }
 
-/* phone in landscape, viewing the 3D city: pull the header out of the flex flow entirely (down
-   to a small floating corner button) so the canvas reclaims the full screen instead of losing a
-   whole row's worth of height to a bar that, in this orientation, is mostly wasted space. */
-@media (max-height: 500px) and (orientation: landscape) {
+/* phone OR tablet in landscape, viewing the 3D city: pull the header out of the flex flow
+   entirely (down to a small floating corner button) so the canvas reclaims the full screen
+   instead of losing a whole row's worth of height to a bar that, in this orientation, is mostly
+   wasted space. The touch-device check is what makes this reach tablets — a tablet in landscape
+   is usually well past 500px tall, so the height condition alone never caught it. */
+@media (max-height: 500px) and (orientation: landscape), (orientation: landscape) and (hover: none) and (pointer: coarse) {
   .screen.cityMode .header {
     position: fixed;
     top: 0;

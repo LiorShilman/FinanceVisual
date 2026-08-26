@@ -103,6 +103,11 @@ function BoardCanvas() {
   const [showInvestmentsTable, setShowInvestmentsTable] = useState(false);
   const [showRiseupTransactions, setShowRiseupTransactions] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  // the account owner's own photo, if they've added one in the family panel — shown as a small
+  // corner badge in the header, not rounded into a circle (a family crest/logo can be a
+  // non-square image, and cropping it into a circle cut pieces off in an earlier version of
+  // this).
+  const selfPhotoUrl = familyMembers.find((m) => m.relation === 'self')?.photoUrl;
   const importInputRef = useRef<HTMLInputElement>(null);
   const canvasWrapRef = useRef<HTMLDivElement>(null);
 
@@ -460,8 +465,11 @@ function BoardCanvas() {
     <div className={`${styles.screen} ${layoutMode === 'city' ? styles.cityMode : ''}`}>
       <header className={styles.header}>
         <div className={styles.titleBlock}>
-          <h1 className={styles.title}>הלוח הפיננסי המשפחתי</h1>
-          <span className={styles.subtitle}>גרור, ארגן, בנה את תמונת המצב שלך</span>
+          {selfPhotoUrl && <img src={selfPhotoUrl} alt="" className={styles.selfAvatar} />}
+          <div className={styles.titleText}>
+            <h1 className={styles.title}>הלוח הפיננסי המשפחתי</h1>
+            <span className={styles.subtitle}>גרור, ארגן, בנה את תמונת המצב שלך</span>
+          </div>
         </div>
         <button
           type="button"

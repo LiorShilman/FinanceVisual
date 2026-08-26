@@ -9,9 +9,11 @@ import { computeCityLayout, depthBaseZ, depthIndex, DISTRICT_SPACING } from '../
 import { computeGroundBounds, type CircularExtent } from '../../domain/cityGrid';
 import type { GrowthProjectionPoint } from '../../domain/compoundInterest';
 import { computeDebtLinkPaths } from '../../domain/debtLinks';
+import { computeEmergencyRunway } from '../../domain/emergencyFund';
 import { CATEGORY_LABELS, ENTITY_CATEGORIES, getWeight, isGrowthAssetDetails, type FinancialEntity } from '../../domain/entity';
 import type { FamilyMember } from '../../domain/familyMember';
 import { computeIncomeLinkPaths } from '../../domain/incomeLinks';
+import { computeIndependenceProgress } from '../../domain/independence';
 import { computeNetWorthBreakdown } from '../../domain/netWorth';
 import { getTerrainHeight } from '../../domain/terrain';
 import { computeValleyFeature } from '../../domain/valley';
@@ -23,6 +25,7 @@ import { CityBuildingMesh } from './CityBuildingMesh';
 import { CityCameraFocus } from './CityCameraFocus';
 import { CityCrystalMesh } from './CityCrystalMesh';
 import { CityDebtChains } from './CityDebtChains';
+import { CityEmergencyGauge } from './CityEmergencyGauge';
 import { CityExpenseMesh } from './CityExpenseMesh';
 import { CityFamilyAvatar } from './CityFamilyAvatar';
 import { CityFountainMesh } from './CityFountainMesh';
@@ -30,6 +33,7 @@ import { CityGivingPillarMesh } from './CityGivingPillarMesh';
 import { CityGoalMesh } from './CityGoalMesh';
 import { CityGround } from './CityGround';
 import { CityGrowthRings } from './CityGrowthRings';
+import { CityIndependenceDome } from './CityIndependenceDome';
 import { CityHourglassMesh } from './CityHourglassMesh';
 import { CityHouseMesh } from './CityHouseMesh';
 import { CityIncomeFaucet } from './CityIncomeFaucet';
@@ -184,6 +188,19 @@ export function CityView({
     const clearance = medalEntityIds.has(growthForecastEntityId) ? 4.6 : 1.6;
     return { x: b.x, z: b.z, y: terrainY + labelY + clearance, color: b.color };
   }, [growthForecastEntityId, buildings, entities, medalEntityIds]);
+  // the emergency-fund savings entity's own tree, if one exists — same labelY-matching trick as
+  // above, so the gauge sits right above the actual canopy instead of a hand-guessed offset.
+  const emergencyGaugeTarget = useMemo(() => {
+    const emergencyEntity = entities.find((e) => e.details.kind === 'savings' && e.details.isEmergencyFund);
+    if (!emergencyEntity) return null;
+    const b = buildings.find((building) => building.id === emergencyEntity.id);
+    if (!b) return null;
+    const labelY = computeTreeLabelY(b.height, b.footprint, 'sapling');
+    const terrainY = getTerrainHeight(b.x, b.z);
+    const clearance = medalEntityIds.has(emergencyEntity.id) ? 4.8 : 1.9;
+    return { x: b.x, z: b.z, y: terrainY + labelY + clearance };
+  }, [entities, buildings, medalEntityIds]);
+  const emergencyRunway = useMemo(() => computeEmergencyRunway(entities), [entities]);
   const incomeFaucetTarget = useMemo(() => {
     const incomeBuildings = buildings.filter((b) => b.category === 'income');
     if (incomeBuildings.length === 0) return null;
@@ -197,9 +214,13 @@ export function CityView({
   }, [buildings]);
   // one avatar per family member, hovering above the centroid of the buildings they own — not
   // one per owned entity, which would clutter the city fast for anyone owning several things.
-  // Members who own nothing yet (or aren't tied to any entity) render no avatar at all.
+  // Members who own nothing yet (or aren't tied to any entity) render no avatar at all. The
+  // account owner ("self") is excluded here — their own photo already has a dedicated home in
+  // the header's corner badge, so it doesn't need a second, floating copy in the middle of the
+  // map too.
   const familyAvatarTargets = useMemo(() => {
     return familyMembers
+      .filter((m) => m.relation !== 'self')
       .map((m) => {
         const owned = buildings.filter((b) => entities.find((e) => e.id === b.id)?.ownerIds.includes(m.id));
         if (owned.length === 0) return null;
@@ -235,6 +256,10 @@ export function CityView({
     { center: valley.center, radius: valley.radius } satisfies CircularExtent,
   ]);
   const gridDivisions = Math.round(Math.max(bounds.width, bounds.depth) / 1.6);
+  // half the diagonal (not half the width/depth) — a dome sized off just one axis would leave the
+  // rectangular footprint's own corners poking out past its curved wall.
+  const independenceDomeRadius = Math.hypot(bounds.width, bounds.depth) / 2 + 3;
+  const independenceProgress = useMemo(() => computeIndependenceProgress(entities), [entities]);
   // once locked, the saved position/target win over the computed defaults — kept fixed here
   // (not recomputed from board data) so the view stays exactly where the user pinned it,
   // regardless of what gets added to the board afterward.
@@ -265,6 +290,39 @@ export function CityView({
       <directionalLight position={[-10, 14, -10]} intensity={0.85} color="#6c8dff" />
 
       <CityGround groundCenter={groundCenter} groundSize={groundSize} water={water} valley={valley} />
+      <CityIndependenceDome
+        x={bounds.center[0]}
+        z={bounds.center[1]}
+        radius={independenceDomeRadius}
+        progress={independenceProgress.progress}
+        amountLabel={
+          hideAmounts
+            ? ''
+            : `${formatCurrency(independenceProgress.current)} מתוך ${formatCurrency(independenceProgress.target)}`
+        }
+        monthlyLabel={
+          hideAmounts
+            ? ''
+            : `משיכה חודשית בטוחה (4%): ${formatCurrency(independenceProgress.monthlySafeWithdrawal)}   מול הוצאה קבועה בפועל: ${formatCurrency(independenceProgress.essentialMonthlyExpenses)}`
+        }
+        yearsLabel={
+          independenceProgress.target <= 0
+            ? ''
+            : independenceProgress.yearsToIndependence === 0
+              ? '🎉 כבר הגעת ליעד העצמאות הכלכלית!'
+              : independenceProgress.yearsToIndependence === null
+                ? 'בקצב ההפקדות/תשואה הנוכחי, לא צפוי להגיע ליעד'
+                : `בעוד כ-${independenceProgress.yearsToIndependence.toFixed(1)} שנים בקצב הנוכחי`
+        }
+      />
+      {emergencyGaugeTarget && (
+        <CityEmergencyGauge
+          x={emergencyGaugeTarget.x}
+          z={emergencyGaugeTarget.z}
+          baseY={emergencyGaugeTarget.y}
+          monthsOfRunway={emergencyRunway.monthsOfRunway}
+        />
+      )}
       <gridHelper
         args={[1, gridDivisions, '#4a5a7a', '#2e3648']}
         scale={[bounds.width, 1, bounds.depth]}
@@ -274,7 +332,7 @@ export function CityView({
       {/* off to one side, not dead-center over the district — anchored to the camera-relative
           frame (width/depth) rather than the valley's own far-corner position, which left almost
           no headroom to raise it without pushing it straight out of the frustum's edge. */}
-      <CitySun x={width * 0.68} y={19} z={maxDepthZ * 0.35} breakdown={hideAmounts ? null : netWorth} />
+      <CitySun x={width * 0.85} y={19} z={maxDepthZ * 0.35} breakdown={hideAmounts ? null : netWorth} />
       {/* a few units to the right of the depth-tier labels' own column (x=-4.6 — "right" meaning
           toward higher x, since categories read right-to-left in this RTL city), centered in z
           between the long-term and short-term tiers specifically (not the full long-to-current
