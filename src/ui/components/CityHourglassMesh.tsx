@@ -12,6 +12,7 @@ interface Props {
   color: string;
   name: string;
   amount: string;
+  labelScale?: number;
   onOpen: () => void;
 }
 
@@ -31,7 +32,7 @@ function hash(seed: number): number {
  * color — blue while manageable, sliding to risk-red exactly when the debt actually gets
  * dangerous, so the timer's own color carries real information, not just decoration.
  */
-export function CityHourglassMesh({ x, z, height, footprint, color, name, amount, onOpen }: Props) {
+export function CityHourglassMesh({ x, z, height, footprint, color, name, amount, labelScale = 1, onOpen }: Props) {
   const grainRefs = useRef<(THREE.Mesh | null)[]>([]);
 
   const handleClick = (e: ThreeEvent<MouseEvent>) => {
@@ -147,8 +148,8 @@ export function CityHourglassMesh({ x, z, height, footprint, color, name, amount
       <Billboard position={[0, totalTopY + 0.6, 0]}>
         {amount !== '' && (
           <Text
-            position={[0, 0.62, 0]}
-            fontSize={0.42}
+            position={[0, 1, 0]}
+            fontSize={0.58 * labelScale}
             color="#ffd166"
             anchorX="center"
             anchorY="bottom"
@@ -162,7 +163,7 @@ export function CityHourglassMesh({ x, z, height, footprint, color, name, amount
           </Text>
         )}
         <Text
-          fontSize={0.46}
+          fontSize={0.72 * labelScale}
           color="#f1f3f8"
           anchorX="center"
           anchorY="bottom"

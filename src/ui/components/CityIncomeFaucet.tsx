@@ -10,7 +10,7 @@ interface Props {
   targetY: number;
 }
 
-const FAUCET_COLOR = '#c9a24a';
+const FAUCET_COLOR = '#c2921f';
 const DROP_COLOR = '#ffd166';
 const DROP_COUNT = 8;
 const DROP_RADIUS = 0.21;

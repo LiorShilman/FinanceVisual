@@ -12,6 +12,7 @@ interface Props {
   color: string;
   name: string;
   amount: string;
+  labelScale?: number;
   onOpen: () => void;
 }
 
@@ -25,7 +26,7 @@ interface Props {
  * category's own color (blue, escalating to risk-red) instead of real estate's neutral grey, plus
  * a small pennant flag planted at the roof peak that no other mesh in the city uses.
  */
-export function CityMortgageMesh({ x, z, height, footprint, color, name, amount, onOpen }: Props) {
+export function CityMortgageMesh({ x, z, height, footprint, color, name, amount, labelScale = 1, onOpen }: Props) {
   const facadeTexture = useMemo(() => getFacadeTexture(), []);
   const roofTexture = useMemo(() => getRoofTexture(), []);
 
@@ -87,8 +88,8 @@ export function CityMortgageMesh({ x, z, height, footprint, color, name, amount,
       <Billboard position={[0, roofPeakY + poleHeight + 0.55, 0]}>
         {amount !== '' && (
           <Text
-            position={[0, 0.62, 0]}
-            fontSize={0.42}
+            position={[0, 1, 0]}
+            fontSize={0.58 * labelScale}
             color="#ffd166"
             anchorX="center"
             anchorY="bottom"
@@ -102,7 +103,7 @@ export function CityMortgageMesh({ x, z, height, footprint, color, name, amount,
           </Text>
         )}
         <Text
-          fontSize={0.46}
+          fontSize={0.72 * labelScale}
           color="#f1f3f8"
           anchorX="center"
           anchorY="bottom"

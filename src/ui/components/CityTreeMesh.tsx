@@ -16,6 +16,7 @@ interface Props {
    * stack instead (with the trophy sitting between the two), so this mesh's own label would
    * otherwise duplicate it right next to the canopy. */
   hideLabel?: boolean;
+  labelScale?: number;
   onOpen: () => void;
 }
 
@@ -39,7 +40,7 @@ function hash(seed: number): number {
   return s - Math.floor(s);
 }
 
-export function CityTreeMesh({ x, z, height, footprint, color, name, amount, variant, hideLabel, onOpen }: Props) {
+export function CityTreeMesh({ x, z, height, footprint, color, name, amount, variant, hideLabel, labelScale = 1, onOpen }: Props) {
   const handleClick = (e: ThreeEvent<MouseEvent>) => {
     e.stopPropagation();
     onOpen();
@@ -155,8 +156,8 @@ export function CityTreeMesh({ x, z, height, footprint, color, name, amount, var
         <Billboard position={[0, labelY, 0]}>
           {amount !== '' && (
             <Text
-              position={[0, 0.62, 0]}
-              fontSize={0.42}
+              position={[0, 1, 0]}
+              fontSize={0.58 * labelScale}
               color="#ffd166"
               anchorX="center"
               anchorY="bottom"
@@ -170,7 +171,7 @@ export function CityTreeMesh({ x, z, height, footprint, color, name, amount, var
             </Text>
           )}
           <Text
-            fontSize={0.46}
+            fontSize={0.72 * labelScale}
             color="#f1f3f8"
             anchorX="center"
             anchorY="bottom"

@@ -9,6 +9,7 @@ interface Props {
   color: string;
   name: string;
   amount: string;
+  labelScale?: number;
   onOpen: () => void;
 }
 
@@ -17,7 +18,7 @@ interface Props {
  * roof (a 4-sided cone rotated to align its edges with the box's corners), instead of the generic
  * office tower every other stock-holding category uses.
  */
-export function CityHouseMesh({ x, z, height, footprint, color, name, amount, onOpen }: Props) {
+export function CityHouseMesh({ x, z, height, footprint, color, name, amount, labelScale = 1, onOpen }: Props) {
   const handleClick = (e: ThreeEvent<MouseEvent>) => {
     e.stopPropagation();
     onOpen();
@@ -46,8 +47,8 @@ export function CityHouseMesh({ x, z, height, footprint, color, name, amount, on
       <Billboard position={[0, wallHeight + roofHeight + 0.7, 0]}>
         {amount !== '' && (
           <Text
-            position={[0, 0.62, 0]}
-            fontSize={0.42}
+            position={[0, 1, 0]}
+            fontSize={0.58 * labelScale}
             color="#ffd166"
             anchorX="center"
             anchorY="bottom"
@@ -61,7 +62,7 @@ export function CityHouseMesh({ x, z, height, footprint, color, name, amount, on
           </Text>
         )}
         <Text
-          fontSize={0.46}
+          fontSize={0.72 * labelScale}
           color="#f1f3f8"
           anchorX="center"
           anchorY="bottom"

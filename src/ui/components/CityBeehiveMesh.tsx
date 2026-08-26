@@ -12,10 +12,11 @@ interface Props {
   color: string;
   name: string;
   amount: string;
+  labelScale?: number;
   onOpen: () => void;
 }
 
-const STRAW_LIGHT = '#c9a24a';
+const STRAW_LIGHT = '#c2921f';
 const STRAW_DARK = '#a9822f';
 const BAND_COUNT = 5;
 const BEE_COUNT = 3;
@@ -37,7 +38,7 @@ function widthAt(t: number): number {
  * tapering bands with dark ridge rings between them (not a texture), so it holds up at any zoom
  * instead of looking like a flat solid dome.
  */
-export function CityBeehiveMesh({ x, z, height, footprint, color, name, amount, onOpen }: Props) {
+export function CityBeehiveMesh({ x, z, height, footprint, color, name, amount, labelScale = 1, onOpen }: Props) {
   const beeRefs = useRef<(THREE.Group | null)[]>([]);
 
   const handleClick = (e: ThreeEvent<MouseEvent>) => {
@@ -138,8 +139,8 @@ export function CityBeehiveMesh({ x, z, height, footprint, color, name, amount, 
       <Billboard position={[0, hiveHeight + 0.85, 0]}>
         {amount !== '' && (
           <Text
-            position={[0, 0.62, 0]}
-            fontSize={0.42}
+            position={[0, 1, 0]}
+            fontSize={0.58 * labelScale}
             color="#ffd166"
             anchorX="center"
             anchorY="bottom"
@@ -153,7 +154,7 @@ export function CityBeehiveMesh({ x, z, height, footprint, color, name, amount, 
           </Text>
         )}
         <Text
-          fontSize={0.46}
+          fontSize={0.72 * labelScale}
           color="#f1f3f8"
           anchorX="center"
           anchorY="bottom"

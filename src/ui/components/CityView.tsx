@@ -11,7 +11,14 @@ import type { GrowthProjectionPoint } from '../../domain/compoundInterest';
 import { computeDebtLinkPaths } from '../../domain/debtLinks';
 import { computeEmergencyRunway } from '../../domain/emergencyFund';
 import { computeBudgetSplit } from '../../domain/budgetSplit';
-import { CATEGORY_LABELS, ENTITY_CATEGORIES, getWeight, isGrowthAssetDetails, type FinancialEntity } from '../../domain/entity';
+import {
+  CATEGORY_LABELS,
+  ENTITY_CATEGORIES,
+  getCheckingAvailableForInvestment,
+  getWeight,
+  isGrowthAssetDetails,
+  type FinancialEntity,
+} from '../../domain/entity';
 import type { FamilyMember } from '../../domain/familyMember';
 import { computeIncomeLinkPaths } from '../../domain/incomeLinks';
 import { computeIndependenceProgress } from '../../domain/independence';
@@ -25,6 +32,7 @@ import { CityBudgetBar } from './CityBudgetBar';
 import { CityBuildingItem } from './CityBuildingItem';
 import { CityBuildingMesh } from './CityBuildingMesh';
 import { CityCameraFocus } from './CityCameraFocus';
+import { CityCheckingBridge } from './CityCheckingBridge';
 import { CityCrystalMesh } from './CityCrystalMesh';
 import { CityDebtChains } from './CityDebtChains';
 import { CityEmergencyGauge } from './CityEmergencyGauge';
@@ -110,7 +118,35 @@ export function CityView({
   const usdRate = useBoardStore((s) => s.usdRate);
   const cityPositions = useBoardStore((s) => s.cityPositions);
   const [controlsEnabled, setControlsEnabled] = useState(true);
-  const buildings = useMemo(() => computeCityLayout(entities, cityPositions), [entities, cityPositions]);
+  // same "reversed index * DISTRICT_SPACING" formula every district position (buildings, ground
+  // labels) already uses — see domain/city.ts's baseX and this file's own category-label loop.
+  const checkingX = (ENTITY_CATEGORIES.length - 1 - ENTITY_CATEGORIES.indexOf('checking')) * DISTRICT_SPACING;
+  const checkingBridgeZNear = depthBaseZ(1);
+  const checkingBridgeZFar = depthBaseZ(2);
+  const checkingBridgeCenterZ = (checkingBridgeZNear + checkingBridgeZFar) / 2;
+  const buildings = useMemo(() => {
+    const layout = computeCityLayout(entities, cityPositions);
+    // checking has no building of its own anymore (see CityCheckingBridge) — its every position
+    // consumer (the water stream below, any income link to/from it) should read as originating
+    // from the bridge's own center, not wherever the now-invisible auto-layout cell would have
+    // put it; otherwise a stream/link "starts" from an arbitrary empty point that happens to sit
+    // near, but not aligned with, the bridge structure that now represents this category.
+    return layout.map((b) => (b.category === 'checking' ? { ...b, x: checkingX, z: checkingBridgeCenterZ } : b));
+  }, [entities, cityPositions, checkingX, checkingBridgeCenterZ]);
+  const checkingTotal = useMemo(
+    () => buildings.filter((b) => b.category === 'checking').reduce((sum, b) => sum + b.weight, 0),
+    [buildings],
+  );
+  const checkingAvailable = useMemo(
+    () =>
+      entities.reduce(
+        (sum, e) => (e.details.kind === 'checking' ? sum + getCheckingAvailableForInvestment(e.details) : sum),
+        0,
+      ),
+    [entities],
+  );
+  const checkingAvailableRatio = checkingTotal > 0 ? checkingAvailable / checkingTotal : 0;
+  const firstCheckingId = useMemo(() => entities.find((e) => e.details.kind === 'checking')?.id ?? null, [entities]);
   const water = useMemo(() => computeWaterFeature(buildings), [buildings]);
   const valley = useMemo(() => computeValleyFeature(buildings, entities), [buildings, entities]);
   const netWorth = useMemo(() => computeNetWorthBreakdown(entities), [entities]);
@@ -167,6 +203,9 @@ export function CityView({
         rank: (i + 1) as 1 | 2 | 3,
         name: b.name,
         amount: weight === 0 || hideAmounts ? '' : formatCurrency(weight, entity.currency, usdRate),
+        // same long-term-tier perspective compensation as every other mesh's own label — see the
+        // main buildings.map below.
+        labelScale: b.z < 0 ? 1.35 : 1,
       };
     });
   }, [buildings, entities, hideAmounts, usdRate]);
@@ -258,7 +297,7 @@ export function CityView({
     { center: water.lakeCenter, radius: water.outerRingRadius } satisfies CircularExtent,
     { center: valley.center, radius: valley.radius } satisfies CircularExtent,
   ]);
-  // to the right of the income faucet's own arm (higher x — see CitySun's own x=width*0.85 for
+  // to the right of the income faucet's own arm (higher x — see CitySun's own x=width*0.78 for
   // the same "higher x reads as further right" convention in this RTL city) and level with it —
   // the faucet's valve/arm mechanism floats at a fixed absolute FAUCET_Y (13), independent of the
   // income district's own much-lower rooftop height, so parallel placement needs FAUCET_Y, not
@@ -352,13 +391,31 @@ export function CityView({
           savingsContributionRatio={budgetSplit.savingsContribution / budgetSplit.income}
           donationsRatio={budgetSplit.donations / budgetSplit.income}
           incomeLabel={hideAmounts ? '' : `הכנסה חודשית: ${formatCurrency(budgetSplit.income)}`}
-          breakdownLabel={
+          spendingLabel={
+            hideAmounts ? '' : `צרכים: ${formatCurrency(budgetSplit.needs)} · רצונות: ${formatCurrency(budgetSplit.wants)}`
+          }
+          savingsLabel={
             hideAmounts
               ? ''
-              : `צרכים: ${formatCurrency(budgetSplit.needs)}   רצונות: ${formatCurrency(budgetSplit.wants)}   חיסכון: ${formatCurrency(budgetSplit.savingsContribution)}${
-                  budgetSplit.donations > 0 ? `   תרומה: ${formatCurrency(budgetSplit.donations)}` : ''
-                }`
+              : [
+                  `חיסכון: ${formatCurrency(budgetSplit.savingsContribution)}`,
+                  budgetSplit.donations > 0 ? `תרומה: ${formatCurrency(budgetSplit.donations)}` : null,
+                  budgetSplit.unallocated > 0 ? `לא מוקצה: ${formatCurrency(budgetSplit.unallocated)}` : null,
+                ]
+                  .filter((s): s is string => s !== null)
+                  .join(' · ')
           }
+        />
+      )}
+      {populatedCategories.has('checking') && firstCheckingId && (
+        <CityCheckingBridge
+          x={checkingX}
+          zNear={checkingBridgeZNear}
+          zFar={checkingBridgeZFar}
+          amountLabel={hideAmounts ? '' : formatCurrency(checkingTotal)}
+          availableLabel={hideAmounts || checkingAvailable <= 0 ? '' : `פנוי להשקעה: ${formatCurrency(checkingAvailable)}`}
+          availableRatio={checkingAvailableRatio}
+          onOpen={() => onOpen(firstCheckingId)}
         />
       )}
       <gridHelper
@@ -370,7 +427,7 @@ export function CityView({
       {/* off to one side, not dead-center over the district — anchored to the camera-relative
           frame (width/depth) rather than the valley's own far-corner position, which left almost
           no headroom to raise it without pushing it straight out of the frustum's edge. */}
-      <CitySun x={width * 0.85} y={19} z={maxDepthZ * 0.35} breakdown={hideAmounts ? null : netWorth} />
+      <CitySun x={width * 0.78} y={19} z={maxDepthZ * 0.35} breakdown={hideAmounts ? null : netWorth} />
       {/* a few units to the right of the depth-tier labels' own column (x=-4.6 — "right" meaning
           toward higher x, since categories read right-to-left in this RTL city), centered in z
           between the long-term and short-term tiers specifically (not the full long-to-current
@@ -452,12 +509,16 @@ export function CityView({
           />
         ))}
       {topGrowthMedals.map((m) => (
-        <CityMedalBadge key={`medal-${m.id}`} x={m.x} z={m.z} y={m.y} rank={m.rank} name={m.name} amount={m.amount} />
+        <CityMedalBadge key={`medal-${m.id}`} x={m.x} z={m.z} y={m.y} rank={m.rank} name={m.name} amount={m.amount} labelScale={m.labelScale} />
       ))}
       {familyAvatarTargets.map((t) => (
         <CityFamilyAvatar key={t.id} x={t.x} z={t.z} y={t.y} name={t.name} photoUrl={t.photoUrl} />
       ))}
       {buildings.map((b) => {
+        // represented by the bridge (CityCheckingBridge) + its own lake stream instead of a
+        // regular tower — a checking account has no natural "building" metaphor the way growth
+        // assets or debt do, and the bridge already carries its identity.
+        if (b.category === 'checking') return null;
         const entity = entities.find((e) => e.id === b.id)!;
         const weight = getWeight(entity);
         // insurance's weight is coverageAmount, which plenty of real policies just don't have a
@@ -472,7 +533,13 @@ export function CityView({
         // x/z come from the render-time drag position (which may differ from b.x/b.z mid-drag),
         // not baked in ahead of time — see CityBuildingItem.
         const renderMesh = (x: number, z: number) => {
-          const commonProps = { x, z, height: b.height, footprint: b.footprint, color: b.color, name: b.name, amount };
+          // the locked/long-term depth tier sits a full extra DEPTH_SPACING further back than
+          // every other tier (see domain/city.ts's depthBaseZ — it's the only tier with a
+          // negative z), so its own floating labels read noticeably smaller on screen despite
+          // being the same world-space font size, purely from being that much further from the
+          // camera. Bumping their own scale compensates for the perspective shrink.
+          const labelScale = b.z < 0 ? 1.35 : 1;
+          const commonProps = { x, z, height: b.height, footprint: b.footprint, color: b.color, name: b.name, amount, labelScale };
           if (b.category === 'donation') {
             return <CityGivingPillarMesh {...commonProps} onOpen={onOpenThis} />;
           }

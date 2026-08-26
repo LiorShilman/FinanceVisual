@@ -12,6 +12,7 @@ interface Props {
   color: string;
   name: string;
   amount: string;
+  labelScale?: number;
   onOpen: () => void;
 }
 
@@ -32,7 +33,7 @@ function hash(seed: number): number {
  * something greater", not just an ornamental column with a pretty glow, so it stays legible as
  * *donation* specifically rather than an object that could belong to any other category.
  */
-export function CityGivingPillarMesh({ x, z, height, footprint, color, name, amount, onOpen }: Props) {
+export function CityGivingPillarMesh({ x, z, height, footprint, color, name, amount, labelScale = 1, onOpen }: Props) {
   const moteRefs = useRef<(THREE.Mesh | null)[]>([]);
   const flameRef = useRef<THREE.Group>(null);
 
@@ -140,8 +141,8 @@ export function CityGivingPillarMesh({ x, z, height, footprint, color, name, amo
       <Billboard position={[0, flameBaseY + flameRadius * 2 + 0.5, 0]}>
         {amount !== '' && (
           <Text
-            position={[0, 0.62, 0]}
-            fontSize={0.42}
+            position={[0, 1, 0]}
+            fontSize={0.58 * labelScale}
             color="#ffd166"
             anchorX="center"
             anchorY="bottom"
@@ -155,7 +156,7 @@ export function CityGivingPillarMesh({ x, z, height, footprint, color, name, amo
           </Text>
         )}
         <Text
-          fontSize={0.46}
+          fontSize={0.72 * labelScale}
           color="#f1f3f8"
           anchorX="center"
           anchorY="bottom"

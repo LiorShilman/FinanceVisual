@@ -10,6 +10,7 @@ interface Props {
   rank: 1 | 2 | 3;
   name: string;
   amount: string;
+  labelScale?: number;
 }
 
 const RANK_STYLE: Record<1 | 2 | 3, { metal: string; label: string }> = {
@@ -21,8 +22,11 @@ const RANK_STYLE: Record<1 | 2 | 3, { metal: string; label: string }> = {
 const ROTATE_SPEED = 0.35;
 const BOB_SPEED = 1.6;
 const BOB_AMPLITUDE = 0.1;
-// how far above the name the trophy's own base sits.
-const TROPHY_LIFT = 0.85;
+// how far above the name the trophy's own base sits — the name text grows taller with labelScale
+// (see CityView's long-term-tier compensation), so a fixed lift let the enlarged name's own top
+// climb up into the trophy sitting right above it. Scaling the lift by the same factor keeps the
+// gap between them proportional instead of shrinking away as the text grows.
+const TROPHY_LIFT_BASE = 1.15;
 
 /**
  * A small floating trophy above each of the top-3 largest growth holdings (savings/investment/
@@ -37,7 +41,7 @@ const TROPHY_LIFT = 0.85;
  * the trophy visibly sits *between* the two texts instead of floating above an already-complete
  * label.
  */
-export function CityMedalBadge({ x, z, y, rank, name, amount }: Props) {
+export function CityMedalBadge({ x, z, y, rank, name, amount, labelScale = 1 }: Props) {
   const groupRef = useRef<THREE.Group>(null);
   const style = RANK_STYLE[rank];
   // deterministic per-position phase (not Math.random — impure during render) so multiple
@@ -52,6 +56,7 @@ export function CityMedalBadge({ x, z, y, rank, name, amount }: Props) {
     }
   });
 
+  const trophyLift = TROPHY_LIFT_BASE * labelScale;
   const baseRadius = 0.62;
   const baseHeight = 0.17;
   const stemHeight = 0.36;
@@ -69,7 +74,7 @@ export function CityMedalBadge({ x, z, y, rank, name, amount }: Props) {
     <group ref={groupRef} position={[x, y, z]}>
       <Billboard>
         <Text
-          fontSize={0.46}
+          fontSize={0.72 * labelScale}
           color="#f1f3f8"
           anchorX="center"
           anchorY="bottom"
@@ -82,7 +87,7 @@ export function CityMedalBadge({ x, z, y, rank, name, amount }: Props) {
         </Text>
       </Billboard>
 
-      <group position={[0, TROPHY_LIFT, 0]}>
+      <group position={[0, trophyLift, 0]}>
         <pointLight color={style.metal} intensity={0.75} distance={4} decay={2} />
 
         <mesh position={[0, baseHeight / 2, 0]} frustumCulled={false}>
@@ -122,7 +127,7 @@ export function CityMedalBadge({ x, z, y, rank, name, amount }: Props) {
         {amount !== '' && (
           <Billboard position={[0, trophyTopY + 2.0, 0]}>
             <Text
-              fontSize={0.62}
+              fontSize={0.58 * labelScale}
               color="#ffd166"
               anchorX="center"
               anchorY="bottom"

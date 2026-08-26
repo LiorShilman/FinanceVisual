@@ -12,6 +12,7 @@ interface Props {
   color: string;
   name: string;
   amount: string;
+  labelScale?: number;
   onOpen: () => void;
 }
 
@@ -30,7 +31,7 @@ function hash(seed: number): number {
  * uses the same near-black-base-plus-emissive-tint, low-poly-faceted recipe as the insurance
  * shield/trophy so it reads as carved stone under any lighting instead of a flat solid disc.
  */
-export function CityFountainMesh({ x, z, height, footprint, color, name, amount, onOpen }: Props) {
+export function CityFountainMesh({ x, z, height, footprint, color, name, amount, labelScale = 1, onOpen }: Props) {
   const dropRefs = useRef<(THREE.Mesh | null)[]>([]);
 
   const handleClick = (e: ThreeEvent<MouseEvent>) => {
@@ -108,8 +109,8 @@ export function CityFountainMesh({ x, z, height, footprint, color, name, amount,
       <Billboard position={[0, basinHeight + pillarHeight + 0.9, 0]}>
         {amount !== '' && (
           <Text
-            position={[0, 0.62, 0]}
-            fontSize={0.42}
+            position={[0, 1, 0]}
+            fontSize={0.58 * labelScale}
             color="#ffd166"
             anchorX="center"
             anchorY="bottom"
@@ -123,7 +124,7 @@ export function CityFountainMesh({ x, z, height, footprint, color, name, amount,
           </Text>
         )}
         <Text
-          fontSize={0.46}
+          fontSize={0.72 * labelScale}
           color="#f1f3f8"
           anchorX="center"
           anchorY="bottom"

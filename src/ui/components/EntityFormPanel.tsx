@@ -45,7 +45,7 @@ function defaultDetails(category: EntityCategory): EntityDetails {
     case 'donation':
       return { kind: 'donation', monthlyAmount: 0 };
     case 'checking':
-      return { kind: 'checking', balance: 0, availableForInvestment: 0 };
+      return { kind: 'checking', balance: 0, desiredMinimumBalance: 0 };
     case 'savings':
       return { kind: 'savings', balance: 0, isEmergencyFund: false, expectedAnnualReturnPct: 1, monthlyContribution: 0, fromIncome: true };
     case 'investment':
@@ -435,11 +435,11 @@ export function EntityFormPanel({
               />
             </label>
             <label className={styles.field}>
-              <span className={styles.label}>פנוי להשקעה ({currencySymbol})</span>
+              <span className={styles.label}>מינימום עו״ש רצוי ({currencySymbol})</span>
               <NumberField
                 className={styles.input}
-                value={toDisplay(d.availableForInvestment)}
-                onChange={(v) => updateDetail({ availableForInvestment: fromDisplay(v) })}
+                value={toDisplay(d.desiredMinimumBalance)}
+                onChange={(v) => updateDetail({ desiredMinimumBalance: fromDisplay(v) })}
               />
             </label>
           </div>

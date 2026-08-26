@@ -108,7 +108,7 @@ export function CityIndependenceDome({ x, z, radius, progress, amountLabel, mont
   // high enough to clear every building, trophy and floating label in the city (all well under
   // 15) and sit visibly against the dome's own sky backdrop near the top of the frame, instead of
   // reading as just more ground-level clutter among the entities.
-  const labelY = 21;
+  const labelY = 27;
 
   return (
     <group position={[x, 0, z]}>
@@ -146,12 +146,12 @@ export function CityIndependenceDome({ x, z, radius, progress, amountLabel, mont
         </Text>
         {amountLabel !== '' && (
           <Text
-            position={[0, -1, 0]}
-            fontSize={0.9}
+            position={[0, -1.1, 0]}
+            fontSize={1}
             color="#ffffff"
             anchorX="center"
             anchorY="top"
-            outlineWidth={0.036}
+            outlineWidth={0.04}
             outlineColor="#0a0c11"
             fontWeight="bold"
             frustumCulled={false}
@@ -161,12 +161,12 @@ export function CityIndependenceDome({ x, z, radius, progress, amountLabel, mont
         )}
         {monthlyLabel !== '' && (
           <Text
-            position={[0, -2.15, 0]}
-            fontSize={0.72}
+            position={[0, -2.4, 0]}
+            fontSize={0.82}
             color="#ffe0a3"
             anchorX="center"
             anchorY="top"
-            outlineWidth={0.03}
+            outlineWidth={0.034}
             outlineColor="#0a0c11"
             fontWeight="bold"
             frustumCulled={false}
@@ -176,12 +176,12 @@ export function CityIndependenceDome({ x, z, radius, progress, amountLabel, mont
         )}
         {yearsLabel !== '' && (
           <Text
-            position={[0, -3.2, 0]}
-            fontSize={0.8}
+            position={[0, -3.55, 0]}
+            fontSize={0.9}
             color="#9fe6c0"
             anchorX="center"
             anchorY="top"
-            outlineWidth={0.032}
+            outlineWidth={0.036}
             outlineColor="#0a0c11"
             fontWeight="bold"
             frustumCulled={false}

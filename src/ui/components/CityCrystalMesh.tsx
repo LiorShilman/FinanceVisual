@@ -17,6 +17,7 @@ interface Props {
    * stack instead (with the trophy sitting between the two), so this mesh's own label would
    * otherwise duplicate it right next to the crown mouth. */
   hideLabel?: boolean;
+  labelScale?: number;
   onOpen: () => void;
 }
 
@@ -39,7 +40,7 @@ function hash(seed: number): number {
  * hidden inside as bait. Bark is near-black/violet, not the mineral grey the crystal tree used, so
  * the whole silhouette reads as sinister at a glance, not just its ornaments.
  */
-export function CityCrystalMesh({ x, z, height, footprint, color, name, amount, hideLabel, onOpen }: Props) {
+export function CityCrystalMesh({ x, z, height, footprint, color, name, amount, hideLabel, labelScale = 1, onOpen }: Props) {
   const lureRefs = useRef<(THREE.Mesh | null)[]>([]);
   const mouthRefs = useRef<(THREE.Group | null)[]>([]);
 
@@ -166,8 +167,8 @@ export function CityCrystalMesh({ x, z, height, footprint, color, name, amount, 
         <Billboard position={[0, computeCrystalLabelY(height, footprint), 0]}>
           {amount !== '' && (
             <Text
-              position={[0, 0.62, 0]}
-              fontSize={0.42}
+              position={[0, 1, 0]}
+              fontSize={0.58 * labelScale}
               color="#ffd166"
               anchorX="center"
               anchorY="bottom"
@@ -181,7 +182,7 @@ export function CityCrystalMesh({ x, z, height, footprint, color, name, amount, 
             </Text>
           )}
           <Text
-            fontSize={0.46}
+            fontSize={0.72 * labelScale}
             color="#f1f3f8"
             anchorX="center"
             anchorY="bottom"

@@ -12,6 +12,7 @@ interface Props {
   color: string;
   name: string;
   amount: string;
+  labelScale?: number;
   /** currentAmount / targetAmount, clamped to [0, 1] by the caller. */
   progress: number;
   onOpen: () => void;
@@ -27,7 +28,7 @@ const GOLD = '#ffd166';
  * completed goal gets a slowly spinning golden ring overhead instead, so reaching 100% stays
  * visibly different from simply being a funded goal at 99%.
  */
-export function CityGoalMesh({ x, z, height, footprint, color, name, amount, progress, onOpen }: Props) {
+export function CityGoalMesh({ x, z, height, footprint, color, name, amount, labelScale = 1, progress, onOpen }: Props) {
   const ringRef = useRef<THREE.Mesh>(null);
   const isComplete = progress >= 1;
   // deterministic per-position phase (not Math.random — impure during render) so multiple
@@ -78,8 +79,8 @@ export function CityGoalMesh({ x, z, height, footprint, color, name, amount, pro
       <Billboard position={[0, height + (isComplete ? 1.3 : 0.7), 0]}>
         {amount !== '' && (
           <Text
-            position={[0, 0.62, 0]}
-            fontSize={0.42}
+            position={[0, 1, 0]}
+            fontSize={0.58 * labelScale}
             color="#ffd166"
             anchorX="center"
             anchorY="bottom"
@@ -93,7 +94,7 @@ export function CityGoalMesh({ x, z, height, footprint, color, name, amount, pro
           </Text>
         )}
         <Text
-          fontSize={0.46}
+          fontSize={0.72 * labelScale}
           color="#f1f3f8"
           anchorX="center"
           anchorY="bottom"

@@ -5,8 +5,11 @@ import { computeMagnitudeShare } from './sizing';
 // same tributary, but a visibly different-colored one — pension's own stream reads as a distinct
 // source feeding the same lake, not just more of the same liquid/investment water. Study funds
 // pool with savings/investment (liquid) — unlike pension, they're a real user choice of liquidity,
-// not a permanent lock, so they belong with the growth/investment grouping, not pension's.
-export type StreamKind = 'liquid' | 'pension';
+// not a permanent lock, so they belong with the growth/investment grouping, not pension's. Checking
+// gets its own third color too (see CityGround.tsx) — it's still counted as liquid money for the
+// lake's own radius/share math below, just tinted differently so day-to-day cash reads as visibly
+// distinct from money actually earmarked for savings/investment.
+export type StreamKind = 'liquid' | 'checking' | 'pension';
 
 export interface StreamSource {
   x: number;
@@ -32,19 +35,26 @@ const MIN_TOTAL_RADIUS = 2.5;
 const MAX_TOTAL_RADIUS = 9;
 const MIN_SHARE = 0.22; // neither pool ever visually vanishes, even if one side is empty
 
-/** Every savings/investment/pension building feeds a stream into the corner lake — liquid money
- * pools in the inner circle, pension money pools in the ring around it. The ring/lake split is
- * proportional to how much money is actually in each (by area, so the ring's true visual "amount"
- * is the area between the two radii, not the radius itself); the lake's overall size reflects the
- * combined total. */
+/** Every checking/savings/investment/pension building feeds a stream into the corner lake —
+ * liquid money pools in the inner circle, pension money pools in the ring around it. Checking is
+ * included alongside savings — it's still liquid money, just held for day-to-day spending rather
+ * than growth; leaving it out made a checking account render as an unconnected building with no
+ * link to the rest of the city's money story at all. The ring/lake split is proportional to how
+ * much money is actually in each (by area, so the ring's true visual "amount" is the area between
+ * the two radii, not the radius itself); the lake's overall size reflects the combined total. */
 export function computeWaterFeature(buildings: CityBuilding[]): WaterFeature {
   const relevant = buildings.filter(
-    (b) => b.category === 'savings' || b.category === 'investment' || b.category === 'studyFund' || b.category === 'pension',
+    (b) =>
+      b.category === 'checking' ||
+      b.category === 'savings' ||
+      b.category === 'investment' ||
+      b.category === 'studyFund' ||
+      b.category === 'pension',
   );
   const streams = relevant.map((b) => ({
     x: b.x,
     z: b.z,
-    kind: (b.category === 'pension' ? 'pension' : 'liquid') as StreamKind,
+    kind: (b.category === 'pension' ? 'pension' : b.category === 'checking' ? 'checking' : 'liquid') as StreamKind,
     weight: b.weight,
   }));
 

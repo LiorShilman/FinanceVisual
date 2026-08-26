@@ -51,9 +51,13 @@ interface Props {
   savingsContributionRatio: number;
   donationsRatio: number;
   // '' hides these lines (respects hideAmounts) — the headline % split above still shows
-  // regardless, since a ratio alone doesn't disclose a ₪ figure.
+  // regardless, since a ratio alone doesn't disclose a ₪ figure. Split across two lines (spending
+  // vs. the savings zone) instead of one — five items on a single small line, separated by
+  // variable-width space runs, read as cramped and unevenly spaced; two shorter lines with a
+  // fixed "·" separator (matching the headline above) fixes both.
   incomeLabel: string;
-  breakdownLabel: string;
+  spendingLabel: string;
+  savingsLabel: string;
 }
 
 const FULL_HEIGHT = 4.4;
@@ -76,7 +80,7 @@ const NEEDS_COLOR = '#5a1f1b';
 // gauge (see CityEmergencyGauge.tsx), with a gold frame instead of just floating against the
 // scene's own grey sky, which read as flat and unfinished on its own.
 const PANEL_COLOR = '#0e0f14';
-const FRAME_COLOR = '#c9a24a';
+const FRAME_COLOR = '#c2921f';
 const PANEL_WIDTH = RADIUS * 3.4;
 const PANEL_HEIGHT = FULL_HEIGHT + 0.9;
 const PANEL_Z = -(RADIUS + 0.35);
@@ -99,7 +103,8 @@ export function CityBudgetBar({
   savingsContributionRatio,
   donationsRatio,
   incomeLabel,
-  breakdownLabel,
+  spendingLabel,
+  savingsLabel,
 }: Props) {
   const savingsRatio = savingsContributionRatio + donationsRatio;
   const needsPct = Math.round(needsRatio * 100);
@@ -117,8 +122,19 @@ export function CityBudgetBar({
   // proportions intact rather than clipping off whichever happens to be drawn last.
   const scale = overCommitted ? 1 / committed : 1;
 
-  const savingsContributionHeight = rawSavingsContribution * scale * FILL_HEIGHT;
-  const donationsHeight = rawDonations * scale * FILL_HEIGHT;
+  let savingsContributionHeight = rawSavingsContribution * scale * FILL_HEIGHT;
+  let donationsHeight = rawDonations * scale * FILL_HEIGHT;
+  // a real but tiny donation (e.g. 1% of income) rendered at true scale is a sliver so thin its
+  // flat-shaded side faces barely catch any light — it reads as a dark seam, not a colored band.
+  // Borrowing height from the savingsContribution band right next to it keeps their combined
+  // total (and everything stacked above them) exactly unchanged, so only the internal split
+  // within the "20%" zone shifts, not the zone's own boundaries.
+  const MIN_VISIBLE_BAND = 0.12;
+  if (donationsHeight > 0.001 && donationsHeight < MIN_VISIBLE_BAND) {
+    const boost = Math.min(MIN_VISIBLE_BAND - donationsHeight, savingsContributionHeight);
+    donationsHeight += boost;
+    savingsContributionHeight -= boost;
+  }
   const wantsHeight = rawWants * scale * FILL_HEIGHT;
   const needsHeight = rawNeeds * scale * FILL_HEIGHT;
   const savingsHeight = savingsContributionHeight + donationsHeight;
@@ -214,22 +230,27 @@ export function CityBudgetBar({
           local offsets, so the base itself has to clear FULL_HEIGHT by more than just those
           lines' own spacing, or the bottom lines end up back down inside the tube's own height
           range, right where an earlier version of this put them. */}
-      <Billboard position={[0, FULL_HEIGHT + 2.6, 0]}>
-        <Text fontSize={0.56} color="#ffd166" anchorX="center" anchorY="bottom" outlineWidth={0.026} outlineColor="#5a3d00" fontWeight="bold" frustumCulled={false}>
+      <Billboard position={[0, FULL_HEIGHT + 4.8, 0]}>
+        <Text fontSize={1.8} color="#ffd166" anchorX="center" anchorY="bottom" outlineWidth={0.045} outlineColor="#5a3d00" fontWeight="bold" frustumCulled={false}>
           {`צרכים ${needsPct}% · רצונות ${wantsPct}% · חיסכון ${savingsPct}%`}
         </Text>
         {incomeLabel !== '' && (
-          <Text position={[0, -0.7, 0]} fontSize={0.46} color="#ffffff" anchorX="center" anchorY="top" outlineWidth={0.02} outlineColor="#0a0c11" fontWeight="bold" frustumCulled={false}>
+          <Text position={[0, -1, 0]} fontSize={0.9} color="#ffffff" anchorX="center" anchorY="top" outlineWidth={0.036} outlineColor="#0a0c11" fontWeight="bold" frustumCulled={false}>
             {incomeLabel}
           </Text>
         )}
-        {breakdownLabel !== '' && (
-          <Text position={[0, -1.3, 0]} fontSize={0.36} color="#ffe0a3" anchorX="center" anchorY="top" outlineWidth={0.017} outlineColor="#0a0c11" fontWeight="bold" frustumCulled={false}>
-            {breakdownLabel}
+        {spendingLabel !== '' && (
+          <Text position={[0, -2, 0]} fontSize={0.75} color="#ffe0a3" anchorX="center" anchorY="top" outlineWidth={0.03} outlineColor="#0a0c11" fontWeight="bold" frustumCulled={false}>
+            {spendingLabel}
+          </Text>
+        )}
+        {savingsLabel !== '' && (
+          <Text position={[0, -2.85, 0]} fontSize={0.75} color="#ffe0a3" anchorX="center" anchorY="top" outlineWidth={0.03} outlineColor="#0a0c11" fontWeight="bold" frustumCulled={false}>
+            {savingsLabel}
           </Text>
         )}
         {overCommitted && (
-          <Text position={[0, -1.95, 0]} fontSize={0.42} color="#e05a4e" anchorX="center" anchorY="top" outlineWidth={0.02} outlineColor="#0a0c11" fontWeight="bold" frustumCulled={false}>
+          <Text position={[0, -3.7, 0]} fontSize={0.7} color="#e05a4e" anchorX="center" anchorY="top" outlineWidth={0.03} outlineColor="#0a0c11" fontWeight="bold" frustumCulled={false}>
             ⚠ ההוצאות עוברות את ההכנסה
           </Text>
         )}

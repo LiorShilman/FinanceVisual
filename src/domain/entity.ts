@@ -33,12 +33,14 @@ const ExpenseDetails = z.object({
 // or get grouped into the same total when judging spending.
 const DonationDetails = z.object({ kind: z.literal('donation'), monthlyAmount: z.number().nonnegative() });
 // the everyday operating cash account — always immediately liquid by nature (like pension is
-// always locked), with one extra number beyond its balance: how much of it is actually free to
-// move into savings/investment rather than needed for day-to-day spending.
+// always locked). desiredMinimumBalance is the user's own "don't touch this much" floor — what's
+// actually free to move into savings/investment is balance minus that floor (see
+// getCheckingAvailableForInvestment below), not a second manually-entered number that could
+// silently drift out of sync with the real balance.
 const CheckingDetails = z.object({
   kind: z.literal('checking'),
   balance: z.number().nonnegative(),
-  availableForInvestment: z.number().nonnegative().default(0),
+  desiredMinimumBalance: z.number().nonnegative().default(0),
 });
 const SavingsDetails = z.object({
   kind: z.literal('savings'),
@@ -199,19 +201,23 @@ export function isGrowthAssetDetails(details: EntityDetails): details is GrowthA
   return (GROWTH_ASSET_KINDS as readonly string[]).includes(details.kind);
 }
 
-// savings has no monthlyContribution field at all (a savings account isn't modeled as having
-// recurring deposits) — every other growth kind does, so this is the one place that needs to
-// paper over that gap for code that treats all four kinds generically.
 export function getGrowthMonthlyContribution(details: GrowthAssetDetails): number {
-  return details.kind === 'savings' ? 0 : details.monthlyContribution;
+  return details.monthlyContribution;
+}
+
+// checking's own free-for-investment figure — balance above the user's own "don't touch this
+// much" floor, not a second manually-entered number that could silently drift out of sync with
+// the real balance (see CheckingDetails.desiredMinimumBalance).
+export function getCheckingAvailableForInvestment(details: { balance: number; desiredMinimumBalance: number }): number {
+  return Math.max(0, details.balance - details.desiredMinimumBalance);
 }
 
 export const ENTITY_CATEGORIES: readonly EntityCategory[] = [
   'source',
   'income',
+  'checking',
   'expense',
   'donation',
-  'checking',
   'savings',
   'investment',
   'pension',
@@ -298,10 +304,9 @@ export const LINKABLE_FIELDS: Partial<Record<EntityCategory, LinkableField[]>> =
   income: [{ key: 'monthlyAmount', label: 'סכום חודשי' }],
   expense: [{ key: 'monthlyAmount', label: 'סכום חודשי' }],
   donation: [{ key: 'monthlyAmount', label: 'סכום חודשי' }],
-  checking: [
-    { key: 'balance', label: 'יתרה' },
-    { key: 'availableForInvestment', label: 'פנוי להשקעה' },
-  ],
+  // desiredMinimumBalance is a personal preference, not something RiseUp's bank data could ever
+  // confirm — only balance is a real, linkable bank figure.
+  checking: [{ key: 'balance', label: 'יתרה' }],
   savings: [{ key: 'balance', label: 'יתרה' }],
   investment: [
     { key: 'balance', label: 'יתרה' },
@@ -382,8 +387,10 @@ export function getSecondaryDetail(entity: FinancialEntity): SecondaryDetail | n
     case 'pension':
     case 'studyFund':
       return d.monthlyContribution > 0 ? { label: 'הפקדה חודשית', amount: d.monthlyContribution } : null;
-    case 'checking':
-      return d.availableForInvestment > 0 ? { label: 'פנוי להשקעה', amount: d.availableForInvestment } : null;
+    case 'checking': {
+      const available = getCheckingAvailableForInvestment(d);
+      return available > 0 ? { label: 'פנוי להשקעה', amount: available } : null;
+    }
     case 'insurance':
       return { label: 'פרמיה חודשית', amount: d.monthlyPremium };
     case 'debt':

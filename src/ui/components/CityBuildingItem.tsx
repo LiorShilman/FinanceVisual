@@ -18,8 +18,14 @@ interface Props {
 // "the ground" rather than hardcoding y=0, so a future non-flat terrain wouldn't need this file
 // touched again.
 const GROUND_PLANE = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
-// Below this, a press-and-release still counts as "open the entity", not "moved it by accident".
-const DRAG_THRESHOLD = 0.15;
+// Below this, a press-and-release still counts as "open the entity", not "moved it by accident" —
+// measured in screen pixels, not world units. A world-space threshold here used to mean the same
+// deliberate drag gesture could cross it easily when zoomed out (a small mouse movement covers
+// many world units at a distant camera) but never cross it when zoomed in close (the same
+// movement covers very few world units) — so a real drag at closer zoom would silently fail to
+// register as a drag at all, and releasing it popped the edit panel open instead of moving the
+// building. Screen pixels stay perceptually consistent regardless of camera distance.
+const DRAG_THRESHOLD_PX = 6;
 const TOUCH_QUERY = '(pointer: coarse)';
 
 // A touch device has no way to tell "orbit the camera" and "drag this building" apart from a
@@ -59,7 +65,7 @@ export function CityBuildingItem({ building, renderMesh, onOpen, setControlsEnab
   // happened to be the instant the threshold was crossed. Tracking the pointer's own start and
   // moving the building by the same *delta* the pointer has since traveled keeps whatever offset
   // was clicked, so the building follows the cursor smoothly instead of jumping to meet it.
-  const dragStartRef = useRef<{ pointerX: number; pointerZ: number } | null>(null);
+  const dragStartRef = useRef<{ pointerX: number; pointerZ: number; clientX: number; clientY: number } | null>(null);
 
   const terrainYTouch = getTerrainHeight(building.x, building.z);
   if (isTouch) {
@@ -78,7 +84,9 @@ export function CityBuildingItem({ building, renderMesh, onOpen, setControlsEnab
     e.stopPropagation();
     (e.target as Element).setPointerCapture?.(e.pointerId);
     const point = new THREE.Vector3();
-    dragStartRef.current = e.ray.intersectPlane(GROUND_PLANE, point) ? { pointerX: point.x, pointerZ: point.z } : null;
+    dragStartRef.current = e.ray.intersectPlane(GROUND_PLANE, point)
+      ? { pointerX: point.x, pointerZ: point.z, clientX: e.nativeEvent.clientX, clientY: e.nativeEvent.clientY }
+      : null;
     activeRef.current = true;
     draggingRef.current = false;
     setControlsEnabled(false);
@@ -91,7 +99,8 @@ export function CityBuildingItem({ building, renderMesh, onOpen, setControlsEnab
     const dx = point.x - dragStartRef.current.pointerX;
     const dz = point.z - dragStartRef.current.pointerZ;
     if (!draggingRef.current) {
-      if (Math.hypot(dx, dz) < DRAG_THRESHOLD) return;
+      const pixelDist = Math.hypot(e.nativeEvent.clientX - dragStartRef.current.clientX, e.nativeEvent.clientY - dragStartRef.current.clientY);
+      if (pixelDist < DRAG_THRESHOLD_PX) return;
       draggingRef.current = true;
     }
     setDragPos(snapCityPosition(building.x + dx, building.z + dz, baseX, baseZ, building.cellBounds));

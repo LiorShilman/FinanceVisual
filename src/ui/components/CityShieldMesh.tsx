@@ -9,6 +9,7 @@ interface Props {
   color: string;
   name: string;
   amount: string;
+  labelScale?: number;
   onOpen: () => void;
 }
 
@@ -26,7 +27,7 @@ interface Props {
  * to a full tower even at a healthy weight. The cross emblem stays on its own Billboard, always
  * turned to face the camera regardless of which facet happens to be toward the viewer.
  */
-export function CityShieldMesh({ x, z, height, footprint, color, name, amount, onOpen }: Props) {
+export function CityShieldMesh({ x, z, height, footprint, color, name, amount, labelScale = 1, onOpen }: Props) {
   const handleClick = (e: ThreeEvent<MouseEvent>) => {
     e.stopPropagation();
     onOpen();
@@ -82,8 +83,8 @@ export function CityShieldMesh({ x, z, height, footprint, color, name, amount, o
       <Billboard position={[0, bodyHeight + 1.15, 0]}>
         {amount !== '' && (
           <Text
-            position={[0, 0.62, 0]}
-            fontSize={0.42}
+            position={[0, 1, 0]}
+            fontSize={0.58 * labelScale}
             color="#ffd166"
             anchorX="center"
             anchorY="bottom"
@@ -97,7 +98,7 @@ export function CityShieldMesh({ x, z, height, footprint, color, name, amount, o
           </Text>
         )}
         <Text
-          fontSize={0.46}
+          fontSize={0.72 * labelScale}
           color="#f1f3f8"
           anchorX="center"
           anchorY="bottom"

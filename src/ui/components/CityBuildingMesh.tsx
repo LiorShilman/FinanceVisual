@@ -11,10 +11,13 @@ interface Props {
   color: string;
   name: string;
   amount: string;
+  // compensates for buildings sitting in the locked/long-term depth tier reading smaller on
+  // screen purely from being further from the camera — see CityView.tsx's own commonProps.
+  labelScale?: number;
   onOpen: () => void;
 }
 
-export function CityBuildingMesh({ x, z, height, footprint, color, name, amount, onOpen }: Props) {
+export function CityBuildingMesh({ x, z, height, footprint, color, name, amount, labelScale = 1, onOpen }: Props) {
   const facadeTexture = useMemo(() => getFacadeTexture(), []);
   const tiers = useMemo(() => computeTiers(height, footprint), [height, footprint]);
 
@@ -65,8 +68,8 @@ export function CityBuildingMesh({ x, z, height, footprint, color, name, amount,
       <Billboard position={[0, height + roofHeight + 0.85, 0]}>
         {amount !== '' && (
           <Text
-            position={[0, 0.62, 0]}
-            fontSize={0.42}
+            position={[0, 1, 0]}
+            fontSize={0.58 * labelScale}
             color="#ffd166"
             anchorX="center"
             anchorY="bottom"
@@ -80,7 +83,7 @@ export function CityBuildingMesh({ x, z, height, footprint, color, name, amount,
           </Text>
         )}
         <Text
-          fontSize={0.46}
+          fontSize={0.72 * labelScale}
           color="#f1f3f8"
           anchorX="center"
           anchorY="bottom"

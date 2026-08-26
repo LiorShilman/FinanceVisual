@@ -4,7 +4,7 @@ import { computeGroundBounds, type CircularExtent } from '../../domain/cityGrid'
 import { computeMagnitudeShare } from '../../domain/sizing';
 import { getTerrainHeight } from '../../domain/terrain';
 import type { ValleyFeature } from '../../domain/valley';
-import type { WaterFeature } from '../../domain/water';
+import type { StreamKind, WaterFeature } from '../../domain/water';
 
 interface Props {
   groundCenter: [number, number];
@@ -12,6 +12,15 @@ interface Props {
   water: WaterFeature;
   valley: ValleyFeature;
 }
+
+// checking gets its own third tint (its own health color — see domain/health.ts) instead of
+// blending into the same blue as savings/investment — day-to-day cash isn't the same thing as
+// money actually earmarked for growth, even though both are "liquid" for the lake's own size math.
+const WATER_STREAM_COLOR: Record<StreamKind, string> = {
+  pension: '#c2921f',
+  checking: '#2fb0a0',
+  liquid: '#4a90b8',
+};
 
 // Richly blended greens, no dry/dirt patches mixed in — a lawn of varying tone rather than a
 // grass-meets-desert look. Many overlapping soft blobs read as a smooth gradient wash, the same
@@ -159,8 +168,8 @@ function buildInflowCurve(targetX: number, targetZ: number, targetRadius: number
 // reflect the amount. frustumCulled is disabled explicitly: this project hit a render-loop crash
 // once from a custom geometry whose bounding sphere never got excluded from the culling check —
 // cheap insurance against the same class of bug recurring.
-const MIN_STREAM_RADIUS = 0.08;
-const MAX_STREAM_RADIUS = 0.36;
+const MIN_STREAM_RADIUS = 0.06;
+const MAX_STREAM_RADIUS = 0.26;
 
 // Direct magnitude, not rank — rank-based sizing (used for buildings/pyramid) deliberately
 // guarantees every item looks different even when two values are nearly equal, which is exactly
@@ -217,9 +226,9 @@ export function CityGround({ groundCenter, groundSize, water, valley }: Props) {
       createWaterTexture(
         [
           [0, '#4a3a1a'],
-          [0.5, '#a9822f'],
-          [0.78, '#c9a24a'],
-          [1, '#e8cf8a'],
+          [0.5, '#9c7422'],
+          [0.78, '#c2921f'],
+          [1, '#d9ae3f'],
         ],
         'rgba(255,244,214,0.45)',
       ),
@@ -308,14 +317,14 @@ export function CityGround({ groundCenter, groundSize, water, valley }: Props) {
       </mesh>
 
       <mesh geometry={pensionRingGeometry} rotation-x={-Math.PI / 2} position={[lakeX, lakeTerrainY + 0.012, lakeZ]} frustumCulled={false}>
-        <meshStandardMaterial map={ringTexture} emissive="#c9a24a" emissiveIntensity={0.3} roughness={0.15} metalness={0.12} side={THREE.DoubleSide} />
+        <meshStandardMaterial map={ringTexture} emissive="#c2921f" emissiveIntensity={0.3} roughness={0.15} metalness={0.12} side={THREE.DoubleSide} />
       </mesh>
 
       {waterStreamGeometries.map(({ kind, radius, terrainY, geometry }, i) => (
         <mesh key={i} geometry={geometry} position={[0, floatYForRadius(radius, terrainY), 0]} frustumCulled={false}>
           <meshStandardMaterial
-            color={kind === 'pension' ? '#c9a24a' : '#4a90b8'}
-            emissive={kind === 'pension' ? '#c9a24a' : '#4a90b8'}
+            color={WATER_STREAM_COLOR[kind]}
+            emissive={WATER_STREAM_COLOR[kind]}
             emissiveIntensity={0.32}
             roughness={0.25}
             metalness={0.1}

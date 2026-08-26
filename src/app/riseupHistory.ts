@@ -32,11 +32,14 @@ function monthKey(monthsBack: number): string {
  * else in the app. */
 export async function fetchRiseupHistory(pat: string, months: number): Promise<MonthHistoryPoint[]> {
   const keys = Array.from({ length: months }, (_, i) => monthKey(months - 1 - i));
-  const results = await Promise.all(keys.map((key) => fetchBudgetStatus(pat, key)));
+  // sequential, not Promise.all — firing all `months` requests at once tripped RiseUp's own rate
+  // limit (429s), which then made even the separate "current month" connection check fail too,
+  // reading as "not connected" despite a perfectly valid PAT. One at a time is slower but doesn't
+  // starve the rest of the app's own RiseUp calls.
   const points: MonthHistoryPoint[] = [];
-  keys.forEach((month, i) => {
-    const data = results[i].data;
-    if (data) points.push({ month, income: data.income, expense: data.expense, net: data.net });
-  });
+  for (const month of keys) {
+    const result = await fetchBudgetStatus(pat, month);
+    if (result.data) points.push({ month, income: result.data.income, expense: result.data.expense, net: result.data.net });
+  }
   return points;
 }

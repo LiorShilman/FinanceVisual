@@ -15,6 +15,7 @@ interface Props {
   name: string;
   amount: string;
   expenseType: ExpenseType;
+  labelScale?: number;
   onOpen: () => void;
 }
 
@@ -26,13 +27,13 @@ function hash01(seed: number): number {
   return s - Math.floor(s);
 }
 
-function labelBlock(name: string, amount: string, y: number) {
+function labelBlock(name: string, amount: string, y: number, labelScale = 1) {
   return (
     <Billboard position={[0, y, 0]}>
       {amount !== '' && (
         <Text
-          position={[0, 0.62, 0]}
-          fontSize={0.42}
+          position={[0, 1, 0]}
+          fontSize={0.58 * labelScale}
           color="#ffd166"
           anchorX="center"
           anchorY="bottom"
@@ -46,7 +47,7 @@ function labelBlock(name: string, amount: string, y: number) {
         </Text>
       )}
       <Text
-        fontSize={0.46}
+        fontSize={0.72 * labelScale}
         color="#f1f3f8"
         anchorX="center"
         anchorY="bottom"
@@ -70,7 +71,7 @@ function labelBlock(name: string, amount: string, y: number) {
  * enough to read as "alive" and distinct from a static building.) Stays in the shared expense-red
  * family so it's still legible as "expense" at a glance.
  */
-function ChaosExpenseMesh({ x, z, height, footprint, color, name, amount, onOpen }: Omit<Props, 'expenseType'>) {
+function ChaosExpenseMesh({ x, z, height, footprint, color, name, amount, labelScale = 1, onOpen }: Omit<Props, 'expenseType'>) {
   const coreRef = useRef<THREE.Mesh>(null);
   // deterministic per-position phase (not Math.random — impure during render, and would reshuffle
   // on every re-render anyway) so multiple instances don't all pulse in lockstep.
@@ -100,7 +101,7 @@ function ChaosExpenseMesh({ x, z, height, footprint, color, name, amount, onOpen
         <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.3} roughness={0.45} metalness={0.15} />
       </mesh>
       <pointLight position={[0, floatY, 0]} color={color} intensity={0.5} distance={4} decay={2} />
-      {labelBlock(name, amount, floatY + coreRadius + 0.7)}
+      {labelBlock(name, amount, floatY + coreRadius + 0.7, labelScale)}
     </group>
   );
 }
@@ -111,7 +112,7 @@ function ChaosExpenseMesh({ x, z, height, footprint, color, name, amount, onOpen
  * handle. Sized off the full entity weight (like every other standalone city mesh), in the shared
  * expense-red family.
  */
-function FoodExpenseMesh({ x, z, height, footprint, color, name, amount, onOpen }: Omit<Props, 'expenseType'>) {
+function FoodExpenseMesh({ x, z, height, footprint, color, name, amount, labelScale = 1, onOpen }: Omit<Props, 'expenseType'>) {
   const handleClick = (e: ThreeEvent<MouseEvent>) => {
     e.stopPropagation();
     onOpen();
@@ -140,7 +141,7 @@ function FoodExpenseMesh({ x, z, height, footprint, color, name, amount, onOpen 
         <torusGeometry args={[cartScale * 0.42, cartScale * 0.08, 6, 10, Math.PI]} />
         <meshStandardMaterial color="#2a2e38" metalness={0.4} roughness={0.5} />
       </mesh>
-      {labelBlock(name, amount, basketY + basketH / 2 + cartScale * 0.9 + 0.7)}
+      {labelBlock(name, amount, basketY + basketH / 2 + cartScale * 0.9 + 0.7, labelScale)}
     </group>
   );
 }
@@ -150,7 +151,7 @@ function FoodExpenseMesh({ x, z, height, footprint, color, name, amount, onOpen 
  * the full entity weight, in the shared expense-red family, with a dark hub and crossbar spokes
  * for a bit of mechanical detail against the flat red rubber.
  */
-function TransportExpenseMesh({ x, z, height, footprint, color, name, amount, onOpen }: Omit<Props, 'expenseType'>) {
+function TransportExpenseMesh({ x, z, height, footprint, color, name, amount, labelScale = 1, onOpen }: Omit<Props, 'expenseType'>) {
   const handleClick = (e: ThreeEvent<MouseEvent>) => {
     e.stopPropagation();
     onOpen();
@@ -175,7 +176,7 @@ function TransportExpenseMesh({ x, z, height, footprint, color, name, amount, on
           <meshStandardMaterial color="#2a2e38" metalness={0.5} roughness={0.4} />
         </mesh>
       ))}
-      {labelBlock(name, amount, wheelR * 2 + 0.7)}
+      {labelBlock(name, amount, wheelR * 2 + 0.7, labelScale)}
     </group>
   );
 }
@@ -186,7 +187,7 @@ function TransportExpenseMesh({ x, z, height, footprint, color, name, amount, on
  * and 'other' are all fully standalone objects — see FoodExpenseMesh, TransportExpenseMesh,
  * ChaosExpenseMesh.
  */
-export function CityExpenseMesh({ x, z, height, footprint, color, name, amount, expenseType, onOpen }: Props) {
+export function CityExpenseMesh({ x, z, height, footprint, color, name, amount, expenseType, labelScale = 1, onOpen }: Props) {
   const facadeTexture = useMemo(() => getFacadeTexture(), []);
   const roofTexture = useMemo(() => getRoofTexture(), []);
   const tiers = useMemo(() => computeTiers(height, footprint), [height, footprint]);
@@ -197,13 +198,19 @@ export function CityExpenseMesh({ x, z, height, footprint, color, name, amount, 
   };
 
   if (expenseType === 'other') {
-    return <ChaosExpenseMesh x={x} z={z} height={height} footprint={footprint} color={color} name={name} amount={amount} onOpen={onOpen} />;
+    return (
+      <ChaosExpenseMesh x={x} z={z} height={height} footprint={footprint} color={color} name={name} amount={amount} labelScale={labelScale} onOpen={onOpen} />
+    );
   }
   if (expenseType === 'food') {
-    return <FoodExpenseMesh x={x} z={z} height={height} footprint={footprint} color={color} name={name} amount={amount} onOpen={onOpen} />;
+    return (
+      <FoodExpenseMesh x={x} z={z} height={height} footprint={footprint} color={color} name={name} amount={amount} labelScale={labelScale} onOpen={onOpen} />
+    );
   }
   if (expenseType === 'transport') {
-    return <TransportExpenseMesh x={x} z={z} height={height} footprint={footprint} color={color} name={name} amount={amount} onOpen={onOpen} />;
+    return (
+      <TransportExpenseMesh x={x} z={z} height={height} footprint={footprint} color={color} name={name} amount={amount} labelScale={labelScale} onOpen={onOpen} />
+    );
   }
 
   // housing
@@ -257,7 +264,7 @@ export function CityExpenseMesh({ x, z, height, footprint, color, name, amount, 
           roughness={0.75}
         />
       </mesh>
-      {labelBlock(name, amount, height + roofHeight + 0.85)}
+      {labelBlock(name, amount, height + roofHeight + 0.85, labelScale)}
     </group>
   );
 }
