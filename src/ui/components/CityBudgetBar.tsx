@@ -146,13 +146,17 @@ export function CityBudgetBar({
   const wantsTop = unallocatedTop + wantsHeight;
 
   const rulerTexture = useMemo(() => createRulerTexture(), []);
+  // the frame itself joins the warning, not just the needs band and the text below — the same
+  // red already used for the "⚠ ההוצאות עוברות את ההכנסה" line, so the whole fixture reads as
+  // alarmed at a glance instead of needing a second look to spot the one darker band inside it.
+  const frameColor = overCommitted ? '#e05a4e' : FRAME_COLOR;
 
   return (
     <group position={[x, y, z]}>
       {/* backing panel — gold-framed near-black plate, matching the emergency gauge's own dial. */}
       <mesh position={[0, FULL_HEIGHT / 2, PANEL_Z - 0.03]} frustumCulled={false}>
         <planeGeometry args={[PANEL_WIDTH + 0.14, PANEL_HEIGHT + 0.14]} />
-        <meshStandardMaterial color={FRAME_COLOR} metalness={0.5} roughness={0.4} />
+        <meshStandardMaterial color={frameColor} metalness={0.5} roughness={0.4} />
       </mesh>
       <mesh position={[0, FULL_HEIGHT / 2, PANEL_Z]} frustumCulled={false}>
         <planeGeometry args={[PANEL_WIDTH, PANEL_HEIGHT]} />
@@ -167,11 +171,11 @@ export function CityBudgetBar({
       </mesh>
       <mesh position={[0, 0.03, 0]} rotation={[Math.PI / 2, 0, 0]} frustumCulled={false}>
         <torusGeometry args={[RADIUS, 0.02, 8, 24]} />
-        <meshBasicMaterial color={FRAME_COLOR} />
+        <meshBasicMaterial color={frameColor} />
       </mesh>
       <mesh position={[0, FULL_HEIGHT, 0]} rotation={[Math.PI / 2, 0, 0]} frustumCulled={false}>
         <torusGeometry args={[RADIUS, 0.02, 8, 24]} />
-        <meshBasicMaterial color={FRAME_COLOR} />
+        <meshBasicMaterial color={frameColor} />
       </mesh>
 
       {/* syringe-style graduation marks — a printed-on ruler texture confined to a thin strip on
