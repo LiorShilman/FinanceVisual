@@ -244,10 +244,10 @@ function buildBlobShape(radius: number, points = 32): THREE.Shape {
 // [0,1] — so for a shape spanning roughly ±radius, almost the whole surface samples a texture far
 // outside [0,1] and clamps to the edge color, with a visible seam exactly where local x or y
 // crosses 0. Rebuilding the UVs from the shape's own radius fixes both.
-// Split from the shape's own construction (unlike a one-shot `buildBlobGeometry(radius)`) so the
-// lake/valley basin walls below can reuse the *exact same* outline for their own walls — two
-// independently-generated blobs (each with their own random jitter) would never line up, leaving a
-// visible seam between the flat pool surface and its own wall.
+// Split from the shape's own construction — the lake/ring/valley basin walls each reuse the
+// *exact same* outline as their own flat pool surface (see buildBasinWallGeometry) so there's no
+// seam between the two; two independently-generated blobs (each with their own random jitter)
+// would never line up.
 function buildBlobGeometryFromShape(shape: THREE.Shape, radius: number): THREE.BufferGeometry {
   const geometry = new THREE.ShapeGeometry(shape);
   const position = geometry.attributes.position;
@@ -257,10 +257,6 @@ function buildBlobGeometryFromShape(shape: THREE.Shape, radius: number): THREE.B
   }
   uv.needsUpdate = true;
   return geometry;
-}
-
-function buildBlobGeometry(radius: number, points = 32): THREE.BufferGeometry {
-  return buildBlobGeometryFromShape(buildBlobShape(radius, points), radius);
 }
 
 // A vertical ribbon of quads following the blob shape's own outline — from the base (local y=0,
@@ -374,14 +370,19 @@ const VALLEY_STREAM_LIFT = MAX_STREAM_RADIUS - MIN_STREAM_RADIUS + 0.5;
 // ever needing a hole at all: the wall's own base plants exactly at grade (y=0, same as the
 // ground around it), and everything the wall/water are is at or above that, never under it.
 // Streams ease UP from their own hover height into this raised rim (see buildMeanderCurve's own
-// dipT easing, which works the same regardless of which direction endY sits from startY). The
-// pension ring stays flat at grade as the lake's own low apron around the raised wall's base.
+// dipT easing, which works the same regardless of which direction endY sits from startY).
 // 0.4 was scaled for a small object seen up close — this city's own scale is enormous (lake radius
 // alone reaches up to 9 units, viewed from well back and above), and a wall a fraction of a unit
 // tall is completely lost at that distance. A wall proportionate to the lake's own radius is what
 // actually reads as a raised reservoir from typical camera distance.
 const LAKE_BASIN_DEPTH = 3;
 const VALLEY_BASIN_DEPTH = 3.2;
+// the pension ring gets its own, shorter raised wall too (from grade up to this height) instead of
+// staying flat — a flat gold ring right next to a tall raised blue lake read as one of the two
+// features just missing its own volume entirely. Deliberately lower than LAKE_BASIN_DEPTH so the
+// lake's own wall continues rising *from the ring's own raised surface* up to the lake's higher
+// one, like a two-tier fountain, rather than the two walls competing at the same height.
+const RING_BASIN_DEPTH = 1.7;
 
 // units of texture-space per second — fast enough to clearly read as motion, slow enough not to
 // look like a strobing glitch on the short stream tubes.
@@ -402,20 +403,25 @@ export function CityGround({ groundCenter, groundSize, water, valley }: Props) {
   const [lakeX, lakeZ] = water.lakeCenter;
   const [valleyX, valleyZ] = valley.center;
 
-  const pensionRingGeometry = useMemo(() => buildBlobGeometry(water.outerRingRadius), [water.outerRingRadius]);
+  const ringShape = useMemo(() => buildBlobShape(water.outerRingRadius), [water.outerRingRadius]);
+  const pensionRingGeometry = useMemo(() => buildBlobGeometryFromShape(ringShape, water.outerRingRadius), [ringShape, water.outerRingRadius]);
+  const ringWallGeometry = useMemo(() => buildBasinWallGeometry(ringShape, RING_BASIN_DEPTH), [ringShape]);
   const lakeShape = useMemo(() => buildBlobShape(water.lakeRadius), [water.lakeRadius]);
   const lakeGeometry = useMemo(() => buildBlobGeometryFromShape(lakeShape, water.lakeRadius), [lakeShape, water.lakeRadius]);
-  const lakeWallGeometry = useMemo(() => buildBasinWallGeometry(lakeShape, LAKE_BASIN_DEPTH), [lakeShape]);
+  // spans only the rise *above* the ring's own already-raised surface, not the full height from
+  // the ground — the wall's own position is offset up to RING_BASIN_DEPTH to start exactly there.
+  const lakeWallGeometry = useMemo(() => buildBasinWallGeometry(lakeShape, LAKE_BASIN_DEPTH - RING_BASIN_DEPTH), [lakeShape]);
   const valleyShape = useMemo(() => buildBlobShape(valley.radius), [valley.radius]);
   const valleyGeometry = useMemo(() => buildBlobGeometryFromShape(valleyShape, valley.radius), [valleyShape, valley.radius]);
   const valleyWallGeometry = useMemo(() => buildBasinWallGeometry(valleyShape, VALLEY_BASIN_DEPTH), [valleyShape]);
 
   const lakeTerrainY = getTerrainHeight(lakeX, lakeZ);
   const valleyTerrainY = getTerrainHeight(valleyX, valleyZ);
-  // raised for liquid streams (the lake itself sits atop its own wall), but pension streams still
-  // land at the ring's own ground-level rim — the ring isn't raised, only the inner lake is.
+  // both raised now — the ring sits on its own shorter wall, and the lake's own (shorter) wall
+  // continues rising from the ring's own surface up to the lake's higher one (see
+  // RING_BASIN_DEPTH's own comment).
   const lakeSurfaceY = lakeTerrainY + LAKE_BASIN_DEPTH + 0.05;
-  const ringSurfaceY = lakeTerrainY + 0.05;
+  const ringSurfaceY = lakeTerrainY + RING_BASIN_DEPTH + 0.05;
   const valleySurfaceY = valleyTerrainY + VALLEY_BASIN_DEPTH + 0.05;
 
   // liquid money pools in the inner circle; pension money pools in the ring around it. Geometry
@@ -496,17 +502,26 @@ export function CityGround({ groundCenter, groundSize, water, valley }: Props) {
         <meshStandardMaterial map={groundTexture} roughness={1} />
       </mesh>
 
-      <mesh geometry={pensionRingGeometry} rotation-x={-Math.PI / 2} position={[lakeX, lakeTerrainY + 0.012, lakeZ]} frustumCulled={false}>
+      {/* the ring's own wall — from grade up to its own raised surface, following the ring's own
+          outer outline. Same tinted-glass treatment as the lake wall below, in gold instead of
+          blue, so the ring reads as having real volume of its own instead of being the one flat
+          feature next to a raised lake. */}
+      <mesh geometry={ringWallGeometry} position={[lakeX, lakeTerrainY, lakeZ]} frustumCulled={false}>
+        <meshStandardMaterial color="#7a5c1f" emissive="#c2921f" emissiveIntensity={0.3} roughness={0.4} transparent opacity={0.62} side={THREE.DoubleSide} />
+      </mesh>
+
+      <mesh geometry={pensionRingGeometry} rotation-x={-Math.PI / 2} position={[lakeX, ringSurfaceY, lakeZ]} frustumCulled={false}>
         <meshStandardMaterial map={ringTexture} emissive="#c2921f" emissiveIntensity={0.3} roughness={0.15} metalness={0.12} side={THREE.DoubleSide} />
       </mesh>
 
-      {/* the basin wall — from the ring's own ground-level rim up to the raised lake surface,
-          following the lake's own outline exactly (see buildBasinWallGeometry) so there's no seam
-          between the wall and the water it holds. Tinted the lake's own blue with a soft emissive
-          glow and mild transparency — a flat near-black rock read as too dark/muddy to actually
-          identify as part of the water feature; a colored, faintly translucent wall (more "glass
-          tank" than "dirt bank") reads clearly as belonging to the lake it holds. */}
-      <mesh geometry={lakeWallGeometry} position={[lakeX, lakeTerrainY, lakeZ]} frustumCulled={false}>
+      {/* the lake's own wall continues rising from the *ring's* own raised surface (not the
+          ground) up to the lake's higher one, following the lake's own outline exactly (see
+          buildBasinWallGeometry) so there's no seam between the wall and the water it holds.
+          Tinted the lake's own blue with a soft emissive glow and mild transparency — a flat
+          near-black rock read as too dark/muddy to actually identify as part of the water
+          feature; a colored, faintly translucent wall (more "glass tank" than "dirt bank") reads
+          clearly as belonging to the lake it holds. */}
+      <mesh geometry={lakeWallGeometry} position={[lakeX, lakeTerrainY + RING_BASIN_DEPTH, lakeZ]} frustumCulled={false}>
         <meshStandardMaterial color="#1f5a72" emissive="#2f8fb8" emissiveIntensity={0.25} roughness={0.4} transparent opacity={0.62} side={THREE.DoubleSide} />
       </mesh>
 
