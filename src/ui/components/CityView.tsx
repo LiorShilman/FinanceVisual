@@ -93,6 +93,11 @@ const DEPTH_LABELS: { text: string; color: string }[] = [
   { text: 'נזיל / שוטף', color: '#ee6b6b' },
 ];
 
+// the checking bridge has no underlying entity of its own to key a drag override off of (see the
+// buildings.map override below) — reuses the same cityPositions store other buildings persist
+// drags through, just under one fixed synthetic key instead of an entity id.
+const CHECKING_BRIDGE_KEY = 'checkingBridge';
+
 // the four growth categories render as trees, not towers — each gets its own species so they stay
 // visually distinct from one another (investment's 'alternative' assetType is handled separately,
 // as CityCrystalMesh, before this map is even consulted).
@@ -117,10 +122,16 @@ export function CityView({
   const hideAmounts = useBoardStore((s) => s.hideAmounts);
   const usdRate = useBoardStore((s) => s.usdRate);
   const cityPositions = useBoardStore((s) => s.cityPositions);
+  const setCityPosition = useBoardStore((s) => s.setCityPosition);
   const [controlsEnabled, setControlsEnabled] = useState(true);
   // same "reversed index * DISTRICT_SPACING" formula every district position (buildings, ground
   // labels) already uses — see domain/city.ts's baseX and this file's own category-label loop.
-  const checkingX = (ENTITY_CATEGORIES.length - 1 - ENTITY_CATEGORIES.indexOf('checking')) * DISTRICT_SPACING;
+  const checkingDefaultX = (ENTITY_CATEGORIES.length - 1 - ENTITY_CATEGORIES.indexOf('checking')) * DISTRICT_SPACING;
+  const checkingBridgeMaxOffset = DISTRICT_SPACING / 2 - 1.3;
+  const checkingX = Math.min(
+    checkingDefaultX + checkingBridgeMaxOffset,
+    Math.max(checkingDefaultX - checkingBridgeMaxOffset, cityPositions[CHECKING_BRIDGE_KEY]?.x ?? checkingDefaultX),
+  );
   const checkingBridgeZNear = depthBaseZ(1);
   const checkingBridgeZFar = depthBaseZ(2);
   const checkingBridgeCenterZ = (checkingBridgeZNear + checkingBridgeZFar) / 2;
@@ -417,6 +428,10 @@ export function CityView({
           amountLabel={hideAmounts ? '' : formatCurrency(checkingTotal)}
           availableLabel={hideAmounts || checkingAvailable <= 0 ? '' : `פנוי להשקעה: ${formatCurrency(checkingAvailable)}`}
           availableRatio={checkingAvailableRatio}
+          minX={checkingDefaultX - checkingBridgeMaxOffset}
+          maxX={checkingDefaultX + checkingBridgeMaxOffset}
+          onMoveX={(newX) => setCityPosition(CHECKING_BRIDGE_KEY, { x: newX, z: 0 })}
+          setControlsEnabled={setControlsEnabled}
           onOpen={() => onOpen(firstCheckingId)}
         />
       )}

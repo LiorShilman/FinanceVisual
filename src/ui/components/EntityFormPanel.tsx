@@ -8,13 +8,13 @@ import {
   EXPENSE_TYPES,
   EXPENSE_TYPE_LABELS,
   FinancialEntitySchema,
+  getAvailableLiquidityLevels,
   getLinkedFieldValue,
   INSURANCE_TYPES,
   INSURANCE_TYPE_LABELS,
   isGrowthAssetDetails,
   LINKABLE_FIELDS,
   LIQUIDITY_LABELS,
-  LIQUIDITY_LEVELS,
   MORTGAGE_TRACK_TYPES,
   MORTGAGE_TRACK_TYPE_LABELS,
   isLiquidityRelevant,
@@ -781,7 +781,7 @@ export function EntityFormPanel({
               value={draft.liquidity}
               onChange={(e) => setDraft((s) => ({ ...s, liquidity: e.target.value as Liquidity }))}
             >
-              {LIQUIDITY_LEVELS.map((l) => (
+              {getAvailableLiquidityLevels(d.kind).map((l) => (
                 <option key={l} value={l}>
                   {LIQUIDITY_LABELS[l]}
                 </option>

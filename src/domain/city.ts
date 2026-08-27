@@ -47,7 +47,7 @@ export interface CityBuilding {
 // spread them out by hand. Every downstream size (ground, camera framing, labels) is derived
 // from these two constants, so widening them scales the whole city instead of needing a change
 // per call site.
-export const DISTRICT_SPACING = 9;
+export const DISTRICT_SPACING = 12;
 export const DEPTH_SPACING = 14;
 const MIN_HEIGHT = 0.6;
 export const MAX_HEIGHT = 9;

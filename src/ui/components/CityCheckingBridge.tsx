@@ -1,8 +1,18 @@
-import { useMemo } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { Billboard, Text } from '@react-three/drei';
 import type { ThreeEvent } from '@react-three/fiber';
 import { getTerrainHeight } from '../../domain/terrain';
+
+// world-space ground plane for ray intersection — same technique CityBuildingItem uses for its
+// own drag.
+const GROUND_PLANE = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+// screen pixels, not world units — a world-space threshold here would hit the exact same bug
+// already fixed once in CityBuildingItem: the same real drag gesture crosses a fixed world-space
+// distance easily when zoomed out but barely at all when zoomed in close, so a deliberate drag at
+// closer zoom could silently fail to register and open the entity editor instead of moving the
+// bridge.
+const DRAG_THRESHOLD_PX = 6;
 
 // a canvas-generated plate texture instead of one flat fill — a solid color on a low-poly box
 // read as a paper cutout, not a deck with any real thickness to its own surface. A dark seam
@@ -62,6 +72,13 @@ interface Props {
   // two zones the numbers above already describe, instead of one flat color that says nothing
   // about the split. 0 when there's no balance to divide.
   availableRatio: number;
+  // the checking district's own column bounds — dragging is confined to the same column width
+  // every regular building's own drag already respects (see domain/city.ts's computeCellBounds),
+  // not free reign across the whole city.
+  minX: number;
+  maxX: number;
+  onMoveX: (x: number) => void;
+  setControlsEnabled: (enabled: boolean) => void;
   onOpen: () => void;
 }
 
@@ -101,7 +118,25 @@ const PILLAR_RADIUS = 0.16;
  * (desired minimum) and available-for-investment portions, painted directly onto the bridge
  * instead of only spelled out in the text above it.
  */
-export function CityCheckingBridge({ x, zNear, zFar, amountLabel, availableLabel, availableRatio, onOpen }: Props) {
+export function CityCheckingBridge({
+  x: baseX,
+  zNear,
+  zFar,
+  amountLabel,
+  availableLabel,
+  availableRatio,
+  minX,
+  maxX,
+  onMoveX,
+  setControlsEnabled,
+  onOpen,
+}: Props) {
+  const [dragX, setDragX] = useState<number | null>(null);
+  const draggingRef = useRef(false);
+  const activeRef = useRef(false);
+  const dragStartRef = useRef<{ pointerX: number; clientX: number; clientY: number } | null>(null);
+  const x = dragX ?? baseX;
+
   const span = Math.abs(zFar - zNear);
   const centerZ = (zNear + zFar) / 2;
   const deckY = useMemo(
@@ -149,8 +184,62 @@ export function CityCheckingBridge({ x, zNear, zFar, amountLabel, availableLabel
     onOpen();
   };
 
+  const handlePointerDown = (e: ThreeEvent<PointerEvent>) => {
+    e.stopPropagation();
+    (e.target as Element).setPointerCapture?.(e.pointerId);
+    const point = new THREE.Vector3();
+    dragStartRef.current = e.ray.intersectPlane(GROUND_PLANE, point)
+      ? { pointerX: point.x, clientX: e.nativeEvent.clientX, clientY: e.nativeEvent.clientY }
+      : null;
+    activeRef.current = true;
+    draggingRef.current = false;
+    setControlsEnabled(false);
+  };
+
+  const handlePointerMove = (e: ThreeEvent<PointerEvent>) => {
+    if (!activeRef.current || !dragStartRef.current) return;
+    const point = new THREE.Vector3();
+    if (!e.ray.intersectPlane(GROUND_PLANE, point)) return;
+    if (!draggingRef.current) {
+      const pixelDist = Math.hypot(e.nativeEvent.clientX - dragStartRef.current.clientX, e.nativeEvent.clientY - dragStartRef.current.clientY);
+      if (pixelDist < DRAG_THRESHOLD_PX) return;
+      draggingRef.current = true;
+    }
+    const dx = point.x - dragStartRef.current.pointerX;
+    setDragX(Math.min(maxX, Math.max(minX, baseX + dx)));
+  };
+
+  const handlePointerUp = (e: ThreeEvent<PointerEvent>) => {
+    (e.target as Element).releasePointerCapture?.(e.pointerId);
+    setControlsEnabled(true);
+    activeRef.current = false;
+    dragStartRef.current = null;
+    if (draggingRef.current) {
+      if (dragX !== null) onMoveX(dragX);
+      setDragX(null);
+    } else {
+      onOpen();
+    }
+    draggingRef.current = false;
+  };
+
   return (
     <group position={[x, 0, 0]}>
+      {/* invisible, oversized hitbox owning the whole drag gesture — the visible meshes' own
+          onClick (still wired below) would lose the pointer the instant the cursor moves off
+          their exact geometry mid-drag. X-only: dragging is confined to sliding along the
+          checking district's own column, not free movement across the city. */}
+      <mesh
+        position={[0, deckY, centerZ]}
+        frustumCulled={false}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <boxGeometry args={[DECK_WIDTH * 1.3, DECK_THICKNESS + RAIL_HEIGHT + 0.4, span + 1]} />
+        <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+      </mesh>
       {reservedGeometry && (
         <mesh geometry={reservedGeometry} position={[0, deckY, reservedCenterZ]} frustumCulled={false} onClick={handleClick}>
           <meshStandardMaterial map={reservedTexture} flatShading roughness={0.75} />

@@ -349,9 +349,19 @@ export function isFlowCategory(entity: FinancialEntity): boolean {
 
 /** Only money that's actually held somewhere has a liquidity — everything else doesn't ask.
  * Study funds (unlike pension) can actually be withdrawn — after 6 years tax-free, or earlier
- * with a tax hit — so it's a real user choice, not a fixed fact like pension's lock. */
+ * with a tax hit — so it's a real user choice, not a fixed fact like pension's lock. An expense
+ * isn't "held" anywhere either, but the same field still means something real for it: whether
+ * it's a bill due right now (immediate) or one that can genuinely wait (short-term) — see
+ * getAvailableLiquidityLevels below for why it doesn't get the full three-way choice. */
 export function isLiquidityRelevant(category: EntityCategory): boolean {
-  return category === 'savings' || category === 'investment' || category === 'studyFund';
+  return category === 'savings' || category === 'investment' || category === 'studyFund' || category === 'expense';
+}
+
+/** Which liquidity choices actually make sense for a category — an expense can't be "locked" the
+ * way a held asset can (there's no vault a bill sits in), so it only ever offers immediate/
+ * short-term. Everything else that asks gets the full set. */
+export function getAvailableLiquidityLevels(category: EntityCategory): readonly Liquidity[] {
+  return category === 'expense' ? ['immediate', 'shortTerm'] : LIQUIDITY_LEVELS;
 }
 
 /** Pension is always locked and a checking account is always immediately liquid, by nature — no

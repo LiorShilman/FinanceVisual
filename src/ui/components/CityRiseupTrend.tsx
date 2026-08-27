@@ -8,11 +8,11 @@ interface Props {
   history: MonthHistoryPoint[];
 }
 
-const BAR_WIDTH = 0.55;
+const BAR_WIDTH = 0.68;
 // widened from 0.35 — the amount labels above each bar are wider than the bar itself, and at the
 // old gap neighboring labels overlapped each other.
-const BAR_GAP = 0.65;
-const MAX_BAR_HEIGHT = 4.2;
+const BAR_GAP = 0.8;
+const MAX_BAR_HEIGHT = 5.2;
 const POSITIVE_COLOR = '#2f9e58';
 const NEGATIVE_COLOR = '#d64545';
 
@@ -38,11 +38,11 @@ export function CityRiseupTrend({ x, z, history }: Props) {
     <group position={[x, 0, z]}>
       <Billboard position={[totalWidth / 2, MAX_BAR_HEIGHT + 1, 0]}>
         <Text
-          fontSize={0.42}
+          fontSize={0.52}
           color="#c3cadb"
           anchorX="center"
           anchorY="middle"
-          outlineWidth={0.015}
+          outlineWidth={0.018}
           outlineColor="#0a0c11"
           fontWeight="bold"
           frustumCulled={false}
@@ -89,11 +89,11 @@ export function CityRiseupTrend({ x, z, history }: Props) {
                 CityExpenseMesh), so it reads as "an amount" at a glance here too. */}
             <Billboard position={[0, barHeight + 0.45, 0]}>
               <Text
-                fontSize={0.32}
+                fontSize={0.4}
                 color="#ffd166"
                 anchorX="center"
                 anchorY="middle"
-                outlineWidth={0.022}
+                outlineWidth={0.026}
                 outlineColor="#0a0c11"
                 outlineBlur={0.02}
                 fontWeight="bold"
@@ -108,11 +108,11 @@ export function CityRiseupTrend({ x, z, history }: Props) {
                 the bar's center risked clipping into its own box geometry. */}
             <Billboard position={[0, 0.15, 1.9]}>
               <Text
-                fontSize={0.52}
+                fontSize={0.62}
                 color="#ffffff"
                 anchorX="center"
                 anchorY="middle"
-                outlineWidth={0.016}
+                outlineWidth={0.02}
                 outlineColor="#0a0c11"
                 fontWeight="bold"
                 frustumCulled={false}
