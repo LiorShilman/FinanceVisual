@@ -571,8 +571,13 @@ export function CityView({
         const onOpenThis = () => onOpen(b.id);
 
         // x/z come from the render-time drag position (which may differ from b.x/b.z mid-drag),
-        // not baked in ahead of time — see CityBuildingItem.
-        const renderMesh = (x: number, z: number) => {
+        // not baked in ahead of time — see CityBuildingItem. The third argument is
+        // CityBuildingItem's own drag-release-guarded onOpen — every mesh variant below uses that,
+        // not onOpenThis directly, since a mesh's own onClick fires through React Three Fiber's
+        // independent raycast-based click system, unaware of the wrapper's drag gesture, and can
+        // otherwise pop the edit panel open right as a drag finishes (see CityBuildingItem's own
+        // DRAG_RELEASE_GUARD_MS comment).
+        const renderMesh = (x: number, z: number, onOpenGuarded: () => void) => {
           // the locked/long-term depth tier sits a full extra DEPTH_SPACING further back than
           // every other tier (see domain/city.ts's depthBaseZ — it's the only tier with a
           // negative z), so its own floating labels read noticeably smaller on screen despite
@@ -581,43 +586,43 @@ export function CityView({
           const labelScale = b.z < 0 ? 1.35 : 1;
           const commonProps = { x, z, height: b.height, footprint: b.footprint, color: b.color, name: b.name, amount, labelScale };
           if (b.category === 'donation') {
-            return <CityGivingPillarMesh {...commonProps} onOpen={onOpenThis} />;
+            return <CityGivingPillarMesh {...commonProps} onOpen={onOpenGuarded} />;
           }
           if (entity.details.kind === 'income') {
-            return <CityBeehiveMesh {...commonProps} onOpen={onOpenThis} />;
+            return <CityBeehiveMesh {...commonProps} onOpen={onOpenGuarded} />;
           }
           if (entity.details.kind === 'source') {
-            return <CityFountainMesh {...commonProps} onOpen={onOpenThis} />;
+            return <CityFountainMesh {...commonProps} onOpen={onOpenGuarded} />;
           }
           if (entity.details.kind === 'investment' && entity.details.assetType === 'alternative') {
-            return <CityCrystalMesh {...commonProps} hideLabel={medalEntityIds.has(b.id)} onOpen={onOpenThis} />;
+            return <CityCrystalMesh {...commonProps} hideLabel={medalEntityIds.has(b.id)} onOpen={onOpenGuarded} />;
           }
           if (entity.details.kind === 'expense') {
-            return <CityExpenseMesh {...commonProps} expenseType={entity.details.expenseType} onOpen={onOpenThis} />;
+            return <CityExpenseMesh {...commonProps} expenseType={entity.details.expenseType} onOpen={onOpenGuarded} />;
           }
           if (entity.details.kind === 'insurance') {
-            return <CityShieldMesh {...commonProps} onOpen={onOpenThis} />;
+            return <CityShieldMesh {...commonProps} onOpen={onOpenGuarded} />;
           }
           if (entity.details.kind === 'realEstate') {
-            return <CityHouseMesh {...commonProps} onOpen={onOpenThis} />;
+            return <CityHouseMesh {...commonProps} onOpen={onOpenGuarded} />;
           }
           if (entity.details.kind === 'goal') {
             const { targetAmount, currentAmount } = entity.details;
             const progress = targetAmount > 0 ? Math.max(0, Math.min(1, currentAmount / targetAmount)) : 0;
-            return <CityGoalMesh {...commonProps} progress={progress} onOpen={onOpenThis} />;
+            return <CityGoalMesh {...commonProps} progress={progress} onOpen={onOpenGuarded} />;
           }
           if (entity.details.kind === 'debt') {
             return entity.details.isMortgage ? (
-              <CityMortgageMesh {...commonProps} onOpen={onOpenThis} />
+              <CityMortgageMesh {...commonProps} onOpen={onOpenGuarded} />
             ) : (
-              <CityHourglassMesh {...commonProps} onOpen={onOpenThis} />
+              <CityHourglassMesh {...commonProps} onOpen={onOpenGuarded} />
             );
           }
           const treeVariant = TREE_VARIANT_BY_KIND[entity.details.kind];
           if (treeVariant) {
-            return <CityTreeMesh {...commonProps} variant={treeVariant} hideLabel={medalEntityIds.has(b.id)} onOpen={onOpenThis} />;
+            return <CityTreeMesh {...commonProps} variant={treeVariant} hideLabel={medalEntityIds.has(b.id)} onOpen={onOpenGuarded} />;
           }
-          return <CityBuildingMesh {...commonProps} onOpen={onOpenThis} />;
+          return <CityBuildingMesh {...commonProps} onOpen={onOpenGuarded} />;
         };
 
         return <CityBuildingItem key={b.id} building={b} renderMesh={renderMesh} onOpen={onOpenThis} setControlsEnabled={setControlsEnabled} />;

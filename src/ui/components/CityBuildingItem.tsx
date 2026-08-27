@@ -8,8 +8,13 @@ import { getTerrainHeight } from '../../domain/terrain';
 interface Props {
   building: CityBuilding;
   /** Builds the actual visible mesh at the given absolute world x/z — kept as a factory so this
-   * component doesn't need to know about every category's mesh variant. */
-  renderMesh: (x: number, z: number) => React.ReactNode;
+   * component doesn't need to know about every category's mesh variant. The third argument is a
+   * guarded `onOpen` (see DRAG_RELEASE_GUARD_MS below) that every inner mesh's own onClick should
+   * use instead of closing over its own `onOpen` — the mesh's own onClick fires from React Three
+   * Fiber's own independent raycast-based synthetic click system, which isn't aware of the pointer
+   * capture this wrapper uses for its drag gesture, so it can fire *in addition to*, not instead
+   * of, this wrapper's own (correctly drag-aware) click handling. */
+  renderMesh: (x: number, z: number, onOpen: () => void) => React.ReactNode;
   onOpen: () => void;
   setControlsEnabled: (enabled: boolean) => void;
 }
@@ -26,6 +31,18 @@ const GROUND_PLANE = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 // register as a drag at all, and releasing it popped the edit panel open instead of moving the
 // building. Screen pixels stay perceptually consistent regardless of camera distance.
 const DRAG_THRESHOLD_PX = 6;
+// This wrapper's own onPointerUp already correctly tells a drag-release apart from a real click
+// (via draggingRef) and skips calling onOpen for a release — but the *inner* mesh (the tree
+// trunk, the tower, whatever renderMesh actually returns) has its own onClick wired directly to
+// onOpen too, for when it's clicked without ever going through this wrapper's hitbox at all (e.g.
+// a canopy or a wide roof poking past the hitbox's own padded bounds). That inner onClick fires
+// through React Three Fiber's own independent raycast-based synthetic click system, which has no
+// idea a drag was just happening on this wrapper's hitbox — so a drag that ends with the pointer
+// sitting over the inner mesh's own geometry can still pop the edit panel open via that separate
+// path, even though this wrapper's own logic correctly declined to. A short cooldown after a real
+// drag-release swallows that stray click without needing the inner mesh to know anything about
+// dragging at all.
+const DRAG_RELEASE_GUARD_MS = 300;
 const TOUCH_QUERY = '(pointer: coarse)';
 
 // A touch device has no way to tell "orbit the camera" and "drag this building" apart from a
@@ -59,6 +76,10 @@ export function CityBuildingItem({ building, renderMesh, onOpen, setControlsEnab
   const [dragPos, setDragPos] = useState<CityPosition | null>(null);
   const draggingRef = useRef(false);
   const activeRef = useRef(false);
+  // a timestamp (not a plain boolean) so a real drag that happens to finish, then get followed
+  // very quickly by a genuine new click, doesn't accidentally swallow that next click too — the
+  // guard only actually blocks calls made within DRAG_RELEASE_GUARD_MS of the drag's own release.
+  const dragReleasedAtRef = useRef(0);
   // where the pointer itself first hit the ground, not the building's own center — a click
   // rarely lands exactly on-center (the hitbox is deliberately oversized), so driving the drag
   // position straight off the raw pointer position snapped the building to wherever the pointer
@@ -69,7 +90,7 @@ export function CityBuildingItem({ building, renderMesh, onOpen, setControlsEnab
 
   const terrainYTouch = getTerrainHeight(building.x, building.z);
   if (isTouch) {
-    return <group position={[0, terrainYTouch, 0]}>{renderMesh(building.x, building.z)}</group>;
+    return <group position={[0, terrainYTouch, 0]}>{renderMesh(building.x, building.z, onOpen)}</group>;
   }
 
   const displayX = dragPos?.x ?? building.x;
@@ -114,10 +135,16 @@ export function CityBuildingItem({ building, renderMesh, onOpen, setControlsEnab
     if (draggingRef.current) {
       if (dragPos) setCityPosition(building.id, dragPos);
       setDragPos(null);
+      dragReleasedAtRef.current = performance.now();
     } else {
       onOpen();
     }
     draggingRef.current = false;
+  };
+
+  const guardedOnOpen = () => {
+    if (performance.now() - dragReleasedAtRef.current < DRAG_RELEASE_GUARD_MS) return;
+    onOpen();
   };
 
   const terrainY = getTerrainHeight(displayX, displayZ);
@@ -143,7 +170,7 @@ export function CityBuildingItem({ building, renderMesh, onOpen, setControlsEnab
         <boxGeometry args={[hitFootprint, hitHeight, hitFootprint]} />
         <meshBasicMaterial transparent opacity={0} depthWrite={false} />
       </mesh>
-      {renderMesh(displayX, displayZ)}
+      {renderMesh(displayX, displayZ, guardedOnOpen)}
     </group>
   );
 }
