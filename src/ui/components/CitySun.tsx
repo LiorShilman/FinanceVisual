@@ -18,8 +18,12 @@ interface Props {
 // literal "the better things are, the more light there is over the city" reward.
 const MIN_RADIUS = 1.6;
 const MAX_RADIUS = 5.5;
-const MIN_LIGHT = 0.4;
-const MAX_LIGHT = 2;
+// raised along with the sun's own new height (see CityView.tsx) — moving the light source further
+// away flattens its falloff across the now-bigger city (good, that's the point: the far edges
+// stop reading noticeably darker than right under it), but also just dims the whole scene overall
+// unless intensity goes up to compensate.
+const MIN_LIGHT = 0.65;
+const MAX_LIGHT = 3.2;
 const POSITIVE_COLOR = '#ffc400';
 const NEGATIVE_COLOR = '#e05a5a';
 
@@ -62,8 +66,10 @@ export function CitySun({ x, y, z, breakdown }: Props) {
   return (
     <group position={[x, y, z]}>
       {/* the light that actually brightens the city — not just decoration, this is what makes
-          "better numbers" visibly light up the whole scene. */}
-      <pointLight color={color} intensity={lightIntensity} decay={1.2} />
+          "better numbers" visibly light up the whole scene. Lower decay than before (was 1.2) —
+          less falloff per unit of distance means the now-much-farther edges of the city don't
+          dim out disproportionately compared to what's right underneath it. */}
+      <pointLight color={color} intensity={lightIntensity} decay={0.9} />
 
       {/* solid disc — self-lit regardless of scene lighting/fog, like a real sun. Not billboarded
           (a sphere looks the same from every angle), so it can't drift relative to the glow/text. */}

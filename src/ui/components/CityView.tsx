@@ -444,7 +444,19 @@ export function CityView({
       {/* off to one side, not dead-center over the district — anchored to the camera-relative
           frame (width/depth) rather than the valley's own far-corner position, which left almost
           no headroom to raise it without pushing it straight out of the frustum's edge. */}
-      <CitySun x={width * 0.78} y={19} z={maxDepthZ * 0.35} breakdown={hideAmounts ? null : netWorth} />
+      {/* raised well above its old height (was 19) — the city's own footprint grew a lot this
+          session (wider districts, much deeper long/short-term tiers), and a point light that
+          close to the ground lit the area right underneath it while the now-much-farther edges
+          stayed comparatively dark. Further away is more like the real sun: less of a hotspot,
+          more even coverage across a bigger area.
+          z was `maxDepthZ * 0.35` — a fraction of only the *front* tier's own z, which never
+          accounted for how far the long-term tier's own z now reaches in the *other* (negative)
+          direction (see domain/city.ts's LONG_TERM_MIN_Z) — so raising just the height still left
+          the sun sitting well toward the front, with the whole deep-back half of the city getting
+          no real benefit from the repositioning. groundCenter[1] is the real depth midpoint across
+          the *entire* span (both directions), the same center CityGround/the camera's own default
+          target already use. */}
+      <CitySun x={width * 0.78} y={27} z={groundCenter[1]} breakdown={hideAmounts ? null : netWorth} />
       {/* a few units to the right of the depth-tier labels' own column (x=-4.6 — "right" meaning
           toward higher x, since categories read right-to-left in this RTL city), centered in z
           between the long-term and short-term tiers specifically (not the full long-to-current
