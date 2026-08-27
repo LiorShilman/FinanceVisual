@@ -53,11 +53,23 @@ export function CityGoalMesh({ x, z, height, footprint, color, name, amount, lab
 
   return (
     <group position={[x, 0, z]}>
-      {/* the finished shape, as a wireframe shell — always full size regardless of progress */}
+      {/* invisible hit area matching the shell's own full footprint — before any progress exists
+          there's no solid fill mesh to click instead, and the thin lines of the EdgesGeometry
+          shell below are too poor a click target on their own. Same pattern as
+          CityCheckingBridge's own dedicated hitbox mesh. */}
       <mesh position={[0, height / 2, 0]} frustumCulled={false} onClick={handleClick}>
         <boxGeometry args={[footprint, height, footprint]} />
-        <meshBasicMaterial color={color} wireframe transparent opacity={0.55} />
+        <meshBasicMaterial transparent opacity={0} depthWrite={false} />
       </mesh>
+      {/* the finished shape, as a shell outline — always full size regardless of progress.
+          EdgesGeometry, not `wireframe` on the box itself — a plain BoxGeometry face is two
+          triangles, and `wireframe` draws that internal diagonal seam along with the real edges;
+          EdgesGeometry keeps only the real edges/corners, which is what a construction scaffold
+          should actually look like. */}
+      <lineSegments position={[0, height / 2, 0]} frustumCulled={false}>
+        <edgesGeometry args={[new THREE.BoxGeometry(footprint, height, footprint)]} />
+        <lineBasicMaterial color={color} transparent opacity={0.55} />
+      </lineSegments>
       {/* the funded portion, solid, growing from the ground up */}
       {progress > 0 && (
         <mesh position={[0, solidHeight / 2, 0]} frustumCulled={false} onClick={handleClick}>

@@ -1,3 +1,4 @@
+import * as THREE from 'three';
 import { Billboard, Text } from '@react-three/drei';
 import type { MonthHistoryPoint } from '../../app/riseupHistory';
 import { formatCurrency } from '../format';
@@ -72,7 +73,12 @@ export function CityRiseupTrend({ x, y, z, history }: Props) {
         // one flat dim shade for every past month, not a gradient — the point is "current vs.
         // everything else", not a ranking of how old each past month is.
         const isCurrent = i === history.length - 1;
-        const opacity = isCurrent ? 1 : 0.35;
+        // the fill stays a bit dimmer for past months (still "current vs. everything else", not a
+        // ranking) but far less faded than before (was 0.35) — the rim below carries its own,
+        // even higher opacity so the box's own edges/depth stay crisp regardless of how dim the
+        // fill is, instead of both fading together into a flat, hard-to-read silhouette.
+        const opacity = isCurrent ? 1 : 0.6;
+        const rimOpacity = isCurrent ? 1 : 0.9;
         return (
           <group key={h.month} position={[bx, 0, 0]}>
             <mesh position={[0, barHeight / 2, 0]} frustumCulled={false}>
@@ -86,13 +92,16 @@ export function CityRiseupTrend({ x, y, z, history }: Props) {
                 opacity={opacity}
               />
             </mesh>
-            {/* a bright wireframe rim on the bar's own edges — the same trick every other faceted
-                mesh in the city (shield/trophy/fountain/lantern) uses so it reads as an actual box
-                with depth instead of a flat painted rectangle. */}
-            <mesh position={[0, barHeight / 2, 0]} scale={[1.05, 1.02, 1.05]} frustumCulled={false}>
-              <boxGeometry args={[BAR_WIDTH, barHeight, BAR_WIDTH]} />
-              <meshBasicMaterial color={color} wireframe transparent opacity={opacity} depthWrite={false} />
-            </mesh>
+            {/* a bright rim on the bar's own edges — the same trick every other faceted mesh in the
+                city (shield/trophy/fountain/lantern) uses so it reads as an actual box with depth
+                instead of a flat painted rectangle. EdgesGeometry, not `wireframe` on the box
+                itself — a plain BoxGeometry face is two triangles, and `wireframe` draws that
+                internal diagonal seam along with the real edges; EdgesGeometry keeps only the
+                real edges/corners. */}
+            <lineSegments position={[0, barHeight / 2, 0]} scale={[1.05, 1.02, 1.05]} frustumCulled={false}>
+              <edgesGeometry args={[new THREE.BoxGeometry(BAR_WIDTH, barHeight, BAR_WIDTH)]} />
+              <lineBasicMaterial color={color} transparent opacity={rimOpacity} />
+            </lineSegments>
             {isCurrent && <pointLight position={[0, barHeight * 0.6, 0]} color={color} intensity={0.6} distance={3} decay={2} />}
             {/* gold, not the bar's own green/red — the bar already carries that signal, and a
                 green label on a green bar (or red-on-red) was nearly unreadable. Gold matches

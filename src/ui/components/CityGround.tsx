@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import * as THREE from 'three';
+import { useFrame } from '@react-three/fiber';
 import { computeGroundBounds, type CircularExtent } from '../../domain/cityGrid';
 import { computeMagnitudeShare } from '../../domain/sizing';
 import { getTerrainHeight } from '../../domain/terrain';
@@ -91,9 +92,120 @@ function createWaterTexture(stops: [number, string][], rippleColor: string): THR
   }
   ctx.globalAlpha = 1;
 
+  // a single bright glint, off-center and much higher-contrast than the faint ripple rings above —
+  // those rings are centered on (and rotate around) the texture's own pivot point, so their motion
+  // is a subtle change in a thin, faint ellipse's orientation, easy to miss entirely at normal
+  // viewing distance. An off-center highlight sweeping around as the texture rotates (see
+  // CityGround's own useFrame) is what actually reads clearly as "the water is moving."
+  const glintGrad = ctx.createRadialGradient(size * 0.68, size * 0.28, 0, size * 0.68, size * 0.28, size * 0.22);
+  glintGrad.addColorStop(0, 'rgba(255,255,255,0.6)');
+  glintGrad.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = glintGrad;
+  ctx.fillRect(0, 0, size, size);
+
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
+  // rotated slowly (see CityGround's own useFrame) to read as a gentle ripple/swirl instead of a
+  // static painted pattern — pivoting around the texture's own center, not the default (0,0)
+  // corner, so it actually spins in place rather than sliding/skewing around an off-center point.
+  texture.center.set(0.5, 0.5);
   return texture;
+}
+
+// One shared, module-level "flow" texture — a repeating brightness pulse along the U axis
+// (TubeGeometry's own along-length coordinate — see three.js's TubeGeometry.generateUVs), used as
+// both `map` and `emissiveMap` on every stream tube so one animated offset (see CityGround's own
+// useFrame) makes every stream's base color/glow pulse and travel along its own length, reading as
+// flowing water instead of a static painted tube. Shared across every stream (water and valley
+// alike) rather than one texture per stream — much cheaper, and the synchronized pulse across the
+// whole city reads as coherent rather than each stream flowing to its own independent clock.
+let sharedFlowTexture: THREE.CanvasTexture | null = null;
+function getFlowTexture(): THREE.CanvasTexture {
+  if (sharedFlowTexture) return sharedFlowTexture;
+  const w = 128;
+  const h = 16;
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d')!;
+  const grad = ctx.createLinearGradient(0, 0, w, 0);
+  grad.addColorStop(0, '#3a3a3a');
+  grad.addColorStop(0.1, '#ffffff');
+  grad.addColorStop(0.26, '#3a3a3a');
+  grad.addColorStop(0.6, '#3a3a3a');
+  grad.addColorStop(0.72, '#ffffff');
+  grad.addColorStop(0.88, '#3a3a3a');
+  grad.addColorStop(1, '#3a3a3a');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, w, h);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
+  texture.repeat.set(3, 1);
+  sharedFlowTexture = texture;
+  return texture;
+}
+
+// module-level singletons, not per-render useMemo — their colors are fixed literals, never derived
+// from props, so there's nothing to recompute across renders anyway; keeping them as plain shared
+// instances (matching getFlowTexture's own pattern above) also sidesteps the react-compiler's
+// "don't mutate a hook-returned value" warning that useMemo here would trigger, since
+// CityGround's own useFrame deliberately mutates their `.rotation` every frame for the ripple.
+let sharedLakeTexture: THREE.CanvasTexture | null = null;
+// a deeper, more muted sapphire-teal — the old bright cyan read as a swimming pool rather than a
+// body of water holding value.
+function getLakeTexture(): THREE.CanvasTexture {
+  if (sharedLakeTexture) return sharedLakeTexture;
+  sharedLakeTexture = createWaterTexture(
+    [
+      [0, '#7fc4d8'],
+      [0.35, '#2f8fb8'],
+      [0.7, '#155a82'],
+      [1, '#0a2c40'],
+    ],
+    'rgba(255,255,255,0.4)',
+  );
+  return sharedLakeTexture;
+}
+
+let sharedRingTexture: THREE.CanvasTexture | null = null;
+// pension money reads as "the golden years" better than lavender — purple had no real financial
+// association here, just a hue that hadn't been used elsewhere in the city yet. The ring's own
+// *center* sits underneath the inner lake mesh and is never actually seen — only the outer band
+// (near UV=1) is visible — so the bright tone still has to sit at the outer stop or the ring reads
+// as a dark, unrecognizable rim.
+function getPensionRingTexture(): THREE.CanvasTexture {
+  if (sharedRingTexture) return sharedRingTexture;
+  sharedRingTexture = createWaterTexture(
+    [
+      [0, '#4a3a1a'],
+      [0.5, '#9c7422'],
+      [0.78, '#c2921f'],
+      [1, '#d9ae3f'],
+    ],
+    'rgba(255,244,214,0.45)',
+  );
+  return sharedRingTexture;
+}
+
+let sharedValleyTexture: THREE.CanvasTexture | null = null;
+// a canyon, not a pool — glowing embers rather than gentle ripples, but muted rather than neon so
+// it doesn't outshine everything else in the district. Kept in the same red family as the expense
+// buildings' own health-risk color (#e05a5a), not orange/amber — that hue is already claimed by
+// every warning-status savings/investment/pension building, and an orange valley next to them read
+// as ambiguous.
+function getValleyTexture(): THREE.CanvasTexture {
+  if (sharedValleyTexture) return sharedValleyTexture;
+  sharedValleyTexture = createWaterTexture(
+    [
+      [0, '#d9897e'],
+      [0.35, '#b84a4a'],
+      [0.7, '#7a2530'],
+      [1, '#3a1015'],
+    ],
+    'rgba(230,140,130,0.3)',
+  );
+  return sharedValleyTexture;
 }
 
 // Deterministic in [-1, 1] from a couple of coordinates — same stream always bends the same way
@@ -132,8 +244,11 @@ function buildBlobShape(radius: number, points = 32): THREE.Shape {
 // [0,1] — so for a shape spanning roughly ±radius, almost the whole surface samples a texture far
 // outside [0,1] and clamps to the edge color, with a visible seam exactly where local x or y
 // crosses 0. Rebuilding the UVs from the shape's own radius fixes both.
-function buildBlobGeometry(radius: number, points = 32): THREE.BufferGeometry {
-  const shape = buildBlobShape(radius, points);
+// Split from the shape's own construction (unlike a one-shot `buildBlobGeometry(radius)`) so the
+// lake/valley basin walls below can reuse the *exact same* outline for their own walls — two
+// independently-generated blobs (each with their own random jitter) would never line up, leaving a
+// visible seam between the flat pool surface and its own wall.
+function buildBlobGeometryFromShape(shape: THREE.Shape, radius: number): THREE.BufferGeometry {
   const geometry = new THREE.ShapeGeometry(shape);
   const position = geometry.attributes.position;
   const uv = geometry.attributes.uv;
@@ -144,10 +259,41 @@ function buildBlobGeometry(radius: number, points = 32): THREE.BufferGeometry {
   return geometry;
 }
 
+function buildBlobGeometry(radius: number, points = 32): THREE.BufferGeometry {
+  return buildBlobGeometryFromShape(buildBlobShape(radius, points), radius);
+}
+
+// A vertical ribbon of quads following the blob shape's own outline — from the base (local y=0,
+// ground level, planted flush with the terrain around it) up to the pool's own raised surface
+// (local y=+depth) — so the lake/valley read as a real raised basin with visible banks/walls, not
+// a flat disc laid straight on the ground.
+function buildBasinWallGeometry(shape: THREE.Shape, depth: number): THREE.BufferGeometry {
+  const points = shape.getPoints();
+  const n = points.length;
+  const positions: number[] = [];
+  const indices: number[] = [];
+  for (let i = 0; i < n; i++) {
+    const a = points[i];
+    const b = points[(i + 1) % n];
+    const base = positions.length / 3;
+    positions.push(a.x, 0, a.y, a.x, depth, a.y, b.x, 0, b.y, b.x, depth, b.y);
+    indices.push(base, base + 1, base + 2, base + 2, base + 1, base + 3);
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
 // A gentle S-curve, not a single kinked line: the perpendicular offset is zero at both ends
 // (so it still meets the building and the shoreline exactly) and swells in the middle via a
 // sine envelope, with alternating per-segment jitter so the river actually winds back and forth.
-function buildMeanderCurve(sx: number, sz: number, ex: number, ez: number): THREE.CatmullRomCurve3 {
+// Y eases from `startY` (the stream's own hover height near the source) down to `endY` (the
+// target pool's own surface height) only over the final stretch of the path — most of the run
+// stays level, then it visibly dips down into the basin right as it arrives, instead of hanging
+// at a constant height in mid-air above a now-recessed lake/valley.
+function buildMeanderCurve(sx: number, sz: number, ex: number, ez: number, startY: number, endY: number): THREE.CatmullRomCurve3 {
   const dx = ex - sx;
   const dz = ez - sz;
   const len = Math.hypot(dx, dz) || 1;
@@ -159,20 +305,30 @@ function buildMeanderCurve(sx: number, sz: number, ex: number, ez: number): THRE
     const t = i / segments;
     const envelope = Math.sin(t * Math.PI);
     const wobble = pseudoJitter(sx + i * 11.7, sz + i * 5.3) * envelope * Math.min(len * 0.16, 3.5);
-    controlPoints.push(new THREE.Vector3(sx + dx * t + nx * wobble, 0.02, sz + dz * t + nz * wobble));
+    const dipT = Math.max(0, (t - 0.65) / 0.35);
+    const y = startY + (endY - startY) * dipT * dipT;
+    controlPoints.push(new THREE.Vector3(sx + dx * t + nx * wobble, y, sz + dz * t + nz * wobble));
   }
   return new THREE.CatmullRomCurve3(controlPoints);
 }
 
 /** Straight-line-to-source direction decides where on the target circle's boundary a stream
  * arrives, so multiple streams converging on one pool still fan out instead of overlapping. */
-function buildInflowCurve(targetX: number, targetZ: number, targetRadius: number, sx: number, sz: number): THREE.CatmullRomCurve3 {
+function buildInflowCurve(
+  targetX: number,
+  targetZ: number,
+  targetRadius: number,
+  sx: number,
+  sz: number,
+  startY: number,
+  endY: number,
+): THREE.CatmullRomCurve3 {
   const dx = targetX - sx;
   const dz = targetZ - sz;
   const dist = Math.hypot(dx, dz) || 1;
   const edgeX = targetX - (dx / dist) * targetRadius * 0.92;
   const edgeZ = targetZ - (dz / dist) * targetRadius * 0.92;
-  return buildMeanderCurve(sx, sz, edgeX, edgeZ);
+  return buildMeanderCurve(sx, sz, edgeX, edgeZ, startY, endY);
 }
 
 // Real geometry, not a flat screen-space line — a tube has actual width in 3D, so it reads as a
@@ -210,92 +366,104 @@ function floatYForRadius(radius: number, terrainY: number): number {
 // clears the thickest water stream (MAX radius) by a comfortable margin, using the same terrainY
 // each stream already samples at its own position.
 const VALLEY_STREAM_LIFT = MAX_STREAM_RADIUS - MIN_STREAM_RADIUS + 0.5;
+// how far ABOVE grade the lake/valley's own water surface sits, with a visible wall rising from
+// the ground up to meet it — real volume/depth instead of a flat disc painted on the ground.
+// Recessing it *below* grade instead was the first attempt, but the ground plane is one
+// unbroken sheet with no hole cut for the basin, so a recessed surface just renders underneath
+// it — invisible or z-fighting with the ground, not "in a hole". Raising the pool instead avoids
+// ever needing a hole at all: the wall's own base plants exactly at grade (y=0, same as the
+// ground around it), and everything the wall/water are is at or above that, never under it.
+// Streams ease UP from their own hover height into this raised rim (see buildMeanderCurve's own
+// dipT easing, which works the same regardless of which direction endY sits from startY). The
+// pension ring stays flat at grade as the lake's own low apron around the raised wall's base.
+// 0.4 was scaled for a small object seen up close — this city's own scale is enormous (lake radius
+// alone reaches up to 9 units, viewed from well back and above), and a wall a fraction of a unit
+// tall is completely lost at that distance. A wall proportionate to the lake's own radius is what
+// actually reads as a raised reservoir from typical camera distance.
+const LAKE_BASIN_DEPTH = 3;
+const VALLEY_BASIN_DEPTH = 3.2;
+
+// units of texture-space per second — fast enough to clearly read as motion, slow enough not to
+// look like a strobing glitch on the short stream tubes.
+const FLOW_SPEED = 0.35;
+// radians per second — 0.06 (a full rotation every ~105s) turned out to be imperceptibly slow, not
+// "gentle"; a full rotation every several seconds is what actually reads as a living, swirling
+// surface rather than a still image. Ring and valley spin a little slower/opposite the lake so the
+// three water surfaces don't all pulse in obvious lockstep.
+const RIPPLE_SPEED = 0.7;
 
 export function CityGround({ groundCenter, groundSize, water, valley }: Props) {
   const groundTexture = useMemo(() => createGroundTexture(), []);
-  // a deeper, more muted sapphire-teal — the old bright cyan read as a swimming pool rather
-  // than a body of water holding value.
-  const lakeTexture = useMemo(
-    () =>
-      createWaterTexture(
-        [
-          [0, '#7fc4d8'],
-          [0.35, '#2f8fb8'],
-          [0.7, '#155a82'],
-          [1, '#0a2c40'],
-        ],
-        'rgba(255,255,255,0.4)',
-      ),
-    [],
-  );
-  // pension money reads as "the golden years" better than lavender — purple had no real
-  // financial association here, just a hue that hadn't been used elsewhere in the city yet.
-  // The ring's own *center* sits underneath the inner lake mesh and is never actually seen —
-  // only the outer band (near UV=1) is visible — so the bright tone still has to sit at the
-  // outer stop or the ring reads as a dark, unrecognizable rim.
-  const ringTexture = useMemo(
-    () =>
-      createWaterTexture(
-        [
-          [0, '#4a3a1a'],
-          [0.5, '#9c7422'],
-          [0.78, '#c2921f'],
-          [1, '#d9ae3f'],
-        ],
-        'rgba(255,244,214,0.45)',
-      ),
-    [],
-  );
-  // a canyon, not a pool — glowing embers rather than gentle ripples, but muted rather than
-  // neon so it doesn't outshine everything else in the district. Kept in the same red family as
-  // the expense buildings' own health-risk color (#e05a5a), not orange/amber — that hue is
-  // already claimed by every warning-status savings/investment/pension building, and an orange
-  // valley next to them read as ambiguous.
-  const valleyTexture = useMemo(
-    () =>
-      createWaterTexture(
-        [
-          [0, '#d9897e'],
-          [0.35, '#b84a4a'],
-          [0.7, '#7a2530'],
-          [1, '#3a1015'],
-        ],
-        'rgba(230,140,130,0.3)',
-      ),
-    [],
-  );
+  const flowTexture = getFlowTexture();
+  const lakeTexture = getLakeTexture();
+  const ringTexture = getPensionRingTexture();
+  const valleyTexture = getValleyTexture();
 
   const [lakeX, lakeZ] = water.lakeCenter;
   const [valleyX, valleyZ] = valley.center;
 
   const pensionRingGeometry = useMemo(() => buildBlobGeometry(water.outerRingRadius), [water.outerRingRadius]);
-  const lakeGeometry = useMemo(() => buildBlobGeometry(water.lakeRadius), [water.lakeRadius]);
-  const valleyGeometry = useMemo(() => buildBlobGeometry(valley.radius), [valley.radius]);
+  const lakeShape = useMemo(() => buildBlobShape(water.lakeRadius), [water.lakeRadius]);
+  const lakeGeometry = useMemo(() => buildBlobGeometryFromShape(lakeShape, water.lakeRadius), [lakeShape, water.lakeRadius]);
+  const lakeWallGeometry = useMemo(() => buildBasinWallGeometry(lakeShape, LAKE_BASIN_DEPTH), [lakeShape]);
+  const valleyShape = useMemo(() => buildBlobShape(valley.radius), [valley.radius]);
+  const valleyGeometry = useMemo(() => buildBlobGeometryFromShape(valleyShape, valley.radius), [valleyShape, valley.radius]);
+  const valleyWallGeometry = useMemo(() => buildBasinWallGeometry(valleyShape, VALLEY_BASIN_DEPTH), [valleyShape]);
 
-  // liquid money pools in the inner circle; pension money pools in the ring around it.
+  const lakeTerrainY = getTerrainHeight(lakeX, lakeZ);
+  const valleyTerrainY = getTerrainHeight(valleyX, valleyZ);
+  // raised for liquid streams (the lake itself sits atop its own wall), but pension streams still
+  // land at the ring's own ground-level rim — the ring isn't raised, only the inner lake is.
+  const lakeSurfaceY = lakeTerrainY + LAKE_BASIN_DEPTH + 0.05;
+  const ringSurfaceY = lakeTerrainY + 0.05;
+  const valleySurfaceY = valleyTerrainY + VALLEY_BASIN_DEPTH + 0.05;
+
+  // liquid money pools in the inner circle; pension money pools in the ring around it. Geometry
+  // now carries each point's own absolute Y directly (baked in by buildMeanderCurve's dip-to-
+  // target easing), so the mesh itself renders at the origin — no separate uniform Y translation.
   const waterStreamGeometries = useMemo(
     () =>
       water.streams.map((s) => {
         const targetRadius = s.kind === 'liquid' ? water.lakeRadius : water.outerRingRadius;
-        const curve = buildInflowCurve(lakeX, lakeZ, targetRadius, s.x, s.z);
         const radius = radiusForWeight(s.weight);
-        return { kind: s.kind, radius, terrainY: getTerrainHeight(s.x, s.z), geometry: buildStreamTubeGeometry(curve, radius) };
+        const startY = floatYForRadius(radius, getTerrainHeight(s.x, s.z));
+        const endY = s.kind === 'liquid' ? lakeSurfaceY : ringSurfaceY;
+        const curve = buildInflowCurve(lakeX, lakeZ, targetRadius, s.x, s.z, startY, endY);
+        return { kind: s.kind, hasMonthlyContribution: s.hasMonthlyContribution, geometry: buildStreamTubeGeometry(curve, radius) };
       }),
-    [water.streams, lakeX, lakeZ, water.lakeRadius, water.outerRingRadius],
+    [water.streams, lakeX, lakeZ, water.lakeRadius, water.outerRingRadius, lakeSurfaceY, ringSurfaceY],
   );
 
   const valleyStreamGeometries = useMemo(
     () =>
       valley.streams.map((s) => {
-        const curve = buildInflowCurve(valleyX, valleyZ, valley.radius, s.x, s.z);
         const radius = radiusForWeight(s.weight);
-        return { radius, terrainY: getTerrainHeight(s.x, s.z), geometry: buildStreamTubeGeometry(curve, radius) };
+        // VALLEY_STREAM_LIFT carried through on both ends — still needs to float clear of the
+        // blue/gold water streams wherever their paths cross, on top of (not instead of) its own
+        // dip into the recessed valley floor.
+        const startY = floatYForRadius(radius, getTerrainHeight(s.x, s.z)) + VALLEY_STREAM_LIFT;
+        const endY = valleySurfaceY + VALLEY_STREAM_LIFT;
+        const curve = buildInflowCurve(valleyX, valleyZ, valley.radius, s.x, s.z, startY, endY);
+        return { radius, geometry: buildStreamTubeGeometry(curve, radius) };
       }),
-    [valley.streams, valleyX, valleyZ, valley.radius],
+    [valley.streams, valleyX, valleyZ, valley.radius, valleySurfaceY],
   );
 
-  const lakeTerrainY = getTerrainHeight(lakeX, lakeZ);
-  const valleyTerrainY = getTerrainHeight(valleyX, valleyZ);
+  useFrame((_, delta) => {
+    // called fresh each frame rather than closing over the outer `flowTexture`/`lakeTexture`/etc.
+    // locals — all four are cached module-level singletons (see their own getters above), so this
+    // costs nothing beyond a lookup, and it sidesteps the react-compiler flagging mutation of a
+    // captured local as unsafe.
+    //
+    // subtracted, not added — TubeGeometry's own u=0 sits at each stream's source (the building)
+    // and u=1 at the lake/valley edge (see buildInflowCurve), and a *positive* offset shifts the
+    // sampled pattern toward *lower* u, so subtracting is what actually makes the pulse travel
+    // from source toward target instead of backward, upstream.
+    getFlowTexture().offset.x -= delta * FLOW_SPEED;
+    getLakeTexture().rotation += delta * RIPPLE_SPEED;
+    getPensionRingTexture().rotation -= delta * RIPPLE_SPEED * 0.7;
+    getValleyTexture().rotation += delta * RIPPLE_SPEED * 0.85;
+  });
 
   const bounds = computeGroundBounds(groundCenter, groundSize, [
     { center: water.lakeCenter, radius: water.outerRingRadius } satisfies CircularExtent,
@@ -332,29 +500,59 @@ export function CityGround({ groundCenter, groundSize, water, valley }: Props) {
         <meshStandardMaterial map={ringTexture} emissive="#c2921f" emissiveIntensity={0.3} roughness={0.15} metalness={0.12} side={THREE.DoubleSide} />
       </mesh>
 
-      {waterStreamGeometries.map(({ kind, radius, terrainY, geometry }, i) => (
-        <mesh key={i} geometry={geometry} position={[0, floatYForRadius(radius, terrainY), 0]} frustumCulled={false}>
+      {/* the basin wall — from the ring's own ground-level rim up to the raised lake surface,
+          following the lake's own outline exactly (see buildBasinWallGeometry) so there's no seam
+          between the wall and the water it holds. Tinted the lake's own blue with a soft emissive
+          glow and mild transparency — a flat near-black rock read as too dark/muddy to actually
+          identify as part of the water feature; a colored, faintly translucent wall (more "glass
+          tank" than "dirt bank") reads clearly as belonging to the lake it holds. */}
+      <mesh geometry={lakeWallGeometry} position={[lakeX, lakeTerrainY, lakeZ]} frustumCulled={false}>
+        <meshStandardMaterial color="#1f5a72" emissive="#2f8fb8" emissiveIntensity={0.25} roughness={0.4} transparent opacity={0.62} side={THREE.DoubleSide} />
+      </mesh>
+
+      {waterStreamGeometries.map(({ kind, hasMonthlyContribution, geometry }, i) => (
+        <mesh key={i} geometry={geometry} frustumCulled={false}>
+          {/* the animated flow pulse is reserved for money actually being topped up every month —
+              a stream with no map just renders as a calm, smooth, unpulsing tube, reading as "this
+              pool is being fed" vs. "this is a static balance just sitting there" (see
+              StreamSource.hasMonthlyContribution's own comment in domain/water.ts). */}
           <meshStandardMaterial
             color={WATER_STREAM_COLOR[kind]}
             emissive={WATER_STREAM_COLOR[kind]}
-            emissiveIntensity={WATER_STREAM_EMISSIVE_INTENSITY[kind]}
+            emissiveIntensity={hasMonthlyContribution ? WATER_STREAM_EMISSIVE_INTENSITY[kind] : WATER_STREAM_EMISSIVE_INTENSITY[kind] * 0.55}
+            map={hasMonthlyContribution ? flowTexture : null}
+            emissiveMap={hasMonthlyContribution ? flowTexture : null}
             roughness={0.25}
             metalness={0.1}
           />
         </mesh>
       ))}
 
-      <mesh geometry={lakeGeometry} rotation-x={-Math.PI / 2} position={[lakeX, lakeTerrainY + 0.018, lakeZ]} frustumCulled={false}>
+      <mesh geometry={lakeGeometry} rotation-x={-Math.PI / 2} position={[lakeX, lakeSurfaceY, lakeZ]} frustumCulled={false}>
         <meshStandardMaterial map={lakeTexture} emissive="#155a82" emissiveIntensity={0.28} roughness={0.12} metalness={0.15} side={THREE.DoubleSide} />
       </mesh>
 
-      {valleyStreamGeometries.map(({ radius, terrainY, geometry }, i) => (
-        <mesh key={i} geometry={geometry} position={[0, floatYForRadius(radius, terrainY) + VALLEY_STREAM_LIFT, 0]} frustumCulled={false}>
-          <meshStandardMaterial color="#b84a4a" emissive="#b84a4a" emissiveIntensity={0.32} roughness={0.25} metalness={0.1} />
+      {/* same tinted-glass treatment as the lake wall, in the valley's own ember red instead of
+          blue. */}
+      <mesh geometry={valleyWallGeometry} position={[valleyX, valleyTerrainY, valleyZ]} frustumCulled={false}>
+        <meshStandardMaterial color="#7a2e28" emissive="#b84a4a" emissiveIntensity={0.3} roughness={0.4} transparent opacity={0.62} side={THREE.DoubleSide} />
+      </mesh>
+
+      {valleyStreamGeometries.map(({ geometry }, i) => (
+        <mesh key={i} geometry={geometry} frustumCulled={false}>
+          <meshStandardMaterial
+            color="#b84a4a"
+            emissive="#b84a4a"
+            emissiveIntensity={0.32}
+            map={flowTexture}
+            emissiveMap={flowTexture}
+            roughness={0.25}
+            metalness={0.1}
+          />
         </mesh>
       ))}
 
-      <mesh geometry={valleyGeometry} rotation-x={-Math.PI / 2} position={[valleyX, valleyTerrainY + 0.014, valleyZ]} frustumCulled={false}>
+      <mesh geometry={valleyGeometry} rotation-x={-Math.PI / 2} position={[valleyX, valleySurfaceY, valleyZ]} frustumCulled={false}>
         <meshStandardMaterial map={valleyTexture} emissive="#b84a4a" emissiveIntensity={0.42} roughness={0.3} metalness={0.05} side={THREE.DoubleSide} />
       </mesh>
     </group>

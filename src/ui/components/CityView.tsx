@@ -158,7 +158,7 @@ export function CityView({
   );
   const checkingAvailableRatio = checkingTotal > 0 ? checkingAvailable / checkingTotal : 0;
   const firstCheckingId = useMemo(() => entities.find((e) => e.details.kind === 'checking')?.id ?? null, [entities]);
-  const water = useMemo(() => computeWaterFeature(buildings), [buildings]);
+  const water = useMemo(() => computeWaterFeature(buildings, entities), [buildings, entities]);
   const valley = useMemo(() => computeValleyFeature(buildings, entities), [buildings, entities]);
   const netWorth = useMemo(() => computeNetWorthBreakdown(entities), [entities]);
   const atmosphere = useMemo(() => computeCityAtmosphere(buildings, netWorth), [buildings, netWorth]);

@@ -17,128 +17,100 @@ interface Props {
 }
 
 const STONE_COLOR = '#1c1e24';
-const COIN_COLOR = '#e8cf8a';
-const MOTE_COUNT = 6;
-const FLICKER_SPEED = 4.5;
+// a brushed neutral pewter, not the entity's own bright rose/magenta health color — a spinning
+// award-star reads as a distinct, dignified marker on its own shape alone; a bright pink cast on
+// top of that read as a toy, not a recognition piece. The gold rim (this city's own established
+// "money" accent) is the only color the entity's own hue would otherwise have carried.
+const STAR_COLOR = '#a7adb6';
+const RIM_COLOR = '#c2921f';
+const SPIN_SPEED = 0.5;
 
 function hash(seed: number): number {
   const s = Math.sin(seed * 12.9898) * 43758.5453;
   return s - Math.floor(s);
 }
 
+// A real 5-pointed star outline, extruded for actual depth (not a flat cutout) — points straight
+// up at rotation 0, matching every other upright icon in this city.
+function buildStarShape(outerRadius: number, innerRadius: number, points = 5): THREE.Shape {
+  const shape = new THREE.Shape();
+  const step = Math.PI / points;
+  for (let i = 0; i < points * 2; i++) {
+    const r = i % 2 === 0 ? outerRadius : innerRadius;
+    const angle = i * step - Math.PI / 2;
+    const px = Math.cos(angle) * r;
+    const py = Math.sin(angle) * r;
+    if (i === 0) shape.moveTo(px, py);
+    else shape.lineTo(px, py);
+  }
+  shape.closePath();
+  return shape;
+}
+
 /**
- * A carved giving pillar, not a hanging lantern — a stone offering bowl at the base holds a few
- * coins, and a steady stream of small glowing motes rises from that bowl up the pillar's length to
- * a flame at its top. The coins-becoming-light read is deliberate: "what you gave is lifted into
- * something greater", not just an ornamental column with a pretty glow, so it stays legible as
- * *donation* specifically rather than an object that could belong to any other category.
+ * A donation reads as recognition, not a shrine — a solid, brushed-metal five-point star, mounted
+ * on a plain stone pedestal and slowly spinning on its own vertical axis, replacing an earlier
+ * offering-bowl-and-flame design that read as too ornamental next to the rest of the city's more
+ * restrained buildings/trees/bridge. The star alone is enough to mark "donation" as its own
+ * category without leaning on a narrative object.
  */
-export function CityGivingPillarMesh({ x, z, height, footprint, color, name, amount, labelScale = 1, onOpen }: Props) {
-  const moteRefs = useRef<(THREE.Mesh | null)[]>([]);
-  const flameRef = useRef<THREE.Group>(null);
+export function CityGivingPillarMesh({ x, z, height, footprint, name, amount, labelScale = 1, onOpen }: Props) {
+  const starRef = useRef<THREE.Group>(null);
 
   const handleClick = (e: ThreeEvent<MouseEvent>) => {
     e.stopPropagation();
     onOpen();
   };
 
-  const bowlRadius = Math.max(0.65, Math.min(1.15, footprint * 0.9));
-  const bowlHeight = 0.24;
-  const pillarRadiusBottom = Math.max(0.26, Math.min(0.46, footprint * 0.32));
-  const pillarRadiusTop = pillarRadiusBottom * 0.75;
-  const pillarHeight = Math.max(2.0, Math.min(4.4, height * 0.75));
-  const flameRadius = Math.max(0.34, Math.min(0.75, footprint * 0.58));
+  const pedestalRadius = Math.max(0.5, Math.min(0.9, footprint * 0.7));
+  const pedestalHeight = Math.max(0.5, Math.min(1.0, height * 0.22));
+  // "not too small" — sized as a real fraction of the entity's own height/footprint, not a token
+  // icon dwarfed by its own pedestal.
+  const outerRadius = Math.max(0.9, Math.min(1.7, Math.max(footprint * 1.3, height * 0.4)));
+  const innerRadius = outerRadius * 0.42;
+  const starThickness = outerRadius * 0.34;
+  const starY = pedestalHeight + outerRadius * 0.95;
 
-  const pillarBaseY = bowlHeight;
-  const pillarTopY = pillarBaseY + pillarHeight;
-  const flameBaseY = pillarTopY;
-
-  // deterministic per-position seed (not Math.random — impure during render, and would reshuffle
-  // every mote's timing on each re-render anyway).
+  // deterministic per-position phase (not Math.random — impure during render, and would reshuffle
+  // on every re-render anyway) so multiple donation stars don't all spin in lockstep.
   const seed = x * 12.9898 + z * 78.233;
-  const motePhases = useMemo(() => Array.from({ length: MOTE_COUNT }, (_, i) => hash(seed + i * 3.7)), [seed]);
-  const flamePhase = hash(seed) * Math.PI * 2;
-  const coins = useMemo(
-    () =>
-      Array.from({ length: 3 }, (_, i) => {
-        const h1 = hash(seed + i * 5.1 + 20);
-        const h2 = hash(seed + i * 6.3 + 30);
-        const angle = h1 * Math.PI * 2;
-        const r = bowlRadius * 0.35 * h2;
-        return { x: Math.cos(angle) * r, z: Math.sin(angle) * r, rot: h1 * Math.PI };
-      }),
-    [seed, bowlRadius],
-  );
+  const phase = hash(seed) * Math.PI * 2;
+
+  const starGeometry = useMemo(() => {
+    const geometry = new THREE.ExtrudeGeometry(buildStarShape(outerRadius, innerRadius), {
+      depth: starThickness,
+      bevelEnabled: true,
+      bevelThickness: starThickness * 0.18,
+      bevelSize: outerRadius * 0.06,
+      bevelSegments: 2,
+    });
+    geometry.center();
+    return geometry;
+  }, [outerRadius, innerRadius, starThickness]);
+  const starEdges = useMemo(() => new THREE.EdgesGeometry(starGeometry), [starGeometry]);
 
   useFrame(({ clock }) => {
-    const t = clock.elapsedTime;
-    for (let i = 0; i < MOTE_COUNT; i++) {
-      const m = moteRefs.current[i];
-      if (!m) continue;
-      const progress = (t * 0.35 + motePhases[i]) % 1;
-      const wobble = Math.sin(t * 1.6 + motePhases[i] * 6) * bowlRadius * 0.25 * (1 - progress);
-      m.position.set(wobble, pillarBaseY + progress * (flameBaseY - pillarBaseY), 0);
-      const fade = Math.sin(progress * Math.PI);
-      m.scale.setScalar(0.4 + 0.6 * fade);
-    }
-    if (flameRef.current) {
-      const flicker = 1 + Math.sin(t * FLICKER_SPEED + flamePhase) * 0.1 + Math.sin(t * FLICKER_SPEED * 2.3 + flamePhase) * 0.05;
-      flameRef.current.scale.set(1, flicker, 1);
-    }
+    if (starRef.current) starRef.current.rotation.y = clock.elapsedTime * SPIN_SPEED + phase;
   });
 
   return (
     <group position={[x, 0, z]}>
-      {/* the offering bowl, with a couple of coins resting in it */}
-      <mesh position={[0, bowlHeight / 2, 0]} frustumCulled={false} onClick={handleClick}>
-        <cylinderGeometry args={[bowlRadius, bowlRadius * 1.12, bowlHeight, 10]} />
-        <meshStandardMaterial color={STONE_COLOR} emissive={color} emissiveIntensity={0.4} roughness={0.7} flatShading />
-      </mesh>
-      {coins.map((c, i) => (
-        <mesh key={i} position={[c.x, bowlHeight + 0.02, c.z]} rotation={[Math.PI / 2, 0, c.rot]} frustumCulled={false}>
-          <cylinderGeometry args={[bowlRadius * 0.16, bowlRadius * 0.16, 0.03, 10]} />
-          <meshStandardMaterial color={COIN_COLOR} emissive={COIN_COLOR} emissiveIntensity={0.5} roughness={0.35} metalness={0.4} />
-        </mesh>
-      ))}
-
-      {/* the pillar itself */}
-      <mesh position={[0, pillarBaseY + pillarHeight / 2, 0]} frustumCulled={false} onClick={handleClick}>
-        <cylinderGeometry args={[pillarRadiusTop, pillarRadiusBottom, pillarHeight, 8]} />
-        <meshStandardMaterial color={STONE_COLOR} emissive={color} emissiveIntensity={0.35} roughness={0.65} flatShading />
-      </mesh>
-      <mesh position={[0, pillarBaseY + pillarHeight / 2, 0]} scale={[1.03, 1.005, 1.03]} frustumCulled={false}>
-        <cylinderGeometry args={[pillarRadiusTop, pillarRadiusBottom, pillarHeight, 8]} />
-        <meshBasicMaterial color={color} wireframe transparent opacity={0.3} depthWrite={false} />
+      <mesh position={[0, pedestalHeight / 2, 0]} frustumCulled={false} onClick={handleClick}>
+        <cylinderGeometry args={[pedestalRadius, pedestalRadius * 1.1, pedestalHeight, 10]} />
+        <meshStandardMaterial color={STONE_COLOR} emissive={RIM_COLOR} emissiveIntensity={0.18} roughness={0.75} flatShading />
       </mesh>
 
-      {/* the coins-becoming-light, rising from the bowl up the pillar's length */}
-      {motePhases.map((_, i) => (
-        <mesh
-          key={i}
-          ref={(el) => {
-            moteRefs.current[i] = el;
-          }}
-          frustumCulled={false}
-        >
-          <sphereGeometry args={[bowlRadius * 0.14, 8, 8]} />
-          <meshStandardMaterial color={color} emissive={color} emissiveIntensity={1.1} roughness={0.3} />
+      <group ref={starRef} position={[0, starY, 0]} rotation={[Math.PI / 2, 0, 0]} onClick={handleClick}>
+        <mesh geometry={starGeometry} frustumCulled={false}>
+          <meshStandardMaterial color={STAR_COLOR} emissive={STAR_COLOR} emissiveIntensity={0.28} roughness={0.35} metalness={0.55} flatShading />
         </mesh>
-      ))}
-
-      {/* the flame the coins become at the top — two stacked, flickering cones */}
-      <group ref={flameRef} position={[0, flameBaseY, 0]}>
-        <mesh position={[0, flameRadius * 0.55, 0]} frustumCulled={false} onClick={handleClick}>
-          <coneGeometry args={[flameRadius, flameRadius * 1.5, 8]} />
-          <meshStandardMaterial color={color} emissive={color} emissiveIntensity={1.0} roughness={0.35} flatShading />
-        </mesh>
-        <mesh position={[0, flameRadius * 0.95, 0]} frustumCulled={false} onClick={handleClick}>
-          <coneGeometry args={[flameRadius * 0.55, flameRadius * 1.1, 8]} />
-          <meshStandardMaterial color="#fff0e0" emissive="#fff0e0" emissiveIntensity={1.3} roughness={0.3} flatShading />
-        </mesh>
-        <pointLight position={[0, flameRadius * 0.8, 0]} color={color} intensity={0.85} distance={4} decay={2} />
+        <lineSegments geometry={starEdges} frustumCulled={false}>
+          <lineBasicMaterial color={RIM_COLOR} transparent opacity={0.75} />
+        </lineSegments>
       </group>
+      <pointLight position={[0, starY, 0]} color={RIM_COLOR} intensity={0.4} distance={4} decay={2} />
 
-      <Billboard position={[0, flameBaseY + flameRadius * 2 + 0.5, 0]}>
+      <Billboard position={[0, starY + outerRadius + 0.7, 0]}>
         {amount !== '' && (
           <Text
             position={[0, 1, 0]}

@@ -165,7 +165,11 @@ export function CityCheckingBridge({
     () => (availableLen > 0.001 ? new THREE.BoxGeometry(DECK_WIDTH, DECK_THICKNESS, availableLen) : null),
     [availableLen],
   );
-  const outlineGeometry = useMemo(() => new THREE.BoxGeometry(DECK_WIDTH, DECK_THICKNESS, span), [span]);
+  // EdgesGeometry, not `wireframe` on a plain box — a box face is two triangles, and `wireframe`
+  // draws that internal diagonal seam across the deck's own long top face along with the real
+  // edges; EdgesGeometry keeps only the real edges/corners, matching the fix already applied to
+  // CityRiseupTrend's own bar rims.
+  const outlineGeometry = useMemo(() => new THREE.EdgesGeometry(new THREE.BoxGeometry(DECK_WIDTH, DECK_THICKNESS, span)), [span]);
 
   const reservedTexture = useMemo(() => {
     const t = createDeckPlateTexture(RESERVED_COLOR);
@@ -257,9 +261,9 @@ export function CityCheckingBridge({
           <meshStandardMaterial map={availableTexture} emissive={AVAILABLE_COLOR} emissiveIntensity={0.22} flatShading roughness={0.6} />
         </mesh>
       )}
-      <mesh geometry={outlineGeometry} position={[0, deckY, centerZ]} frustumCulled={false}>
-        <meshBasicMaterial color={CHECKING_STRUCTURE_COLOR} wireframe transparent opacity={0.4} depthWrite={false} />
-      </mesh>
+      <lineSegments geometry={outlineGeometry} position={[0, deckY, centerZ]} frustumCulled={false}>
+        <lineBasicMaterial color={CHECKING_STRUCTURE_COLOR} transparent opacity={0.4} />
+      </lineSegments>
 
       {/* low rails along both edges — same muted structural teal as the wireframe outline above,
           not the brighter text-matched CHECKING_COLOR (see CHECKING_STRUCTURE_COLOR's own

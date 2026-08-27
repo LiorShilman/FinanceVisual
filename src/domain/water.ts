@@ -1,5 +1,6 @@
 import type { CityBuilding } from './city';
 import { GRID_CORNER_FAR_LEFT } from './cityGrid';
+import type { FinancialEntity } from './entity';
 import { computeMagnitudeShare } from './sizing';
 
 // same tributary, but a visibly different-colored one — pension's own stream reads as a distinct
@@ -17,6 +18,14 @@ export interface StreamSource {
   kind: StreamKind;
   /** Raw amount — drives the stream's visual thickness. */
   weight: number;
+  /** Whether this money is actively being topped up every month — savings/investment/pension/
+   * study-fund entities carry their own `monthlyContribution`; checking has no such concept (it's
+   * day-to-day cash, not a growth deposit that can go dormant), so it's always treated as active.
+   * Drives whether the stream gets the animated flowing treatment or reads as a calm, static feed
+   * (see CityGround.tsx) — this is the first place that distinction actually reaches the screen;
+   * every category's own *displayed* health color is a flat per-category override that ignores it
+   * (see health.ts's getDisplayHealthOverride). */
+  hasMonthlyContribution: boolean;
 }
 
 export interface WaterFeature {
@@ -42,7 +51,8 @@ const MIN_SHARE = 0.22; // neither pool ever visually vanishes, even if one side
  * link to the rest of the city's money story at all. The ring/lake split is proportional to how
  * much money is actually in each (by area, so the ring's true visual "amount" is the area between
  * the two radii, not the radius itself); the lake's overall size reflects the combined total. */
-export function computeWaterFeature(buildings: CityBuilding[]): WaterFeature {
+export function computeWaterFeature(buildings: CityBuilding[], entities: FinancialEntity[]): WaterFeature {
+  const entityById = new Map(entities.map((e) => [e.id, e]));
   const relevant = buildings.filter(
     (b) =>
       b.category === 'checking' ||
@@ -51,12 +61,18 @@ export function computeWaterFeature(buildings: CityBuilding[]): WaterFeature {
       b.category === 'studyFund' ||
       b.category === 'pension',
   );
-  const streams = relevant.map((b) => ({
-    x: b.x,
-    z: b.z,
-    kind: (b.category === 'pension' ? 'pension' : b.category === 'checking' ? 'checking' : 'liquid') as StreamKind,
-    weight: b.weight,
-  }));
+  const streams = relevant.map((b) => {
+    const d = entityById.get(b.id)?.details;
+    const hasMonthlyContribution =
+      d?.kind === 'savings' || d?.kind === 'investment' || d?.kind === 'pension' || d?.kind === 'studyFund' ? d.monthlyContribution > 0 : true;
+    return {
+      x: b.x,
+      z: b.z,
+      kind: (b.category === 'pension' ? 'pension' : b.category === 'checking' ? 'checking' : 'liquid') as StreamKind,
+      weight: b.weight,
+      hasMonthlyContribution,
+    };
+  });
 
   const liquidTotal = relevant.filter((b) => b.category !== 'pension').reduce((sum, b) => sum + b.weight, 0);
   const pensionTotal = relevant.filter((b) => b.category === 'pension').reduce((sum, b) => sum + b.weight, 0);
