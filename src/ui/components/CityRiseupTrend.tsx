@@ -12,7 +12,7 @@ interface Props {
 const BAR_WIDTH = 0.68;
 // widened from 0.35 — the amount labels above each bar are wider than the bar itself, and at the
 // old gap neighboring labels overlapped each other.
-const BAR_GAP = 0.8;
+const BAR_GAP = 1;
 const MAX_BAR_HEIGHT = 5.2;
 // the whole chart floats above the ground on its own platform rather than growing straight out of
 // the grid — grown out of the same shallow-camera-angle issue as the month labels/DEPTH_LABELS:
@@ -98,7 +98,7 @@ export function CityRiseupTrend({ x, y, z, history }: Props) {
                 green label on a green bar (or red-on-red) was nearly unreadable. Gold matches
                 every other floating money label in the city (CityBuildingMesh, CityGoalMesh,
                 CityExpenseMesh), so it reads as "an amount" at a glance here too. */}
-            <Billboard position={[0, barHeight + 0.45, 0]}>
+            <Billboard position={[0, barHeight + 0.65, 0]}>
               <Text
                 fontSize={0.4}
                 color="#ffd166"
