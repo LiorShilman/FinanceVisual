@@ -42,12 +42,23 @@ interface BoardState {
    * it follows a family across devices. Sent as a bearer header straight to the RiseUp proxy
    * server; never touches any RiseUp-side storage of its own. */
   riseupPat: string;
+  /** This account's own OpenAI API key, same per-account sync pattern as riseupPat — sent as a
+   * bearer header straight to the shared server's own /api/insights route, never stored server-
+   * side. */
+  openaiKey: string;
+  /** Cached AI insights from the last successful /api/insights call — synced so they survive a
+   * reload without re-spending an OpenAI request; only replaced when the user explicitly refreshes
+   * (see FamilyPanel's own "רענן תובנות" button), never fetched automatically. */
+  aiInsights: string[];
+  aiInsightsUpdatedAt: string | null;
 
   setLayoutMode: (mode: LayoutMode) => void;
   toggleHideAmounts: () => void;
   setUsdRate: (rate: number, updatedAt?: string) => void;
   toggleAutoUpdateUsdRate: () => void;
   setRiseupPat: (pat: string) => void;
+  setOpenaiKey: (key: string) => void;
+  setAiInsights: (insights: string[], updatedAt?: string) => void;
 
   addFamilyMember: (member: Omit<FamilyMember, 'id'>) => void;
   updateFamilyMember: (id: string, patch: Partial<Omit<FamilyMember, 'id'>>) => void;
@@ -75,12 +86,17 @@ export const useBoardStore = create<BoardState>()((set) => ({
   usdRateUpdatedAt: null,
   autoUpdateUsdRate: false,
   riseupPat: '',
+  openaiKey: '',
+  aiInsights: [],
+  aiInsightsUpdatedAt: null,
 
   setLayoutMode: (mode) => set({ layoutMode: mode }),
   toggleHideAmounts: () => set((state) => ({ hideAmounts: !state.hideAmounts })),
   setUsdRate: (rate, updatedAt) => set({ usdRate: rate, usdRateUpdatedAt: updatedAt ?? new Date().toISOString() }),
   toggleAutoUpdateUsdRate: () => set((state) => ({ autoUpdateUsdRate: !state.autoUpdateUsdRate })),
   setRiseupPat: (pat) => set({ riseupPat: pat }),
+  setOpenaiKey: (key) => set({ openaiKey: key }),
+  setAiInsights: (insights, updatedAt) => set({ aiInsights: insights, aiInsightsUpdatedAt: updatedAt ?? new Date().toISOString() }),
 
   addFamilyMember: (member) =>
     set((state) => ({

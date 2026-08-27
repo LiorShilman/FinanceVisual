@@ -1,9 +1,11 @@
 // Multi-tenant: every FinanceVisual account brings its own RiseUp PAT (stored in boardStore,
 // synced through Firestore like the rest of the account's data — see boardStore.ts's
 // `riseupPat`). This module only ever forwards that token as a bearer header to the shared
-// RiseUp proxy server; the token is never stored or logged here, and the server itself is
-// stateless per-request (see RiseUp/server/src/index.js's extractPat).
-const RISEUP_SERVER_URL = import.meta.env.VITE_RISEUP_SERVER_URL || 'https://shilmanlior2608.ddns.net:36500';
+// FinanceVisual server (see server/src/index.js's extractPat); the token is never stored or
+// logged here, and the server itself is stateless per-request. Same server FinanceVisual's own
+// AI insights feature talks to (see app/insights.ts) — RiseUp used to have its own separate
+// standalone server on port 36500, now folded into this one.
+const RISEUP_SERVER_URL = import.meta.env.VITE_RISEUP_SERVER_URL || 'https://shilmanlior2608.ddns.net:36600';
 const REQUEST_TIMEOUT_MS = 8000;
 
 export type RiseupConnectionStatus = 'unset' | 'checking' | 'connected' | 'invalidPat' | 'unreachable';

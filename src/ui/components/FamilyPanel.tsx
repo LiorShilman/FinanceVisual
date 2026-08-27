@@ -7,7 +7,9 @@ import {
   type FamilyRelation,
   type MaritalStatus,
 } from '../../domain/familyMember';
+import { buildInsightsSummary } from '../../domain/insights';
 import { useBoardStore } from '../../app/boardStore';
+import { askQuestion, fetchInsights, type InsightsFetchStatus } from '../../app/insights';
 import { resizeImageToDataUrl } from '../../app/imageResize';
 import { fetchBudgetStatus, type RiseupConnectionStatus, type RiseupMonthStatus } from '../../app/riseupConnection';
 import { formatCurrency } from '../format';
@@ -19,6 +21,16 @@ const RISEUP_STATUS_LABEL: Record<RiseupConnectionStatus, string> = {
   connected: 'מחובר',
   invalidPat: 'PAT לא תקין',
   unreachable: 'לא מחובר',
+};
+
+type AiPillState = 'unset' | 'loading' | InsightsFetchStatus;
+
+const AI_STATUS_LABEL: Record<AiPillState, string> = {
+  unset: 'לא הופעל',
+  loading: 'טוען…',
+  ok: 'עודכן',
+  invalidKey: 'מפתח לא תקין',
+  unreachable: 'לא זמין',
 };
 
 interface Props {
@@ -88,6 +100,60 @@ export function FamilyPanel({ onClose, onOpenRiseupTransactions }: Props) {
   function commitRiseupPat() {
     setRiseupPat(riseupPatDraft);
   }
+
+  const entities = useBoardStore((s) => s.entities);
+  const openaiKey = useBoardStore((s) => s.openaiKey);
+  const setOpenaiKey = useBoardStore((s) => s.setOpenaiKey);
+  const aiInsights = useBoardStore((s) => s.aiInsights);
+  const aiInsightsUpdatedAt = useBoardStore((s) => s.aiInsightsUpdatedAt);
+  const setAiInsights = useBoardStore((s) => s.setAiInsights);
+
+  // same draft/commit-on-blur pattern as riseupPatDraft above.
+  const [openaiKeyDraft, setOpenaiKeyDraft] = useState(openaiKey);
+  const [insightsLoading, setInsightsLoading] = useState(false);
+  // only the *last fetch attempt's* outcome — not synced, not meant to survive a reload the way
+  // the insights themselves (aiInsights) do.
+  const [lastFetchStatus, setLastFetchStatus] = useState<InsightsFetchStatus | null>(null);
+
+  function commitOpenaiKey() {
+    setOpenaiKey(openaiKeyDraft);
+  }
+
+  async function handleRefreshInsights() {
+    const key = openaiKey.trim();
+    if (!key || insightsLoading) return;
+    setInsightsLoading(true);
+    setLastFetchStatus(null);
+    const result = await fetchInsights(key, buildInsightsSummary(entities));
+    setLastFetchStatus(result.status);
+    if (result.status === 'ok' && result.insights) setAiInsights(result.insights);
+    setInsightsLoading(false);
+  }
+
+  // the free-question answer is deliberately not synced (unlike aiInsights) — it's a one-off
+  // exchange, not a standing fact worth carrying across devices/reloads the way the automatic
+  // insights are.
+  const [question, setQuestion] = useState('');
+  const [answer, setAnswer] = useState<string | null>(null);
+  const [askLoading, setAskLoading] = useState(false);
+  const [askStatus, setAskStatus] = useState<InsightsFetchStatus | null>(null);
+
+  async function handleAsk() {
+    const key = openaiKey.trim();
+    const q = question.trim();
+    if (!key || !q || askLoading) return;
+    setAskLoading(true);
+    setAskStatus(null);
+    setAnswer(null);
+    const result = await askQuestion(key, buildInsightsSummary(entities), q);
+    setAskStatus(result.status);
+    if (result.status === 'ok') setAnswer(result.answer);
+    setAskLoading(false);
+  }
+
+  const aiPillState: AiPillState = insightsLoading
+    ? 'loading'
+    : (lastFetchStatus ?? (aiInsights.length > 0 ? 'ok' : 'unset'));
 
   function handleAdd() {
     const name = newName.trim();
@@ -246,6 +312,58 @@ export function FamilyPanel({ onClose, onOpenRiseupTransactions }: Props) {
               📋 כל התנועות
             </button>
           )}
+        </div>
+
+        <div className={styles.aiSection}>
+          <div className={styles.aiHeader}>
+            <span className={styles.aiTitle}>תובנות AI</span>
+            <span className={`${styles.aiPill} ${styles[`aiPill_${aiPillState}`] ?? ''}`}>{AI_STATUS_LABEL[aiPillState]}</span>
+          </div>
+          <input
+            className={styles.aiInput}
+            type="password"
+            placeholder="מפתח OpenAI API שלך (sk-…)"
+            value={openaiKeyDraft}
+            onChange={(e) => setOpenaiKeyDraft(e.target.value)}
+            onBlur={commitOpenaiKey}
+            onKeyDown={(e) => e.key === 'Enter' && commitOpenaiKey()}
+          />
+          <button
+            type="button"
+            className={styles.aiRefreshBtn}
+            onClick={handleRefreshInsights}
+            disabled={!openaiKey.trim() || insightsLoading}
+          >
+            {insightsLoading ? 'טוען תובנות…' : 'רענן תובנות'}
+          </button>
+          {aiInsights.length > 0 && (
+            <>
+              <ul className={styles.aiInsightsList}>
+                {aiInsights.map((insight, i) => (
+                  <li key={i} className={styles.aiInsightItem}>
+                    {insight}
+                  </li>
+                ))}
+              </ul>
+              {aiInsightsUpdatedAt && (
+                <span className={styles.aiTimestamp}>עודכן {new Date(aiInsightsUpdatedAt).toLocaleString('he-IL')}</span>
+              )}
+            </>
+          )}
+
+          <input
+            className={styles.aiInput}
+            type="text"
+            placeholder="שאל שאלה חופשית על המצב הכלכלי שלך…"
+            value={question}
+            onChange={(e) => setQuestion(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleAsk()}
+          />
+          <button type="button" className={styles.aiRefreshBtn} onClick={handleAsk} disabled={!openaiKey.trim() || !question.trim() || askLoading}>
+            {askLoading ? 'שואל…' : 'שאל'}
+          </button>
+          {askStatus && askStatus !== 'ok' && <span className={styles.aiTimestamp}>{AI_STATUS_LABEL[askStatus]}</span>}
+          {answer && <p className={styles.aiInsightItem}>{answer}</p>}
         </div>
 
         <button type="button" className={styles.closeBtn} onClick={onClose}>

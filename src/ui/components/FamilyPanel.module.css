@@ -229,6 +229,68 @@
   color: var(--health-risk);
 }
 
+.aiSection {
+  composes: riseupSection;
+}
+
+.aiHeader {
+  composes: riseupHeader;
+}
+
+.aiTitle {
+  composes: riseupTitle;
+}
+
+.aiPill {
+  composes: riseupPill;
+}
+
+.aiPill_ok {
+  composes: riseupPill_connected;
+}
+
+.aiPill_invalidKey,
+.aiPill_unreachable {
+  composes: riseupPill_unreachable;
+}
+
+.aiPill_loading {
+  composes: riseupPill_checking;
+}
+
+.aiInput {
+  composes: riseupInput;
+}
+
+.aiRefreshBtn {
+  composes: riseupTransactionsBtn;
+}
+
+.aiRefreshBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.aiInsightsList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 2px;
+  margin: 0;
+  padding-inline-start: 18px;
+}
+
+.aiInsightItem {
+  font-size: 0.8rem;
+  color: var(--text);
+  line-height: 1.4;
+}
+
+.aiTimestamp {
+  font-size: 0.7rem;
+  color: var(--text-dim);
+}
+
 .closeBtn {
   align-self: flex-end;
   border: 1px solid var(--border);
