@@ -82,9 +82,16 @@ interface Props {
   onOpen: () => void;
 }
 
-// checking's own health color (see domain/health.ts) — used for the rails/wireframe/category
-// text, i.e. the bridge's own structural identity.
+// checking's own health color (see domain/health.ts) — used for the "פנוי להשקעה" text, which
+// renders it flat/unlit and therefore exactly as authored.
 const CHECKING_COLOR = '#2fb0a0';
+// the rails and the wireframe outline draped over the whole deck are a different story: the
+// wireframe's own overlapping semi-transparent lines and the rails' specular highlights under the
+// scene's lights both push CHECKING_COLOR toward a visibly brighter, more cyan turquoise than the
+// text ever shows — reducing just the rails' emissive intensity wasn't enough, since the outline
+// (an unlit meshBasicMaterial) never had emissive to begin with. A pre-darkened structural variant
+// keeps the same hue but lands back on the same muted teal once the wireframe/highlights lighten it.
+const CHECKING_STRUCTURE_COLOR = '#1c7d70';
 // the reserved/"don't touch" portion of the deck surface.
 const RESERVED_COLOR = '#3a4a46';
 // the available-for-investment portion — deliberately gold, not the same teal the rails already
@@ -251,10 +258,12 @@ export function CityCheckingBridge({
         </mesh>
       )}
       <mesh geometry={outlineGeometry} position={[0, deckY, centerZ]} frustumCulled={false}>
-        <meshBasicMaterial color={CHECKING_COLOR} wireframe transparent opacity={0.4} depthWrite={false} />
+        <meshBasicMaterial color={CHECKING_STRUCTURE_COLOR} wireframe transparent opacity={0.4} depthWrite={false} />
       </mesh>
 
-      {/* low rails along both edges — glowing teal, the deck's own true accent color. */}
+      {/* low rails along both edges — same muted structural teal as the wireframe outline above,
+          not the brighter text-matched CHECKING_COLOR (see CHECKING_STRUCTURE_COLOR's own
+          comment). */}
       {[-1, 1].map((side) => (
         <mesh
           key={side}
@@ -262,7 +271,7 @@ export function CityCheckingBridge({
           frustumCulled={false}
         >
           <boxGeometry args={[RAIL_THICKNESS, RAIL_HEIGHT, span]} />
-          <meshStandardMaterial color={CHECKING_COLOR} emissive={CHECKING_COLOR} emissiveIntensity={0.4} roughness={0.4} />
+          <meshStandardMaterial color={CHECKING_STRUCTURE_COLOR} emissive={CHECKING_STRUCTURE_COLOR} emissiveIntensity={0.14} roughness={0.4} />
         </mesh>
       ))}
 
@@ -297,7 +306,7 @@ export function CityCheckingBridge({
           עו״ש
         </Text>
         {availableLabel !== '' && (
-          <Text position={[0, -1.7, 0]} fontSize={0.38} color={CHECKING_COLOR} anchorX="center" anchorY="top" outlineWidth={0.017} outlineColor="#0a0c11" fontWeight="bold" frustumCulled={false}>
+          <Text position={[0, -1.7, 0]} fontSize={0.54} color={CHECKING_COLOR} anchorX="center" anchorY="top" outlineWidth={0.022} outlineColor="#0a0c11" fontWeight="bold" frustumCulled={false}>
             {availableLabel}
           </Text>
         )}

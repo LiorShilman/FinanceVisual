@@ -1,7 +1,29 @@
 import { useMemo } from 'react';
+import * as THREE from 'three';
 import { Billboard, Text } from '@react-three/drei';
 import type { ThreeEvent } from '@react-three/fiber';
 import { computeCanopyRadius, computeTreeLabelY, computeTrunkHeight, computeTrunkRadius, type TreeVariant } from './cityGrowthGeometry';
+
+// One shared, module-level soft-shadow texture (dark center fading to fully transparent) — every
+// tree tints and sizes the same texture instead of each generating its own canvas.
+let sharedShadowTexture: THREE.CanvasTexture | null = null;
+function getShadowTexture(): THREE.CanvasTexture {
+  if (sharedShadowTexture) return sharedShadowTexture;
+  const size = 128;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d')!;
+  const grad = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+  grad.addColorStop(0, 'rgba(0,0,0,0.55)');
+  grad.addColorStop(0.7, 'rgba(0,0,0,0.25)');
+  grad.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, size, size);
+  const texture = new THREE.CanvasTexture(canvas);
+  sharedShadowTexture = texture;
+  return texture;
+}
 
 interface Props {
   x: number;
@@ -40,7 +62,7 @@ function hash(seed: number): number {
   return s - Math.floor(s);
 }
 
-export function CityTreeMesh({ x, z, height, footprint, color, name, amount, variant, hideLabel, labelScale = 1, onOpen }: Props) {
+export function CityTreeMesh({ x, z, height, footprint, name, amount, variant, hideLabel, labelScale = 1, onOpen }: Props) {
   const handleClick = (e: ThreeEvent<MouseEvent>) => {
     e.stopPropagation();
     onOpen();
@@ -103,11 +125,15 @@ export function CityTreeMesh({ x, z, height, footprint, color, name, amount, var
 
   return (
     <group position={[x, 0, z]}>
-      {/* a soft glow disc at the base — the one place the entity's own category color still
-          shows, tying the tree back to the rest of the city's colored-ground-glow convention. */}
+      {/* a soft contact shadow at the base, not a flat colored glow — every growth category
+          shares one uninformative flat amber as its "health color" (see the palette comment
+          above), so a disc tinted by it never actually meant anything category- or entity-
+          specific; it just always read as the same gold puck under every tree regardless of
+          species or size. A shadow that scales with the tree's own canopy radius is a real,
+          variable cue instead. */}
       <mesh position={[0, 0.02, 0]} rotation={[-Math.PI / 2, 0, 0]} frustumCulled={false}>
-        <circleGeometry args={[canopyRadius * 0.9, 20]} />
-        <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.35} transparent opacity={0.25} roughness={0.9} />
+        <circleGeometry args={[canopyRadius * 1.1, 20]} />
+        <meshBasicMaterial map={getShadowTexture()} transparent opacity={0.6} depthWrite={false} />
       </mesh>
 
       <mesh position={[0, trunkHeight / 2, 0]} frustumCulled={false} onClick={handleClick}>

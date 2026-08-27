@@ -2,6 +2,7 @@ import { useEffect, useRef, type ElementRef } from 'react';
 import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
 import type { OrbitControls } from '@react-three/drei';
+import { getTerrainHeight } from '../../domain/terrain';
 
 interface Props {
   controlsRef: React.RefObject<ElementRef<typeof OrbitControls> | null>;
@@ -10,6 +11,21 @@ interface Props {
 
 const WALK_SPEED = 14; // world units per second — a bit over one LOT_SIZE (2.6) per second
 const TURN_SPEED = 0.7; // radians per second — gentle, not a snap-to-angle turn
+// roughly person-scale against this city's own buildings (MIN_HEIGHT 0.6, LOT_SIZE 2.6) — high
+// enough to clear the low hedges/ground clutter, low enough that walking actually reads as
+// walking, not the same bird's-eye height the free-orbit camera starts at.
+const EYE_HEIGHT = 2.2;
+// how quickly the camera settles toward walking height once movement starts — snapping straight
+// there on the very first frame reads as a jump-cut; easing it in over roughly half a second feels
+// like crouching down into the walk instead.
+const HEIGHT_EASE = 4;
+// the free-orbit camera is typically angled steeply downward (a bird's-eye view looking down at
+// the city) — easing the *height* down while leaving that same steep pitch untouched just means
+// standing at eye-height while still staring almost straight down at the ground right underfoot,
+// which reads as a black screen with only a thin strip of the map visible at the top. A gentle
+// downward tilt (looking slightly ahead-and-down, not levelling out to dead-flat) is what actually
+// reads as walking; eased in at the same rate as the height so both settle together.
+const WALK_PITCH_TAN = -0.15;
 
 const MOVE_KEYS = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
 
@@ -80,6 +96,20 @@ export function CityWalkControls({ controlsRef, enabled }: Props) {
       const move = forwardFlat.multiplyScalar(walk * WALK_SPEED * delta);
       camera.position.add(move);
     }
+
+    // eased toward ground level, not snapped — the free-orbit camera starts at a bird's-eye
+    // height, and pulling the camera itself down (not just moving it across x/z) is what actually
+    // makes this read as walking *on* the terrain instead of panning a still-elevated view across
+    // it.
+    const groundY = getTerrainHeight(camera.position.x, camera.position.z) + EYE_HEIGHT;
+    camera.position.y += (groundY - camera.position.y) * Math.min(1, HEIGHT_EASE * delta);
+
+    // flatten the pitch in step with the height ease — otherwise `offset`'s own y stays whatever
+    // steep bird's-eye angle the mouse last set, and carrying that same angle down to eye-height
+    // means looking almost straight down at your own feet instead of ahead.
+    const ease = Math.min(1, HEIGHT_EASE * delta);
+    const horizontalDist = Math.hypot(offset.x, offset.z);
+    offset.y += (horizontalDist * WALK_PITCH_TAN - offset.y) * ease;
 
     controls.target.copy(camera.position).add(offset);
     controls.update();

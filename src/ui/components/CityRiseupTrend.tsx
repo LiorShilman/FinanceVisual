@@ -4,6 +4,7 @@ import { formatCurrency } from '../format';
 
 interface Props {
   x: number;
+  y: number;
   z: number;
   history: MonthHistoryPoint[];
 }
@@ -13,6 +14,11 @@ const BAR_WIDTH = 0.68;
 // old gap neighboring labels overlapped each other.
 const BAR_GAP = 0.8;
 const MAX_BAR_HEIGHT = 5.2;
+// the whole chart floats above the ground on its own platform rather than growing straight out of
+// the grid — grown out of the same shallow-camera-angle issue as the month labels/DEPTH_LABELS:
+// bars rooted right at ground level read as sunk into the terrain from this city's viewing angle,
+// not just their own labels.
+const GRAPH_LIFT = 4.4;
 const POSITIVE_COLOR = '#2f9e58';
 const NEGATIVE_COLOR = '#d64545';
 
@@ -29,14 +35,19 @@ function formatMonthShort(monthKey: string): string {
  * below, tallest bar in the set always at MAX_BAR_HEIGHT so the shape stays readable regardless
  * of the account's absolute scale.
  */
-export function CityRiseupTrend({ x, z, history }: Props) {
+export function CityRiseupTrend({ x, y, z, history }: Props) {
   if (history.length === 0) return null;
   const maxAbs = Math.max(1, ...history.map((h) => Math.abs(h.net)));
   const totalWidth = (history.length - 1) * (BAR_WIDTH + BAR_GAP);
 
   return (
-    <group position={[x, 0, z]}>
-      <Billboard position={[totalWidth / 2, MAX_BAR_HEIGHT + 1, 0]}>
+    <group position={[x, y + GRAPH_LIFT, z]}>
+      {/* pulled forward to roughly split the gap between the bars (z=0) and the now much-further-
+          forward month labels (z=5.5) — both are Billboards, so both always face the camera dead-
+          on regardless of z, but sitting at very different camera distances still makes them scale
+          and sit on screen so differently that the title reads as disconnected from the rest of
+          the chart, not part of the same composition. */}
+      <Billboard position={[totalWidth / 2, MAX_BAR_HEIGHT + 1, 2.5]}>
         <Text
           fontSize={0.52}
           color="#c3cadb"
@@ -102,11 +113,12 @@ export function CityRiseupTrend({ x, z, history }: Props) {
                 {formatCurrency(h.net)}
               </Text>
             </Billboard>
-            {/* above ground (y>0) and pulled forward in front of the bar's own footprint — the
-                original negative-y placement sat at/under the ground plane's surface and was
-                getting hidden by it (not actually missing, just invisible), and directly below
-                the bar's center risked clipping into its own box geometry. */}
-            <Billboard position={[0, 0.15, 1.9]}>
+            {/* well above ground (not just barely, y=0.15) — same fix as CityView's own
+                DEPTH_LABELS: a near-ground Billboard reads as "under/blending with the ground"
+                from this city's shallow camera angle even when its Z is already correct, since
+                closer-to-camera near-ground content exaggerates that perspective artifact. Pulled
+                forward in front of the bar's own footprint so it doesn't clip into the box. */}
+            <Billboard position={[0, 1, 5.5]}>
               <Text
                 fontSize={0.62}
                 color="#ffffff"

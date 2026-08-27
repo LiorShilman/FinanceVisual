@@ -458,12 +458,17 @@ export function CityView({
           target already use. */}
       <CitySun x={width * 0.78} y={27} z={groundCenter[1]} breakdown={hideAmounts ? null : netWorth} />
       {/* a few units to the right of the depth-tier labels' own column (x=-4.6 — "right" meaning
-          toward higher x, since categories read right-to-left in this RTL city), centered in z
-          between the long-term and short-term tiers specifically (not the full long-to-current
-          span) — off to the side of the actual district instead of near the sun, where it sat
-          right in the main view and competed with it. */}
+          toward higher x, since categories read right-to-left in this RTL city), in z mostly
+          toward the short-term tier rather than the exact long/short midpoint — the exact
+          midpoint sat close enough to depthBaseZ(0) that the graph's own title/leftmost bar
+          visually climbed onto the "נעול / טווח ארוך" tier label sitting right at that line. */}
       {!hideAmounts && (
-        <CityRiseupTrend x={1.8} z={(depthBaseZ(0) + depthBaseZ(1)) / 2} history={riseupHistory} />
+        <CityRiseupTrend
+          x={1.8}
+          y={getTerrainHeight(1.8, depthBaseZ(0) + (depthBaseZ(1) - depthBaseZ(0)) * 0.95)}
+          z={depthBaseZ(0) + (depthBaseZ(1) - depthBaseZ(0)) * 0.95}
+          history={riseupHistory}
+        />
       )}
       <CityIncomeLinks paths={incomeLinkPaths} />
       <CityDebtChains debtPositions={debtPositions} linkPaths={debtLinkPaths} />

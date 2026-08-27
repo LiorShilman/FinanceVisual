@@ -212,18 +212,22 @@ export function getCheckingAvailableForInvestment(details: { balance: number; de
   return Math.max(0, details.balance - details.desiredMinimumBalance);
 }
 
+// insurance/debt sit right after checking and before expense — the valley's red debt/expense-risk
+// streams (see domain/valley.ts) source from these categories, and with them scattered at the far
+// end of the row (as before), those streams had to cut clear across the whole city width to reach
+// the valley. Grouping them next to checking keeps the streams local instead.
 export const ENTITY_CATEGORIES: readonly EntityCategory[] = [
   'source',
   'income',
   'checking',
+  'insurance',
+  'debt',
   'expense',
   'donation',
   'savings',
   'investment',
   'pension',
   'studyFund',
-  'insurance',
-  'debt',
   'goal',
   'realEstate',
 ];

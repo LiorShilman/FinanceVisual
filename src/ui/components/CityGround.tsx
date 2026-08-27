@@ -13,13 +13,25 @@ interface Props {
   valley: ValleyFeature;
 }
 
-// checking gets its own third tint (its own health color — see domain/health.ts) instead of
-// blending into the same blue as savings/investment — day-to-day cash isn't the same thing as
-// money actually earmarked for growth, even though both are "liquid" for the lake's own size math.
+// checking's stream matches the teal that actually colors its own "פנוי להשקעה" (available for
+// investment) text on the bridge (CityCheckingBridge's CHECKING_COLOR) — not the bridge deck's
+// separate gold zone material, which is a different "available" convention (the deck surface
+// split), not the one this label/stream pairing refers to.
 const WATER_STREAM_COLOR: Record<StreamKind, string> = {
   pension: '#c2921f',
   checking: '#2fb0a0',
   liquid: '#4a90b8',
+};
+
+// the flat, unlit "פנוי להשקעה" text renders its hex exactly as authored, but the same hex on an
+// emissive-lit metal tube reads noticeably brighter/lighter under the scene's lights — the shared
+// 0.32 emissive intensity below washed checking's teal out into a much lighter, more cyan-looking
+// turquoise than the text next to it. Toned down just for checking so the stream actually reads as
+// the same teal, not a brighter cousin of it.
+const WATER_STREAM_EMISSIVE_INTENSITY: Record<StreamKind, number> = {
+  pension: 0.32,
+  checking: 0.14,
+  liquid: 0.32,
 };
 
 // Richly blended greens, no dry/dirt patches mixed in — a lawn of varying tone rather than a
@@ -325,7 +337,7 @@ export function CityGround({ groundCenter, groundSize, water, valley }: Props) {
           <meshStandardMaterial
             color={WATER_STREAM_COLOR[kind]}
             emissive={WATER_STREAM_COLOR[kind]}
-            emissiveIntensity={0.32}
+            emissiveIntensity={WATER_STREAM_EMISSIVE_INTENSITY[kind]}
             roughness={0.25}
             metalness={0.1}
           />
