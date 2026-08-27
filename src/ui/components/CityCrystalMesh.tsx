@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { Billboard, Text } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
 import type { ThreeEvent } from '@react-three/fiber';
-import { computeCrownMouthRadius, computeCrystalLabelY, computeCrystalTrunkHeight } from './cityGrowthGeometry';
+import { computeCrownMouthRadius, computeCrystalLabelY, computeCrystalTrunkHeight, computeCrystalTrunkRadius } from './cityGrowthGeometry';
 
 interface Props {
   x: number;
@@ -50,7 +50,7 @@ export function CityCrystalMesh({ x, z, height, footprint, color, name, amount, 
   };
 
   const trunkHeight = computeCrystalTrunkHeight(height);
-  const trunkRadiusBottom = Math.max(0.09, Math.min(0.2, footprint * 0.12));
+  const trunkRadiusBottom = computeCrystalTrunkRadius(height, footprint);
   const crownMouthRadius = computeCrownMouthRadius(height, footprint);
 
   // deterministic per-position seed (not Math.random — impure during render, and would reshuffle

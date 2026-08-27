@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { Billboard, Text } from '@react-three/drei';
 import type { ThreeEvent } from '@react-three/fiber';
-import { computeCanopyRadius, computeTreeLabelY, computeTrunkHeight, TREE_SIZE_SCALE, type TreeVariant } from './cityGrowthGeometry';
+import { computeCanopyRadius, computeTreeLabelY, computeTrunkHeight, computeTrunkRadius, type TreeVariant } from './cityGrowthGeometry';
 
 interface Props {
   x: number;
@@ -48,7 +48,7 @@ export function CityTreeMesh({ x, z, height, footprint, color, name, amount, var
 
   const palette = CANOPY_PALETTE[variant];
   const trunkHeight = computeTrunkHeight(height, variant);
-  const trunkRadiusBottom = Math.max(0.1, Math.min(0.24, footprint * 0.13)) * TREE_SIZE_SCALE[variant];
+  const trunkRadiusBottom = computeTrunkRadius(height, footprint, variant);
   const trunkRadiusTop = trunkRadiusBottom * 0.7;
   const canopyRadius = computeCanopyRadius(height, footprint, variant);
 

@@ -5,7 +5,7 @@ import { Billboard, OrbitControls, Text } from '@react-three/drei';
 import { useBoardStore } from '../../app/boardStore';
 import type { MonthHistoryPoint } from '../../app/riseupHistory';
 import { computeCityAtmosphere } from '../../domain/atmosphere';
-import { computeCityLayout, depthBaseZ, depthIndex, DISTRICT_SPACING } from '../../domain/city';
+import { computeCityLayout, depthBaseZ, depthIndex, DISTRICT_SPACING, LONG_TERM_MIN_Z } from '../../domain/city';
 import { computeGroundBounds, type CircularExtent } from '../../domain/cityGrid';
 import type { GrowthProjectionPoint } from '../../domain/compoundInterest';
 import { computeDebtLinkPaths } from '../../domain/debtLinks';
@@ -282,10 +282,12 @@ export function CityView({
   const hasDonations = populatedCategories.has('donation');
   const width = (ENTITY_CATEGORIES.length - 1) * DISTRICT_SPACING;
   // one extra row of depth when donations exist — their dedicated foreground lane past every
-  // other category's nearest row (see domain/city.ts's depthIndex). minDepthZ comes from the same
-  // depthBaseZ used to place buildings — locked/long-term sits an extra gap further back than the
-  // other tiers, so the near/far framing below has to reach that far too, not just to z=0.
-  const minDepthZ = depthBaseZ(0);
+  // other category's nearest row (see domain/city.ts's depthIndex). minDepthZ is the real
+  // drag-reachable minimum (LONG_TERM_MIN_Z), not just depthBaseZ(0)'s own front line — a
+  // long-term entity can be manually dragged well behind that line (see domain/city.ts's
+  // LONG_TERM_DEPTH_REACH), and sizing the ground/camera to only the front line let a dragged
+  // entity walk right off the rendered terrain.
+  const minDepthZ = LONG_TERM_MIN_Z;
   const maxDepthZ = depthBaseZ(hasDonations ? 3 : 2);
   const depthSpan = maxDepthZ - minDepthZ;
   const groundSize = Math.max(width, depthSpan) + 20;
@@ -463,7 +465,13 @@ export function CityView({
       ))}
 
       {DEPTH_LABELS.map((label, i) => (
-        <Billboard key={label.text} position={[-4.6, 1.4, depthBaseZ(i)]}>
+        // raised well above ground level (was 1.4) — the label's own Z is already correctly far
+        // from the short-term trees (confirmed: same depthBaseZ every tree/label in this city
+        // reads from), but a low, ground-level Billboard can still visually align with nearer
+        // ground-level content from a shallow camera angle, purely as a perspective/depth-cue
+        // artifact, not an actual position error. More height gives it a clearer silhouette
+        // against the sky instead of blending into whatever's on the ground near it on screen.
+        <Billboard key={label.text} position={[-4.6, 4.5, depthBaseZ(i)]}>
           <Text
             fontSize={0.72}
             color={label.color}
