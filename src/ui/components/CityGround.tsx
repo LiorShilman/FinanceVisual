@@ -2,14 +2,17 @@ import { useMemo } from 'react';
 import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
 import { computeGroundBounds, type CircularExtent } from '../../domain/cityGrid';
+import { HEALTH_COLORS } from '../../domain/health';
 import { computeMagnitudeShare } from '../../domain/sizing';
 import { getTerrainHeight } from '../../domain/terrain';
-import type { ValleyFeature } from '../../domain/valley';
+import type { ValleyFeature, ValleyStreamKind } from '../../domain/valley';
 import type { StreamKind, WaterFeature } from '../../domain/water';
 
 interface Props {
   groundCenter: [number, number];
-  groundSize: number;
+  // independent X/Z margins, not one shared square size — see computeGroundBounds's own comment.
+  groundSizeX: number;
+  groundSizeZ: number;
   water: WaterFeature;
   valley: ValleyFeature;
 }
@@ -33,6 +36,22 @@ const WATER_STREAM_EMISSIVE_INTENSITY: Record<StreamKind, number> = {
   pension: 0.32,
   checking: 0.14,
   liquid: 0.32,
+};
+
+// expense/debt/insurance all drain into the same valley, but they aren't the same *kind* of
+// outflow — a debt payment retires a real liability and an insurance premium buys real coverage,
+// neither is pure loss the way a plain expense is — so only expense keeps the valley's own themed
+// ember red. Debt and insurance instead reuse the exact hex their own buildings already render in
+// (HEALTH_COLORS), so a stream reads as visibly "the same kind of money" as the building it left.
+const VALLEY_STREAM_COLOR: Record<ValleyStreamKind, string> = {
+  expense: '#b84a4a',
+  debt: HEALTH_COLORS.debt,
+  insurance: HEALTH_COLORS.insurance,
+};
+const VALLEY_STREAM_EMISSIVE_INTENSITY: Record<ValleyStreamKind, number> = {
+  expense: 0.32,
+  debt: 0.3,
+  insurance: 0.3,
 };
 
 // Richly blended greens, no dry/dirt patches mixed in — a lawn of varying tone rather than a
@@ -334,13 +353,22 @@ function buildInflowCurve(
 // cheap insurance against the same class of bug recurring.
 const MIN_STREAM_RADIUS = 0.06;
 const MAX_STREAM_RADIUS = 0.26;
+// only a stream that's actually flowing (hasMonthlyContribution — see StreamSource's own comment
+// — or a valley stream, which has no "dormant" concept and is always treated as flowing) gets the
+// thicker treatment; a calm, static water stream stays at the original, thinner size, so the
+// thickness itself doubles as a visual cue for "is this actively being fed" rather than making
+// every stream uniformly bigger regardless of that distinction.
+const MIN_FLOWING_STREAM_RADIUS = 0.1;
+const MAX_FLOWING_STREAM_RADIUS = 0.38;
 
 // Direct magnitude, not rank — rank-based sizing (used for buildings/pyramid) deliberately
 // guarantees every item looks different even when two values are nearly equal, which is exactly
 // wrong for a pipe: ₪3,900 and ₪3,700 are basically the same amount and should look like basically
 // the same pipe, not "thread" vs "river" just because they happen to be neighbors in a short list.
-function radiusForWeight(weight: number): number {
-  return MIN_STREAM_RADIUS + computeMagnitudeShare(weight) * (MAX_STREAM_RADIUS - MIN_STREAM_RADIUS);
+function radiusForWeight(weight: number, flowing: boolean): number {
+  const min = flowing ? MIN_FLOWING_STREAM_RADIUS : MIN_STREAM_RADIUS;
+  const max = flowing ? MAX_FLOWING_STREAM_RADIUS : MAX_STREAM_RADIUS;
+  return min + computeMagnitudeShare(weight) * (max - min);
 }
 
 function buildStreamTubeGeometry(curve: THREE.CatmullRomCurve3, radius: number): THREE.TubeGeometry {
@@ -358,10 +386,11 @@ function floatYForRadius(radius: number, terrainY: number): number {
 }
 // the red (valley/expense-debt) streams cross paths with the blue/gold (lake/pension) streams
 // often enough that whichever draws on top felt arbitrary — this guarantees red always floats
-// clear above the others, at any radius combination: the thinnest valley stream (MIN radius) still
-// clears the thickest water stream (MAX radius) by a comfortable margin, using the same terrainY
-// each stream already samples at its own position.
-const VALLEY_STREAM_LIFT = MAX_STREAM_RADIUS - MIN_STREAM_RADIUS + 0.5;
+// clear above the others, at any radius combination: the thinnest valley stream (MIN_FLOWING,
+// since valley streams are always "flowing" — see radiusForWeight) still clears the thickest
+// water stream (MAX_FLOWING, when a water stream is itself flowing too) by a comfortable margin,
+// using the same terrainY each stream already samples at its own position.
+const VALLEY_STREAM_LIFT = MAX_FLOWING_STREAM_RADIUS - MIN_FLOWING_STREAM_RADIUS + 0.5;
 // how far ABOVE grade the lake/valley's own water surface sits, with a visible wall rising from
 // the ground up to meet it — real volume/depth instead of a flat disc painted on the ground.
 // Recessing it *below* grade instead was the first attempt, but the ground plane is one
@@ -393,7 +422,7 @@ const FLOW_SPEED = 0.35;
 // three water surfaces don't all pulse in obvious lockstep.
 const RIPPLE_SPEED = 0.7;
 
-export function CityGround({ groundCenter, groundSize, water, valley }: Props) {
+export function CityGround({ groundCenter, groundSizeX, groundSizeZ, water, valley }: Props) {
   const groundTexture = useMemo(() => createGroundTexture(), []);
   const flowTexture = getFlowTexture();
   const lakeTexture = getLakeTexture();
@@ -431,7 +460,7 @@ export function CityGround({ groundCenter, groundSize, water, valley }: Props) {
     () =>
       water.streams.map((s) => {
         const targetRadius = s.kind === 'liquid' ? water.lakeRadius : water.outerRingRadius;
-        const radius = radiusForWeight(s.weight);
+        const radius = radiusForWeight(s.weight, s.hasMonthlyContribution);
         const startY = floatYForRadius(radius, getTerrainHeight(s.x, s.z));
         const endY = s.kind === 'liquid' ? lakeSurfaceY : ringSurfaceY;
         const curve = buildInflowCurve(lakeX, lakeZ, targetRadius, s.x, s.z, startY, endY);
@@ -443,14 +472,16 @@ export function CityGround({ groundCenter, groundSize, water, valley }: Props) {
   const valleyStreamGeometries = useMemo(
     () =>
       valley.streams.map((s) => {
-        const radius = radiusForWeight(s.weight);
+        // valley streams (expense/debt/insurance) have no "dormant" concept — every one is always
+        // an active recurring outflow, so always the thicker "flowing" treatment.
+        const radius = radiusForWeight(s.weight, true);
         // VALLEY_STREAM_LIFT carried through on both ends — still needs to float clear of the
         // blue/gold water streams wherever their paths cross, on top of (not instead of) its own
         // dip into the recessed valley floor.
         const startY = floatYForRadius(radius, getTerrainHeight(s.x, s.z)) + VALLEY_STREAM_LIFT;
         const endY = valleySurfaceY + VALLEY_STREAM_LIFT;
         const curve = buildInflowCurve(valleyX, valleyZ, valley.radius, s.x, s.z, startY, endY);
-        return { radius, geometry: buildStreamTubeGeometry(curve, radius) };
+        return { kind: s.kind, radius, geometry: buildStreamTubeGeometry(curve, radius) };
       }),
     [valley.streams, valleyX, valleyZ, valley.radius, valleySurfaceY],
   );
@@ -471,7 +502,7 @@ export function CityGround({ groundCenter, groundSize, water, valley }: Props) {
     getValleyTexture().rotation += delta * RIPPLE_SPEED * 0.85;
   });
 
-  const bounds = computeGroundBounds(groundCenter, groundSize, [
+  const bounds = computeGroundBounds(groundCenter, groundSizeX, groundSizeZ, [
     { center: water.lakeCenter, radius: water.outerRingRadius } satisfies CircularExtent,
     { center: valley.center, radius: valley.radius } satisfies CircularExtent,
   ]);
@@ -553,12 +584,12 @@ export function CityGround({ groundCenter, groundSize, water, valley }: Props) {
         <meshStandardMaterial color="#7a2e28" emissive="#b84a4a" emissiveIntensity={0.3} roughness={0.4} transparent opacity={0.62} side={THREE.DoubleSide} />
       </mesh>
 
-      {valleyStreamGeometries.map(({ geometry }, i) => (
+      {valleyStreamGeometries.map(({ kind, geometry }, i) => (
         <mesh key={i} geometry={geometry} frustumCulled={false}>
           <meshStandardMaterial
-            color="#b84a4a"
-            emissive="#b84a4a"
-            emissiveIntensity={0.32}
+            color={VALLEY_STREAM_COLOR[kind]}
+            emissive={VALLEY_STREAM_COLOR[kind]}
+            emissiveIntensity={VALLEY_STREAM_EMISSIVE_INTENSITY[kind]}
             map={flowTexture}
             emissiveMap={flowTexture}
             roughness={0.25}

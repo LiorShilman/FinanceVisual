@@ -5,8 +5,16 @@ import { Billboard, OrbitControls, Text } from '@react-three/drei';
 import { useBoardStore } from '../../app/boardStore';
 import type { MonthHistoryPoint } from '../../app/riseupHistory';
 import { computeCityAtmosphere } from '../../domain/atmosphere';
-import { computeCityLayout, depthBaseZ, depthIndex, DISTRICT_SPACING, LONG_TERM_MIN_Z } from '../../domain/city';
-import { computeGroundBounds, type CircularExtent } from '../../domain/cityGrid';
+import {
+  computeCityLayout,
+  computeDistrictLayout,
+  computeDistrictSpan,
+  depthBaseZ,
+  depthIndex,
+  DEPTH_SPACING,
+  LONG_TERM_MIN_Z,
+} from '../../domain/city';
+import { computeGridZ, computeGroundBounds, type CircularExtent } from '../../domain/cityGrid';
 import type { GrowthProjectionPoint } from '../../domain/compoundInterest';
 import { computeDebtLinkPaths } from '../../domain/debtLinks';
 import { computeEmergencyRunway } from '../../domain/emergencyFund';
@@ -124,24 +132,57 @@ export function CityView({
   const cityPositions = useBoardStore((s) => s.cityPositions);
   const setCityPosition = useBoardStore((s) => s.setCityPosition);
   const [controlsEnabled, setControlsEnabled] = useState(true);
-  // same "reversed index * DISTRICT_SPACING" formula every district position (buildings, ground
-  // labels) already uses — see domain/city.ts's baseX and this file's own category-label loop.
-  const checkingDefaultX = (ENTITY_CATEGORIES.length - 1 - ENTITY_CATEGORIES.indexOf('checking')) * DISTRICT_SPACING;
-  const checkingBridgeMaxOffset = DISTRICT_SPACING / 2 - 1.3;
+  // each category's own real X-center/width, scaled down for a sparse district (source/income/
+  // checking typically) instead of every category claiming a flat DISTRICT_SPACING regardless of
+  // how many entities it actually holds — see domain/city.ts's computeDistrictLayout. Shared here
+  // so the checking bridge's own default slot/drag range and the category-label loop below both
+  // agree with wherever computeCityLayout itself actually placed each district.
+  const districts = useMemo(() => computeDistrictLayout(entities), [entities]);
+  // realEstate's own left edge stays within a few units of x=0 (it's anchored there itself, see
+  // computeDistrictLayout, and only ever shrinks a little) — every x*fraction formula below
+  // (camera, sun, light, budget bar) already assumes the city's span runs from 0 to `width`, so
+  // reusing that same assumption here (rather than reworking every one of those formulas to
+  // track a real, possibly-shrunk minX too) keeps this a targeted fix: `width` now tracks
+  // source's own real right edge — wherever the districts actually end — instead of a flat
+  // constant that overstated the real span once districts started shrinking individually.
+  const districtSpan = useMemo(() => computeDistrictSpan(districts), [districts]);
+  const width = districtSpan.maxX;
+  // Z only — the lake/valley's own X position is computed straight from districtSpan's real edges
+  // below (see computeWaterFeature/computeValleyFeature), not from this same width-derived corner,
+  // which was exactly what let the lake drift into overlapping the district content as districts
+  // shrank (see cityGrid.ts's computeGridZ).
+  const gridZ = useMemo(() => computeGridZ(width), [width]);
+  const checkingDefaultX = districts.checking.baseX;
+  const checkingBridgeMaxOffset = districts.checking.width / 2 - 1.3;
   const checkingX = Math.min(
     checkingDefaultX + checkingBridgeMaxOffset,
     Math.max(checkingDefaultX - checkingBridgeMaxOffset, cityPositions[CHECKING_BRIDGE_KEY]?.x ?? checkingDefaultX),
   );
-  const checkingBridgeZNear = depthBaseZ(1);
+  // one extra tier further back than the original short-term boundary (not all the way to
+  // long-term's own front line — that stretched the deck so long that, at a real camera angle,
+  // its own reserved/available split (proportional to this whole span) put the far, gold
+  // "available" segment so far from the near, teal "reserved" one that they read as two
+  // disconnected pieces instead of one continuous deck). Still double the original single-gap
+  // span, genuinely reading as spanning real depth rather than parked at the front.
+  const checkingBridgeZNear = depthBaseZ(1) - DEPTH_SPACING;
   const checkingBridgeZFar = depthBaseZ(2);
+  // the middle pillar's own Z — where CityCheckingBridge's own `centerZ` sits (see its pillarZs).
+  // Every consumer of checking's own position (the water stream into the lake, income links,
+  // totals) reads this SAME point, not each its own independently-tuned value — a previous pass
+  // kept the water stream's start point separate from this "conceptual" anchor specifically to
+  // dodge a stream/deck mismatch, but that just moved the same disconnection onto income links
+  // instead, which still terminated at the old, un-anchored point with nothing real underneath
+  // them. One shared, real point on the bridge's own structure is what actually fixes it for
+  // every consumer at once, not another independently-tuned number.
   const checkingBridgeCenterZ = (checkingBridgeZNear + checkingBridgeZFar) / 2;
   const buildings = useMemo(() => {
     const layout = computeCityLayout(entities, cityPositions);
     // checking has no building of its own anymore (see CityCheckingBridge) — its every position
-    // consumer (the water stream below, any income link to/from it) should read as originating
-    // from the bridge's own center, not wherever the now-invisible auto-layout cell would have
-    // put it; otherwise a stream/link "starts" from an arbitrary empty point that happens to sit
-    // near, but not aligned with, the bridge structure that now represents this category.
+    // consumer (income links, totals, the water stream below) should read as originating from
+    // the bridge's own real middle-pillar point (checkingBridgeCenterZ), not wherever the
+    // now-invisible auto-layout cell would have put it; otherwise a stream/link "starts" from an
+    // arbitrary point that happens to sit near, but not aligned with, the bridge structure that
+    // now represents this category.
     return layout.map((b) => (b.category === 'checking' ? { ...b, x: checkingX, z: checkingBridgeCenterZ } : b));
   }, [entities, cityPositions, checkingX, checkingBridgeCenterZ]);
   const checkingTotal = useMemo(
@@ -158,8 +199,33 @@ export function CityView({
   );
   const checkingAvailableRatio = checkingTotal > 0 ? checkingAvailable / checkingTotal : 0;
   const firstCheckingId = useMemo(() => entities.find((e) => e.details.kind === 'checking')?.id ?? null, [entities]);
-  const water = useMemo(() => computeWaterFeature(buildings, entities), [buildings, entities]);
-  const valley = useMemo(() => computeValleyFeature(buildings, entities), [buildings, entities]);
+  // ground-level, same as every other water stream — the income link (gold pipe) into checking
+  // also terminates at ground level (see CityIncomeLinks's own getTerrainHeight-based Y), not at
+  // the elevated deck, so this is where the two visibly meet. An earlier pass started this at the
+  // deck's own elevated height instead, which matched the bridge's own structure but no longer
+  // matched where the gold pipe actually connects — same x/z, wrong y.
+  const water = useMemo(
+    () => computeWaterFeature(buildings, entities, districtSpan.minX, gridZ),
+    [buildings, entities, districtSpan.minX, gridZ],
+  );
+  const valley = useMemo(
+    () => computeValleyFeature(buildings, entities, districtSpan.maxX, gridZ),
+    [buildings, entities, districtSpan.maxX, gridZ],
+  );
+  // the lake's own real far edge — not used directly as an anchor itself anymore (see below), but
+  // the reference point everything on this side of the city is positioned relative to, so nothing
+  // sits stranded between the lake and the real district content the way independent fixed gaps
+  // kept leaving them.
+  const farLeftMarginX = water.lakeCenter[0] - water.outerRingRadius;
+  // inset a few units in from the lake's own edge — the depth-tier labels' own rendered text has
+  // real width around its anchor (Billboard anchorX="center"), and anchoring exactly at the
+  // lake's edge left the text's own left half poking past the rendered ground plane into the dark
+  // void beyond it.
+  const depthLabelX = farLeftMarginX + 4;
+  // between the depth labels and the real leftmost district content — not sharing the labels' own
+  // X, which read as one cluttered column instead of two distinct, evenly spaced elements. Biased
+  // toward the labels (65%, not the exact midpoint) rather than sitting dead-center.
+  const riseupTrendX = districtSpan.minX + (depthLabelX - districtSpan.minX) * 0.65;
   const netWorth = useMemo(() => computeNetWorthBreakdown(entities), [entities]);
   const atmosphere = useMemo(() => computeCityAtmosphere(buildings, netWorth), [buildings, netWorth]);
   const incomeLinkPaths = useMemo(() => computeIncomeLinkPaths(buildings, entities), [buildings, entities]);
@@ -291,7 +357,6 @@ export function CityView({
   // just reads as clutter — the pyramid already skips empty tiers the same way.
   const populatedCategories = useMemo(() => new Set(buildings.map((b) => b.category)), [buildings]);
   const hasDonations = populatedCategories.has('donation');
-  const width = (ENTITY_CATEGORIES.length - 1) * DISTRICT_SPACING;
   // one extra row of depth when donations exist — their dedicated foreground lane past every
   // other category's nearest row (see domain/city.ts's depthIndex). minDepthZ is the real
   // drag-reachable minimum (LONG_TERM_MIN_Z), not just depthBaseZ(0)'s own front line — a
@@ -301,12 +366,18 @@ export function CityView({
   const minDepthZ = LONG_TERM_MIN_Z;
   const maxDepthZ = depthBaseZ(hasDonations ? 3 : 2);
   const depthSpan = maxDepthZ - minDepthZ;
-  const groundSize = Math.max(width, depthSpan) + 20;
+  // independent X/Z margins, not one shared square size — depthSpan is dominated by long-term's
+  // own theoretical max drag reach (a large constant, unrelated to how populated the board
+  // actually is), while `width` now shrinks to whatever the districts actually need. Forcing both
+  // into a square meant a narrow, sparse board still got padded out to match the much bigger
+  // constant depth requirement, leaving wide empty margins on both sides of the content.
+  const groundSizeX = width + 20;
+  const groundSizeZ = depthSpan + 20;
   const groundCenter: [number, number] = [width / 2, (minDepthZ + maxDepthZ) / 2];
   // the grid has to cover exactly what the textured ground plane covers — the lake and the valley
-  // both sit right at (and past) the district square's own corners, so a grid sized to the
+  // both sit right at (and past) the district rectangle's own corners, so a grid sized to the
   // district alone would stop short of them.
-  const bounds = computeGroundBounds(groundCenter, groundSize, [
+  const bounds = computeGroundBounds(groundCenter, groundSizeX, groundSizeZ, [
     { center: water.lakeCenter, radius: water.outerRingRadius } satisfies CircularExtent,
     { center: valley.center, radius: valley.radius } satisfies CircularExtent,
   ]);
@@ -355,7 +426,7 @@ export function CityView({
       <directionalLight position={[width * 0.4, 26, 14]} intensity={2.6} />
       <directionalLight position={[-10, 14, -10]} intensity={0.85} color="#6c8dff" />
 
-      <CityGround groundCenter={groundCenter} groundSize={groundSize} water={water} valley={valley} />
+      <CityGround groundCenter={groundCenter} groundSizeX={groundSizeX} groundSizeZ={groundSizeZ} water={water} valley={valley} />
       <CityIndependenceDome
         x={bounds.center[0]}
         z={bounds.center[1]}
@@ -457,15 +528,15 @@ export function CityView({
           the *entire* span (both directions), the same center CityGround/the camera's own default
           target already use. */}
       <CitySun x={width * 0.78} y={27} z={groundCenter[1]} breakdown={hideAmounts ? null : netWorth} />
-      {/* a few units to the right of the depth-tier labels' own column (x=-4.6 — "right" meaning
-          toward higher x, since categories read right-to-left in this RTL city), in z mostly
-          toward the short-term tier rather than the exact long/short midpoint — the exact
-          midpoint sat close enough to depthBaseZ(0) that the graph's own title/leftmost bar
-          visually climbed onto the "נעול / טווח ארוך" tier label sitting right at that line. */}
+      {/* centered between the depth labels and the real district content (riseupTrendX), not
+          sitting at the lake's own edge alongside the labels. In z mostly toward the short-term
+          tier rather than the exact long/short midpoint — the exact midpoint sat close enough to
+          depthBaseZ(0) that the graph's own title/leftmost bar visually climbed onto the
+          "נעול / טווח ארוך" tier label sitting right at that line. */}
       {!hideAmounts && (
         <CityRiseupTrend
-          x={1.8}
-          y={getTerrainHeight(1.8, depthBaseZ(0) + (depthBaseZ(1) - depthBaseZ(0)) * 0.95)}
+          x={riseupTrendX}
+          y={getTerrainHeight(riseupTrendX, depthBaseZ(0) + (depthBaseZ(1) - depthBaseZ(0)) * 0.95)}
           z={depthBaseZ(0) + (depthBaseZ(1) - depthBaseZ(0)) * 0.95}
           history={riseupHistory}
         />
@@ -479,7 +550,7 @@ export function CityView({
       {ENTITY_CATEGORIES.filter((cat) => populatedCategories.has(cat)).map((cat) => (
         <Billboard
           key={cat}
-          position={[(ENTITY_CATEGORIES.length - 1 - ENTITY_CATEGORIES.indexOf(cat)) * DISTRICT_SPACING, 1.5, maxDepthZ + 6.5]}
+          position={[districts[cat].baseX, 1.5, maxDepthZ + 6.5]}
         >
           <Text
             fontSize={0.72}
@@ -503,7 +574,7 @@ export function CityView({
         // ground-level content from a shallow camera angle, purely as a perspective/depth-cue
         // artifact, not an actual position error. More height gives it a clearer silhouette
         // against the sky instead of blending into whatever's on the ground near it on screen.
-        <Billboard key={label.text} position={[-4.6, 4.5, depthBaseZ(i)]}>
+        <Billboard key={label.text} position={[depthLabelX, 4.5, depthBaseZ(i)]}>
           <Text
             fontSize={0.72}
             color={label.color}

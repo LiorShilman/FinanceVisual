@@ -149,10 +149,16 @@ export const LONG_TERM_MIN_Z = depthBaseZ(0) - (DEPTH_SPACING * LONG_TERM_DEPTH_
 // genuinely extends into long-term's own territory instead of stopping right at its edge.
 const SHORT_TERM_MIN_Z_FLOOR = depthBaseZ(0) + DRAG_MARGIN_Z_BACK;
 
-function computeCellBounds(baseX: number, baseZ: number, depthReach: number, minZFloor = -Infinity): CityCellBounds {
+function computeCellBounds(
+  baseX: number,
+  baseZ: number,
+  depthReach: number,
+  districtWidth: number,
+  minZFloor = -Infinity,
+): CityCellBounds {
   return {
-    minX: baseX - (DISTRICT_SPACING / 2 - DRAG_MARGIN_X),
-    maxX: baseX + (DISTRICT_SPACING / 2 - DRAG_MARGIN_X),
+    minX: baseX - (districtWidth / 2 - DRAG_MARGIN_X),
+    maxX: baseX + (districtWidth / 2 - DRAG_MARGIN_X),
     // z only recedes backward from the tier's own front line (see the row-placement comment
     // below) — dragging "forward" past baseZ would encroach on the next, nearer tier.
     minZ: Math.max(minZFloor, baseZ - (DEPTH_SPACING * depthReach - DRAG_MARGIN_Z_BACK)),
@@ -190,9 +196,94 @@ export function depthIndex(entity: FinancialEntity): number {
   return 0;
 }
 
-const CATEGORY_INDEX: Record<EntityCategory, number> = Object.fromEntries(
-  ENTITY_CATEGORIES.map((c, i) => [c, i]),
-) as Record<EntityCategory, number>;
+// every category's own width scales to what it actually needs, not just source/income/checking —
+// a first pass restricted this to just those three, on the theory that every other category was
+// naturally crowded enough not to need it, but that wasn't true: donation, goal, a single
+// insurance policy — plenty of categories commonly hold just one or two entities too. The earlier
+// "whole city collapsed" complaint wasn't caused by shrinking too many categories, it was caused
+// by the ground/camera still framing the *old* fixed total width while the real content shrank
+// out from under it (see computeDistrictSpan below, now used to size the ground dynamically
+// instead of assuming a constant).
+// never scales *up* past DISTRICT_SPACING, only down: capping it there keeps every populated
+// category's own footprint exactly as wide as it always was, so this only ever reclaims empty
+// ground, never crowds a busy district tighter than before.
+const MIN_DISTRICT_WIDTH = DISTRICT_SPACING * 0.5;
+// how much extra drag room the rightmost district (source) gets on its own outer edge, past its
+// own population-based width — see the computeCityLayout call site below. Pulled back in from an
+// initial 15 — that read as reaching too far right once actually tried.
+const OUTER_EDGE_DRAG_BONUS = 7;
+
+export interface DistrictLayout {
+  baseX: number;
+  width: number;
+}
+
+function districtWidthForCols(cols: number): number {
+  if (cols === 0) return MIN_DISTRICT_WIDTH;
+  return Math.min(DISTRICT_SPACING, Math.max(MIN_DISTRICT_WIDTH, cols * LOT_SIZE + DRAG_MARGIN_X * 2));
+}
+
+/**
+ * Each category's own X-center and half-width, computed from how many entities actually occupy
+ * it (its busiest single depth-tier row) rather than a flat per-index multiple of
+ * DISTRICT_SPACING. Exported so CityView can position everything else that has to agree with
+ * where a district actually sits — the checking bridge's own default slot, its drag range, the
+ * floating category labels, and the ground/camera framing itself (see computeDistrictSpan) —
+ * against this exact same layout, instead of re-deriving the old flat formula and drifting out of
+ * sync with it.
+ */
+export function computeDistrictLayout(entities: FinancialEntity[]): Record<EntityCategory, DistrictLayout> {
+  const colsByCategory = new Map<EntityCategory, number>();
+  const countByCategoryDepth = new Map<string, number>();
+  for (const e of entities) {
+    const key = `${e.details.kind}|${depthIndex(e)}`;
+    countByCategoryDepth.set(key, (countByCategoryDepth.get(key) ?? 0) + 1);
+  }
+  for (const [key, count] of countByCategoryDepth) {
+    const [cat] = key.split('|') as [EntityCategory, string];
+    const cols = Math.max(1, Math.ceil(Math.sqrt(count)));
+    colsByCategory.set(cat, Math.max(colsByCategory.get(cat) ?? 0, cols));
+  }
+
+  const result = {} as Record<EntityCategory, DistrictLayout>;
+  // walked in the same reversed visual order the whole city already renders in (the array's last
+  // entry leftmost, its first entry rightmost, matching RTL flow) — the *first* one placed
+  // (realEstate) is anchored at exactly x=0, same as the old flat formula always put it, and each
+  // one after that sits edge-to-edge against the previous, offset by the sum of their two own
+  // half-widths. When every district is fully populated (every width caps out at
+  // DISTRICT_SPACING) this reduces to exactly the old `index * DISTRICT_SPACING` formula — so a
+  // typical, well-populated board doesn't shift at all; only genuinely sparse districts (usually
+  // source/income/checking) pull in and reclaim space.
+  let prevCenter = 0;
+  let prevHalfWidth = 0;
+  for (let p = 0; p < ENTITY_CATEGORIES.length; p++) {
+    const cat = ENTITY_CATEGORIES[ENTITY_CATEGORIES.length - 1 - p];
+    const width = districtWidthForCols(colsByCategory.get(cat) ?? 0);
+    const halfWidth = width / 2;
+    const baseX = p === 0 ? 0 : prevCenter + prevHalfWidth + halfWidth;
+    result[cat] = { baseX, width };
+    prevCenter = baseX;
+    prevHalfWidth = halfWidth;
+  }
+  return result;
+}
+
+/** The real [minX, maxX] the district layout actually occupies — computed straight from the same
+ * per-category records everything else reads, rather than assumed as a constant. Needed because
+ * districts can now shrink individually: the ground/camera used to size themselves off a flat
+ * `(ENTITY_CATEGORIES.length - 1) * DISTRICT_SPACING`, which was only ever correct when every
+ * district was fully populated — the moment several districts shrink at once, that flat number
+ * overstates the real span, leaving a swath of empty, un-framed ground on one edge instead of the
+ * camera/ground actually hugging the content that's really there. */
+export function computeDistrictSpan(districts: Record<EntityCategory, DistrictLayout>): { minX: number; maxX: number } {
+  let minX = Infinity;
+  let maxX = -Infinity;
+  for (const { baseX, width } of Object.values(districts)) {
+    minX = Math.min(minX, baseX - width / 2);
+    maxX = Math.max(maxX, baseX + width / 2);
+  }
+  return { minX, maxX };
+}
 
 /**
  * Neighborhoods (categories) laid out along X, depth (liquidity/horizon) along Z, building height
@@ -232,12 +323,13 @@ export function computeCityLayout(entities: FinancialEntity[], overrides: Record
     grouped.get(key)!.push(e);
   }
 
+  const districts = computeDistrictLayout(entities);
+
   const buildings: CityBuilding[] = [];
   for (const [key, list] of grouped) {
     const [cat, depthStr] = key.split('|') as [EntityCategory, string];
     const depth = Number(depthStr);
-    // reversed so the first category reads on the right, matching RTL flow.
-    const baseX = (ENTITY_CATEGORIES.length - 1 - CATEGORY_INDEX[cat]) * DISTRICT_SPACING;
+    const { baseX, width: districtWidth } = districts[cat];
     const baseZ = depthBaseZ(depth);
     const cols = Math.max(1, Math.ceil(Math.sqrt(list.length)));
     const depthReach =
@@ -245,11 +337,16 @@ export function computeCityLayout(entities: FinancialEntity[], overrides: Record
     // expense is exempt from the short-term floor (see SHORT_TERM_MIN_Z_FLOOR's own comment) —
     // its space should reach *into* long-term's territory, not just up to its front line.
     const minZFloor = depth === 1 && cat !== 'expense' ? SHORT_TERM_MIN_Z_FLOOR : -Infinity;
-    const cellBounds = computeCellBounds(baseX, baseZ, depthReach, minZFloor);
+    const cellBounds = computeCellBounds(baseX, baseZ, depthReach, districtWidth, minZFloor);
     // ...and not just partway in — a short-term expense gets long-term's *entire* own drag
     // extent tacked onto its own, all the way to LONG_TERM_MIN_Z itself (long-term's own real
     // minZ, reused directly so this stays correct if long-term's own reach constants ever change).
     if (cat === 'expense' && depth === 1) cellBounds.minZ = LONG_TERM_MIN_Z;
+    // the rightmost district (source, always the first category — see ENTITY_CATEGORIES) gets
+    // extra room to drag into on its own outer edge — the ground already extends well past
+    // source's own population-based width to comfortably clear the valley (see cityGrid.ts),
+    // reclaiming some of that otherwise-permanently-empty margin as real, usable drag space.
+    if (cat === ENTITY_CATEGORIES[0]) cellBounds.maxX += OUTER_EDGE_DRAG_BONUS;
     const lotSize = depth === 1 ? SHORT_TERM_LOT_SIZE : LOT_SIZE;
 
     list.forEach((entity, i) => {

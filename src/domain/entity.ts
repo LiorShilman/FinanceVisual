@@ -216,13 +216,17 @@ export function getCheckingAvailableForInvestment(details: { balance: number; de
 // streams (see domain/valley.ts) source from these categories, and with them scattered at the far
 // end of the row (as before), those streams had to cut clear across the whole city width to reach
 // the valley. Grouping them next to checking keeps the streams local instead.
+// checking sits between expense and donation, not next to income — it's a waypoint money passes
+// *through* on its way out (to needs, to giving, to savings), not where it originates, so it
+// reads as a hinge between the "spending" side of the city and the "saving" side, giving the two
+// a visible gap in between instead of expense/checking/income all clustering on the same edge.
 export const ENTITY_CATEGORIES: readonly EntityCategory[] = [
   'source',
   'income',
-  'checking',
   'insurance',
   'debt',
   'expense',
+  'checking',
   'donation',
   'savings',
   'investment',
