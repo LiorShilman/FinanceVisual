@@ -1,4 +1,5 @@
-import { fetchBudgetStatus } from './riseupConnection';
+import { fetchBudgetStatus, fetchTransactions } from './riseupConnection';
+import type { MonthlyTransactions } from '../domain/riseupSuggestions';
 
 export interface MonthHistoryPoint {
   /** 'YYYY-MM', oldest first. */
@@ -42,4 +43,20 @@ export async function fetchRiseupHistory(pat: string, months: number): Promise<M
     if (result.data) points.push({ month, income: result.data.income, expense: result.data.expense, net: result.data.net });
   }
   return points;
+}
+
+/** Last `months` months of real RiseUp transactions, oldest to newest — feeds
+ * domain/riseupSuggestions.ts's recurring-business detection. Sequential, same reasoning as
+ * fetchRiseupHistory above (parallel requests trip RiseUp's own rate limit). A month with no
+ * transactions returned (network hiccup, nothing posted) just contributes an empty array rather
+ * than being skipped — the suggestion logic needs to know how many months were actually checked,
+ * not just how many had data, to judge how "regular" a business really is. */
+export async function fetchRiseupTransactionHistory(pat: string, months: number): Promise<MonthlyTransactions[]> {
+  const keys = Array.from({ length: months }, (_, i) => monthKey(months - 1 - i));
+  const result: MonthlyTransactions[] = [];
+  for (const month of keys) {
+    const transactions = await fetchTransactions(pat, month);
+    result.push({ month, transactions: transactions ?? [] });
+  }
+  return result;
 }

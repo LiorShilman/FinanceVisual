@@ -339,6 +339,28 @@ export const LINKABLE_FIELDS: Partial<Record<EntityCategory, LinkableField[]>> =
   realEstate: [{ key: 'currentValue', label: 'שווי נוכחי' }],
 };
 
+// For each kind, which of its own LINKABLE_FIELDS entries best represents a genuine recurring
+// cash movement — the kind of figure a RiseUp transaction total can actually be compared
+// against, as opposed to a static balance/valuation snapshot. Used when a category switch leaves
+// an existing riseupLink pointing at a field the new kind doesn't even have (see
+// EntityFormPanel's handleSubmit) — retargeted here instead of just dropping the link, so the
+// user's already-set-up business-name matching survives what's ultimately just a
+// re-classification, not a reason to lose it.
+export const PRIMARY_LINKABLE_FIELD: Partial<Record<EntityCategory, string>> = {
+  income: 'monthlyAmount',
+  expense: 'monthlyAmount',
+  donation: 'monthlyAmount',
+  checking: 'balance',
+  savings: 'balance',
+  investment: 'monthlyContribution',
+  pension: 'monthlyContribution',
+  studyFund: 'monthlyContribution',
+  insurance: 'monthlyPremium',
+  debt: 'monthlyPayment',
+  goal: 'currentAmount',
+  realEstate: 'currentValue',
+};
+
 export function getCategory(entity: FinancialEntity): EntityCategory {
   return entity.details.kind;
 }

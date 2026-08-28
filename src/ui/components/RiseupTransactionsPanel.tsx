@@ -152,7 +152,13 @@ export function RiseupTransactionsPanel({ onClose }: Props) {
 
   // only entities whose kind actually has a numeric field worth comparing against RiseUp (a
   // 'source' node has none) show up as link targets.
-  const linkableEntities = useMemo(() => entities.filter((e) => (LINKABLE_FIELDS[e.details.kind]?.length ?? 0) > 0), [entities]);
+  const linkableEntities = useMemo(
+    () =>
+      entities
+        .filter((e) => (LINKABLE_FIELDS[e.details.kind]?.length ?? 0) > 0)
+        .sort((a, b) => a.name.localeCompare(b.name, 'he')),
+    [entities],
+  );
   const linkEntity = linkableEntities.find((e) => e.id === linkEntityId) ?? null;
   const linkFieldOptions = linkEntity ? (LINKABLE_FIELDS[linkEntity.details.kind] ?? []) : [];
 

@@ -6,6 +6,7 @@ import { exportBoardToFile, importBoardFromFile } from '../../app/boardTransfer'
 import { fetchBudgetStatus, fetchTransactions, type RiseupTransaction } from '../../app/riseupConnection';
 import { fetchRiseupHistory, type MonthHistoryPoint } from '../../app/riseupHistory';
 import { sumRiseupForBusinesses } from '../../app/riseupSync';
+import { useRiseupSuggestions } from '../../app/useRiseupSuggestions';
 import { signOutUser } from '../../app/useAuth';
 import {
   getGrowthMonthlyContribution,
@@ -15,11 +16,13 @@ import {
   type EntityCategory,
   type EntityDetails,
   type FinancialEntity,
+  type RiseupLink,
 } from '../../domain/entity';
 import { computeGrowthProjection } from '../../domain/compoundInterest';
 import { computeHealth, buildHealthContext, getMissingEssentials } from '../../domain/health';
 import { computeNodeSize, computeTotalWeight } from '../../domain/sizing';
 import { getEntityBucketKey, getOrderedBucketIds, type LayoutMode, type PyramidBand } from '../../domain/layout';
+import type { RiseupEntitySuggestion } from '../../domain/riseupSuggestions';
 import { CATEGORY_ICONS } from '../icons';
 import { LayoutSwitcher } from '../components/LayoutSwitcher';
 import { EntityNode } from '../components/EntityNode';
@@ -34,6 +37,7 @@ import { clearLockedCamera, loadLockedCamera, saveLockedCamera, type LockedCamer
 import { CurrencyControl } from '../components/CurrencyControl';
 import { InvestmentsTablePanel } from '../components/InvestmentsTablePanel';
 import { RiseupTransactionsPanel } from '../components/RiseupTransactionsPanel';
+import { RiseupSuggestionsPanel } from '../components/RiseupSuggestionsPanel';
 import { formatCurrency } from '../format';
 import type { EntityFlowNode, GhostFlowNode } from '../nodeTypes';
 import type { LabelFlowNode } from '../components/LabelNode';
@@ -96,12 +100,21 @@ function BoardCanvas() {
     EntityFlowNode | GhostFlowNode | LabelFlowNode | TierBandFlowNode
   >([]);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [creating, setCreating] = useState<{ category: EntityCategory; overrides?: Partial<EntityDetails> } | null>(
-    null,
-  );
+  const [creating, setCreating] = useState<{
+    category: EntityCategory;
+    overrides?: Partial<EntityDetails>;
+    name?: string;
+    riseupLink?: RiseupLink;
+  } | null>(null);
   const [showFamilyPanel, setShowFamilyPanel] = useState(false);
   const [showInvestmentsTable, setShowInvestmentsTable] = useState(false);
   const [showRiseupTransactions, setShowRiseupTransactions] = useState(false);
+  const [showRiseupSuggestions, setShowRiseupSuggestions] = useState(false);
+  // enabled by showRiseupSuggestions itself — the hook only actually starts its scan the *first*
+  // time this turns true, then keeps the result cached across close/reopen (see the hook's own
+  // comment for why: closing and reopening the panel used to re-run the whole multi-month RiseUp
+  // scan from scratch every time, which was the real reason adding entities this way felt slow).
+  const riseupSuggestions = useRiseupSuggestions(showRiseupSuggestions);
   const [menuOpen, setMenuOpen] = useState(false);
   // the account owner's own photo, if they've added one in the family panel — shown as a small
   // corner badge in the header, not rounded into a circle (a family crest/logo can be a
@@ -295,6 +308,43 @@ function BoardCanvas() {
   const openCreate = useCallback((category: EntityCategory, presetKey?: string) => {
     setCreating({ category, overrides: presetKey ? GHOST_PRESETS[presetKey] : undefined });
   }, []);
+
+  // remembers which suggestion the currently-open EntityFormPanel was opened *from* (null when
+  // it wasn't — the plain "+ ישות" button, or editing an existing entity) — a ref, not state,
+  // since it only needs to be read once when that form closes, not drive its own render.
+  const creatingFromSuggestionRef = useRef<string | null>(null);
+
+  // a suggestion becomes a real entity via the exact same EntityFormPanel every other creation
+  // path uses — pre-filled with the suggested name/category/amount and pre-linked to the RiseUp
+  // business it came from. markResolved only actually runs once the form reports back a real
+  // save (see the onClose handler below) — calling it here, before the user ever confirms
+  // anything, meant cancelling out of the form silently dropped the suggestion for good even
+  // though no entity was ever created for it. Either way, closing the form (saved or cancelled)
+  // reopens the suggestions list automatically instead of leaving the user to reopen it by hand.
+  const handleAddRiseupSuggestion = useCallback((suggestion: RiseupEntitySuggestion) => {
+    creatingFromSuggestionRef.current = suggestion.businessName;
+    setShowRiseupSuggestions(false);
+    setCreating({
+      category: suggestion.category,
+      name: suggestion.businessName,
+      overrides: { [suggestion.linkField]: suggestion.suggestedAmount, ...(suggestion.expenseType ? { expenseType: suggestion.expenseType } : {}) } as Partial<EntityDetails>,
+      riseupLink: { field: suggestion.linkField, businessNames: [suggestion.businessName] },
+    });
+  }, []);
+
+  // the "link to an existing entity instead" path from the suggestions panel — merges with
+  // whatever that entity's already linked on the same field, same behavior as
+  // RiseupTransactionsPanel's own linking UI, so linking from either place is consistent.
+  const handleLinkExistingRiseupSuggestion = useCallback(
+    (businessName: string, entityId: string, field: string) => {
+      const entity = useBoardStore.getState().entities.find((e) => e.id === entityId);
+      if (!entity) return;
+      const existingNames = entity.riseupLink?.field === field ? entity.riseupLink.businessNames : [];
+      updateEntity(entityId, { riseupLink: { field, businessNames: [...new Set([...existingNames, businessName])] } });
+      riseupSuggestions.markResolved(businessName);
+    },
+    [riseupSuggestions, updateEntity],
+  );
 
   useEffect(() => {
     if (layoutMode === 'city') {
@@ -508,6 +558,17 @@ function BoardCanvas() {
             >
               משפחה ({familyMembers.length})
             </button>
+            <button
+              type="button"
+              className={styles.btn}
+              onClick={() => {
+                setShowRiseupSuggestions(true);
+                setMenuOpen(false);
+              }}
+              title="סריקת תנועות RiseUp למציאת ישויות חדשות מומלצות"
+            >
+              💡 הצעות מ-RiseUp
+            </button>
             <button type="button" className={styles.btn} onClick={exportBoardToFile} title="הורדת כל נתוני הלוח כקובץ JSON">
               ⬇️ ייצוא נתונים
             </button>
@@ -594,11 +655,19 @@ function BoardCanvas() {
           entityId={editingId}
           presetCategory={creating?.category}
           presetDetailOverrides={creating?.overrides}
+          presetName={creating?.name}
+          presetRiseupLink={creating?.riseupLink}
           riseupTransactions={riseupTransactions}
           onOpenGrowthForecast={handleOpenGrowthForecast}
-          onClose={() => {
+          onClose={(saved) => {
             setEditingId(null);
             setCreating(null);
+            const businessName = creatingFromSuggestionRef.current;
+            if (businessName) {
+              creatingFromSuggestionRef.current = null;
+              if (saved) riseupSuggestions.markResolved(businessName);
+              setShowRiseupSuggestions(true);
+            }
           }}
         />
       )}
@@ -614,6 +683,17 @@ function BoardCanvas() {
       )}
 
       {showRiseupTransactions && <RiseupTransactionsPanel onClose={() => setShowRiseupTransactions(false)} />}
+
+      {showRiseupSuggestions && (
+        <RiseupSuggestionsPanel
+          loadState={riseupSuggestions.loadState}
+          suggestions={riseupSuggestions.suggestions}
+          hasPat={riseupSuggestions.hasPat}
+          onClose={() => setShowRiseupSuggestions(false)}
+          onAddSuggestion={handleAddRiseupSuggestion}
+          onLinkExisting={handleLinkExistingRiseupSuggestion}
+        />
+      )}
 
       {showInvestmentsTable && (
         <InvestmentsTablePanel

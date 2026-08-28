@@ -15,6 +15,7 @@ import {
   isGrowthAssetDetails,
   LINKABLE_FIELDS,
   LIQUIDITY_LABELS,
+  PRIMARY_LINKABLE_FIELD,
   MORTGAGE_TRACK_TYPES,
   MORTGAGE_TRACK_TYPE_LABELS,
   isLiquidityRelevant,
@@ -26,6 +27,7 @@ import {
   type Liquidity,
   type MortgageTrack,
   type MortgageTrackType,
+  type RiseupLink,
 } from '../../domain/entity';
 import { useBoardStore } from '../../app/boardStore';
 import type { RiseupTransaction } from '../../app/riseupConnection';
@@ -64,6 +66,67 @@ function defaultDetails(category: EntityCategory): EntityDetails {
       return { kind: 'realEstate', currentValue: 0 };
     case 'source':
       return { kind: 'source' };
+  }
+}
+
+/** The one number that best represents "how much this entity is worth/costs", across every kind's
+ * own different field name for that idea — read before a category switch replaces `details`
+ * wholesale with a blank default, so that figure can be carried into whichever field the new
+ * category uses for the same idea instead of silently resetting to 0 (e.g. an expense's
+ * monthlyAmount surviving a switch to insurance's monthlyPremium). */
+function extractPrimaryAmount(details: EntityDetails): number {
+  switch (details.kind) {
+    case 'income':
+    case 'expense':
+    case 'donation':
+      return details.monthlyAmount;
+    case 'checking':
+      return details.balance;
+    case 'savings':
+    case 'investment':
+    case 'pension':
+    case 'studyFund':
+      return details.monthlyContribution || details.balance;
+    case 'insurance':
+      return details.monthlyPremium || details.coverageAmount;
+    case 'debt':
+      return details.monthlyPayment || details.outstandingBalance;
+    case 'goal':
+      return details.targetAmount;
+    case 'realEstate':
+      return details.currentValue;
+    case 'source':
+      return 0;
+  }
+}
+
+/** The inverse of extractPrimaryAmount — writes a carried-over figure into whichever field a
+ * freshly-defaulted `details` uses for that same idea. A zero amount is left alone (nothing to
+ * carry, and every default already starts at 0 anyway). */
+function applyPrimaryAmount(details: EntityDetails, amount: number): EntityDetails {
+  if (amount <= 0) return details;
+  switch (details.kind) {
+    case 'income':
+    case 'expense':
+    case 'donation':
+      return { ...details, monthlyAmount: amount };
+    case 'checking':
+      return { ...details, balance: amount };
+    case 'savings':
+    case 'investment':
+    case 'pension':
+    case 'studyFund':
+      return { ...details, monthlyContribution: amount };
+    case 'insurance':
+      return { ...details, monthlyPremium: amount };
+    case 'debt':
+      return { ...details, monthlyPayment: amount };
+    case 'goal':
+      return { ...details, targetAmount: amount };
+    case 'realEstate':
+      return { ...details, currentValue: amount };
+    case 'source':
+      return details;
   }
 }
 
@@ -107,6 +170,11 @@ interface Props {
   entityId: string | null;
   presetCategory?: EntityCategory;
   presetDetailOverrides?: Partial<EntityDetails>;
+  // both only apply to a brand-new entity (entityId === null) — a name/RiseUp link the caller
+  // already knows (e.g. RiseupSuggestionsPanel proposing "Netflix" as a new expense), pre-filled
+  // instead of the usual blank name and no-link starting point.
+  presetName?: string;
+  presetRiseupLink?: RiseupLink;
   // this month's real RiseUp transactions, for the linked-field discrepancy indicator below —
   // empty when disconnected or still loading, which just hides the indicator.
   riseupTransactions: RiseupTransaction[];
@@ -114,13 +182,19 @@ interface Props {
   // entity — absent for a not-yet-created entity, since there's nothing to project until it
   // exists.
   onOpenGrowthForecast?: (entityId: string) => void;
-  onClose: () => void;
+  // `saved` is true only when this close follows an actual successful create/update — false (or
+  // omitted) for a plain cancel, the ✕/backdrop, or a delete. A caller that resolved something
+  // (e.g. RiseupSuggestionsPanel) on the assumption a new entity would be created needs this
+  // distinction, or cancelling out of the form still silently drops that suggestion for good.
+  onClose: (saved?: boolean) => void;
 }
 
 export function EntityFormPanel({
   entityId,
   presetCategory,
   presetDetailOverrides,
+  presetName,
+  presetRiseupLink,
   riseupTransactions,
   onOpenGrowthForecast,
   onClose,
@@ -149,7 +223,7 @@ export function EntityFormPanel({
     }
     const category = presetCategory ?? 'savings';
     return {
-      name: '',
+      name: presetName ?? '',
       ownerIds: familyMembers[0] ? [familyMembers[0].id] : [],
       liquidity: 'immediate',
       linkedEntityIds: [],
@@ -172,7 +246,7 @@ export function EntityFormPanel({
   const linkableEntities = useMemo(() => entities.filter((e) => e.id !== entityId), [entities, entityId]);
 
   function setCategory(category: EntityCategory) {
-    setDraft((d) => ({ ...d, details: defaultDetails(category) }));
+    setDraft((d) => ({ ...d, details: applyPrimaryAmount(defaultDetails(category), extractPrimaryAmount(d.details)) }));
   }
 
   function updateDetail(patch: Record<string, unknown>) {
@@ -215,10 +289,22 @@ export function EntityFormPanel({
 
   function handleSubmit() {
     // a category switch can leave a stale riseupLink pointing at a field that doesn't exist on
-    // the new kind (e.g. linked to debt's monthlyPayment, then switched to savings) — drop it
-    // rather than carry forward a link nothing can ever display or compare again.
+    // the new kind at all (e.g. linked to debt's monthlyPayment, then switched to realEstate,
+    // which has no such field) — retargeted to that kind's own PRIMARY_LINKABLE_FIELD instead of
+    // just dropping it, so the user's already-set-up business-name matching survives a mere
+    // re-classification (switching an expense to insurance shouldn't silently lose its RiseUp
+    // link just because the field is now called monthlyPremium instead of monthlyAmount). Only
+    // actually dropped if the new kind isn't linkable at all (e.g. 'source'). Same logic applies
+    // to a brand-new entity's presetRiseupLink — if the user changed the category away from what
+    // the suggestion assumed, the link is retargeted the same way rather than lost.
     const validFieldKeys = new Set((LINKABLE_FIELDS[draft.details.kind] ?? []).map((f) => f.key));
-    const riseupLink = existing?.riseupLink && validFieldKeys.has(existing.riseupLink.field) ? existing.riseupLink : undefined;
+    function retarget(link: RiseupLink | undefined): RiseupLink | undefined {
+      if (!link) return undefined;
+      if (validFieldKeys.has(link.field)) return link;
+      const fallbackField = PRIMARY_LINKABLE_FIELD[draft.details.kind];
+      return fallbackField ? { ...link, field: fallbackField } : undefined;
+    }
+    const riseupLink = existing ? retarget(existing.riseupLink) : retarget(presetRiseupLink);
 
     const payload = {
       name: draft.name.trim(),
@@ -245,7 +331,7 @@ export function EntityFormPanel({
       const created = useBoardStore.getState().entities.at(-1) as FinancialEntity;
       reconcileLinks(created.id, result.data.linkedEntityIds, []);
     }
-    onClose();
+    onClose(true);
   }
 
   function handleDelete() {
@@ -323,7 +409,7 @@ export function EntityFormPanel({
 
   return (
     <>
-    <div className={styles.overlay} onClick={onClose}>
+    <div className={styles.overlay} onClick={() => onClose()}>
       <div className={styles.panel} onClick={(e) => e.stopPropagation()}>
         <h2 className={styles.title}>{existing ? 'עריכת ישות' : 'הוספת ישות פיננסית'}</h2>
 
@@ -870,7 +956,7 @@ export function EntityFormPanel({
             )}
           </div>
           <div className={styles.actionsRight}>
-            <button type="button" className={styles.btn} onClick={onClose}>
+            <button type="button" className={styles.btn} onClick={() => onClose()}>
               ביטול
             </button>
             <button type="button" className={`${styles.btn} ${styles.btnPrimary}`} onClick={handleSubmit}>

@@ -1,0 +1,242 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(4, 5, 8, 0.65);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 60;
+  padding: 24px;
+}
+
+.panel {
+  width: min(720px, 96vw);
+  max-height: 86vh;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-panel);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.title {
+  font-size: 1.15rem;
+  font-weight: 800;
+  margin: 0 0 4px;
+}
+
+.subtitle {
+  font-size: 0.78rem;
+  color: var(--text-dim);
+}
+
+.closeBtn {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  border-radius: var(--radius-sm);
+  width: 32px;
+  height: 32px;
+  font-size: 0.9rem;
+  flex-shrink: 0;
+}
+
+.state {
+  padding: 40px 24px;
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 0.9rem;
+}
+
+.stateError {
+  color: var(--health-risk);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 24px 24px;
+  overflow-y: auto;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.cardTopRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.linkRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.linkRowLabel {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  flex-shrink: 0;
+}
+
+.linkSelect {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 0.74rem;
+  padding: 5px 8px;
+  min-width: 0;
+  flex: 1;
+  /* same fix as .frequencySelect — without this the dropdown popup renders with the OS's light
+     theme regardless of the CSS above, which only reaches the closed box. */
+  color-scheme: dark;
+}
+
+.linkBtn {
+  border: 1px solid var(--border);
+  background: var(--surface-3);
+  color: var(--text);
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 0.74rem;
+  font-weight: 700;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.linkBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.linkBtn:not(:disabled):hover {
+  border-color: var(--accent);
+}
+
+.cardMain {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.cardName {
+  font-size: 0.88rem;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cardMeta {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+}
+
+.regularityPill,
+.frequencySelect {
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 999px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.frequencySelect {
+  border: none;
+  cursor: pointer;
+  /* fixed, not content-sized — "חודשי" and "אולי שנתי" are very different lengths, and without a
+     shared width here every row's amount/button ended up shifted by however long that row's own
+     label happened to be, instead of lining up as a clean column down the list. */
+  width: 96px;
+  text-align: center;
+  text-align-last: center;
+  /* the closed box already gets a tinted background from the regularityFixed/Warning/Variable
+     class merged in alongside this one — but a native <select>'s own dropdown *popup* mostly
+     ignores that and renders using the OS's light theme by default, showing as a jarring white
+     box the instant it opens. This tells the browser to draw its own native chrome for this
+     control (the popup, its scrollbar, etc.) using the dark variant instead. */
+  color-scheme: dark;
+}
+
+/* color-scheme: dark above isn't actually enough on its own — the closed box's own background is
+   the *semi-transparent* color-mix() tint from regularityFixed/Warning/Variable, which reads fine
+   inline (blended over the dark card behind it) but the dropdown *popup* is a native OS surface
+   with nothing of ours behind it to blend against, so that same transparent background resolves
+   back to a plain white box the instant it opens. Each <option> needs its own explicit *solid*
+   color, which a native popup renders reliably regardless of the closed box's own tint. */
+.frequencySelect option {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.regularityFixed {
+  background: color-mix(in srgb, var(--health-good) 22%, transparent);
+  color: var(--health-good);
+}
+
+.regularityWarning {
+  background: color-mix(in srgb, var(--health-warning) 22%, transparent);
+  color: var(--health-warning);
+}
+
+.regularityVariable {
+  background: var(--surface-3);
+  color: var(--text-dim);
+}
+
+.cardAmount {
+  font-size: 0.88rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  flex-shrink: 0;
+  /* fixed, same reasoning as .frequencySelect's own width — ₪691 and ₪9 are very different
+     lengths, and without a shared width every row's own button ended up shifted sideways instead
+     of the whole list reading as clean columns. */
+  width: 64px;
+  text-align: center;
+}
+
+.addBtn {
+  border: 1px solid var(--accent);
+  background: var(--accent-dim);
+  color: var(--text);
+  padding: 7px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 0.78rem;
+  font-weight: 700;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.addBtn:hover {
+  background: var(--accent);
+  color: #0a0c11;
+}
