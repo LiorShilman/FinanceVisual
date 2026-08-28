@@ -2,18 +2,22 @@ import type { CityBuilding } from './city';
 import type { FinancialEntity } from './entity';
 import { computeMagnitudeShare } from './sizing';
 
-export type ValleyStreamKind = 'expense' | 'debt' | 'insurance';
+// expense is split into 'need'/'want' — a non-essential expense isn't the same kind of drain as
+// an essential one (see health.ts's own 'want' status and CityExpenseMesh's own color use), so
+// its stream shouldn't share the identical red either.
+export type ValleyStreamKind = 'expenseNeed' | 'expenseWant' | 'debt' | 'insurance';
 
 export interface ValleyStreamSource {
   x: number;
   z: number;
   /** Raw amount — drives the stream's visual thickness. */
   weight: number;
-  /** Which of the three draining categories this came from — expense/debt/insurance are all real
+  /** Which of the draining categories this came from — expense/debt/insurance are all real
    * recurring outflows into the same valley, but they aren't the same *kind* of outflow (a debt
-   * payment retires a liability, an insurance premium buys real coverage — neither is pure loss
-   * the way a plain expense is), so CityGround colors each stream by this instead of painting
-   * every one the same flat red. */
+   * payment retires a liability, an insurance premium buys real coverage, a non-essential expense
+   * is a choice rather than an unavoidable cost — neither is the same as a plain essential
+   * expense's own pure loss), so CityGround colors each stream by this instead of painting every
+   * one the same flat red. */
   kind: ValleyStreamKind;
 }
 
@@ -50,8 +54,11 @@ export function computeValleyFeature(
   const streams = buildings
     .filter((b) => b.category === 'expense' || b.category === 'debt' || b.category === 'insurance')
     .map((b): ValleyStreamSource => {
-      if (b.category === 'expense') return { x: b.x, z: b.z, weight: b.weight, kind: 'expense' };
       const entity = entityById.get(b.id);
+      if (b.category === 'expense') {
+        const essential = entity?.details.kind === 'expense' ? entity.details.essential : true;
+        return { x: b.x, z: b.z, weight: b.weight, kind: essential ? 'expenseNeed' : 'expenseWant' };
+      }
       if (b.category === 'debt') {
         return { x: b.x, z: b.z, weight: entity?.details.kind === 'debt' ? entity.details.monthlyPayment : 0, kind: 'debt' };
       }

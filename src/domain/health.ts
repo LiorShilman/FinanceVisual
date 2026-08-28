@@ -1,6 +1,6 @@
 import type { EntityCategory, FinancialEntity } from './entity';
 
-export const HEALTH_STATUSES = ['good', 'warning', 'risk', 'unknown', 'donation', 'debt', 'checking', 'insurance'] as const;
+export const HEALTH_STATUSES = ['good', 'warning', 'risk', 'unknown', 'donation', 'debt', 'checking', 'insurance', 'want'] as const;
 export type HealthStatus = (typeof HEALTH_STATUSES)[number];
 
 export const HEALTH_COLORS: Record<HealthStatus, string> = {
@@ -8,6 +8,12 @@ export const HEALTH_COLORS: Record<HealthStatus, string> = {
   warning: '#e2a33d',
   risk: '#d64545',
   unknown: '#8a8f98',
+  // a non-essential expense ("רצונות" — the 30% in the 50/30/20 split) isn't the same kind of
+  // "money out" as an essential one — it's a household choice, not an unavoidable cost, so it
+  // doesn't earn the same alarm-red as a true "need" expense. A warm terracotta instead: still
+  // reads as spending (same warm family as risk-red), but distinct enough from it, and from
+  // warning's own gold-orange, to actually separate needs from wants at a glance in the city.
+  want: '#d97a4a',
   // giving isn't "money in" (income's green) or "money at risk" (expense's red) — its own rose/
   // magenta hue, deliberately unused anywhere else in the city (blue lake, violet pension ring,
   // red valley, gold flow-links), so it reads as a genuinely separate kind of thing.
@@ -29,17 +35,19 @@ export const HEALTH_COLORS: Record<HealthStatus, string> = {
 
 /**
  * For flow/stock categories, the category itself is the meaningful signal, consistently —
- * income is always "green" (money in), an expense is always "red" (money out), and every
+ * income is always "green" (money in), an expense is always "red" or "terracotta" (money out,
+ * split by essential/non-essential — see the 50/30/20 split in domain/budgetSplit.ts), and every
  * held/growing asset (savings, investment, pension) is always "orange", with no per-entity
- * exceptions. Debt, insurance and goals stay on the computed score since those have a real
- * good/bad axis (leverage, coverage, progress) that a flat category color can't express.
+ * exceptions beyond that essential/non-essential split. Debt, insurance and goals stay on the
+ * computed score since those have a real good/bad axis (leverage, coverage, progress) that a flat
+ * category color can't express.
  */
 export function getDisplayHealthOverride(entity: FinancialEntity): HealthStatus | null {
   switch (entity.details.kind) {
     case 'income':
       return 'good';
     case 'expense':
-      return 'risk';
+      return entity.details.essential ? 'risk' : 'want';
     case 'donation':
       return 'donation';
     case 'checking':

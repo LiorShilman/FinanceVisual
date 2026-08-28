@@ -255,14 +255,12 @@ export function CityExpenseMesh({ x, z, height, footprint, color, name, amount, 
       {tierMeshes}
       <mesh position={[0, height + roofPeakHeight / 2 - overlap, 0]} rotation={[0, Math.PI / 4, 0]} frustumCulled={false} onClick={handleClick}>
         <coneGeometry args={[roofRadius, roofPeakHeight, 4]} />
-        <meshStandardMaterial
-          color="#d97a45"
-          map={roofTexture}
-          emissive="#d97a45"
-          emissiveMap={roofTexture}
-          emissiveIntensity={0.35}
-          roughness={0.75}
-        />
+        {/* the roof used to be a flat, hardcoded terracotta regardless of health status — the
+            single most visually prominent part of a housing expense, disconnected from whether
+            it's a "need" (red) or a "want" (a similar terracotta), which is exactly why that
+            distinction barely read at all. It now tracks `color` like every other part of the
+            mesh. */}
+        <meshStandardMaterial color={color} map={roofTexture} emissive={color} emissiveMap={roofTexture} emissiveIntensity={0.35} roughness={0.75} />
       </mesh>
       {labelBlock(name, amount, height + roofHeight + 0.85, labelScale)}
     </group>

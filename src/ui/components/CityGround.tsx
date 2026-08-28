@@ -40,16 +40,20 @@ const WATER_STREAM_EMISSIVE_INTENSITY: Record<StreamKind, number> = {
 
 // expense/debt/insurance all drain into the same valley, but they aren't the same *kind* of
 // outflow — a debt payment retires a real liability and an insurance premium buys real coverage,
-// neither is pure loss the way a plain expense is — so only expense keeps the valley's own themed
-// ember red. Debt and insurance instead reuse the exact hex their own buildings already render in
-// (HEALTH_COLORS), so a stream reads as visibly "the same kind of money" as the building it left.
+// neither is pure loss the way a plain expense is — so only an essential expense keeps the
+// valley's own themed ember red. A non-essential expense ("want") reuses the exact terracotta its
+// own building's roof now renders in (HEALTH_COLORS.want), same reasoning as debt/insurance below
+// reusing their own building hex, so a stream reads as visibly "the same kind of money" as the
+// building it left.
 const VALLEY_STREAM_COLOR: Record<ValleyStreamKind, string> = {
-  expense: '#b84a4a',
+  expenseNeed: '#b84a4a',
+  expenseWant: HEALTH_COLORS.want,
   debt: HEALTH_COLORS.debt,
   insurance: HEALTH_COLORS.insurance,
 };
 const VALLEY_STREAM_EMISSIVE_INTENSITY: Record<ValleyStreamKind, number> = {
-  expense: 0.32,
+  expenseNeed: 0.32,
+  expenseWant: 0.32,
   debt: 0.3,
   insurance: 0.3,
 };

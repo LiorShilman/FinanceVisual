@@ -28,7 +28,7 @@ export interface CityBuilding {
    * can single out e.g. 'risk' buildings for a visual treatment without string-matching a color. */
   healthStatus: HealthStatus;
   /** True only when 'risk' came from an actual computed judgment (high debt burden, thin
-   * insurance coverage, a stalled goal) — NOT from a flat category color. Every expense's
+   * insurance coverage, a stalled goal) — NOT from a flat category color. An essential expense's
    * `healthStatus` is unconditionally 'risk' too (getDisplayHealthOverride — that's just "this
    * category is always drawn red", not a warning), so a UI that wants to flag "this genuinely
    * needs attention" must check this, not `healthStatus === 'risk'` directly. */
