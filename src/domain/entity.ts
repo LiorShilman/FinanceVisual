@@ -167,6 +167,14 @@ const DebtDetails = z.object({
   // that the form aggregates on save.
   isMortgage: z.boolean().default(false),
   mortgageTracks: z.array(MortgageTrackSchema).default([]),
+  // same "counts toward the financial-independence target" idea as insurance's own `essential`
+  // (see domain/independence.ts's computeEssentialMonthlyExpenses) — but debt defaults to
+  // *false*, the opposite of insurance's default, since most debt (a mortgage, a car loan) is
+  // assumed to actually get paid off before independence, unlike most insurance. A genuinely
+  // ongoing obligation that doesn't behave like typical amortizing debt — alimony/child support
+  // being the clearest example — can be flagged true to count toward the target/runway like any
+  // other unavoidable monthly cost.
+  essential: z.boolean().default(false),
 });
 const GoalDetails = z.object({
   kind: z.literal('goal'),

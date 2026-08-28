@@ -68,6 +68,7 @@ export const SEED_ENTITIES: FinancialEntity[] = [
       interestRatePct: 3.2,
       isMortgage: false,
       mortgageTracks: [],
+      essential: false,
     },
   },
   {

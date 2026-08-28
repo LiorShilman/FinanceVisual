@@ -34,17 +34,20 @@ export interface IndependenceProgress {
 
 /** Shared with domain/emergencyFund.ts — "how much do I actually need to keep living" is the
  * same real-world number whether it's being multiplied by 300 for the FI target or compared
- * against an emergency fund's balance for a runway. Insurance counts only when its own `essential`
- * flag says so (see entity.ts's InsuranceDetails — a per-policy judgment call, not a blanket rule
- * by insuranceType: disability insurance replaces lost *work* income and usually stops mattering
- * once independent, and a life policy meant only to bridge to pension age is exactly the same
- * story, but neither is true for every policy of that type, so it's the household's own call per
- * policy, not this function's). */
+ * against an emergency fund's balance for a runway. Insurance and debt both count only when their
+ * own `essential` flag says so (see entity.ts's InsuranceDetails/DebtDetails — a per-entity
+ * judgment call, not a blanket rule by type): disability insurance replaces lost *work* income
+ * and usually stops mattering once independent, most debt (a mortgage, a car loan) is assumed to
+ * get paid off before independence — but neither is true for every policy/debt of that kind (a
+ * life policy meant only to bridge to pension age, an ongoing legal obligation like alimony that
+ * doesn't behave like typical amortizing debt at all), so it's the household's own call per
+ * entity, not this function's. */
 export function computeEssentialMonthlyExpenses(entities: FinancialEntity[]): number {
   let essentialMonthly = 0;
   for (const e of entities) {
     if (e.details.kind === 'expense' && e.details.essential) essentialMonthly += e.details.monthlyAmount;
     if (e.details.kind === 'insurance' && e.details.essential) essentialMonthly += e.details.monthlyPremium;
+    if (e.details.kind === 'debt' && e.details.essential) essentialMonthly += e.details.monthlyPayment;
   }
   return essentialMonthly;
 }

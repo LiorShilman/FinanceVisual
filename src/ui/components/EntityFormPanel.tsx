@@ -59,7 +59,7 @@ function defaultDetails(category: EntityCategory): EntityDetails {
     case 'insurance':
       return { kind: 'insurance', coverageAmount: 0, monthlyPremium: 0, insuranceType: 'life', essential: true };
     case 'debt':
-      return { kind: 'debt', outstandingBalance: 0, monthlyPayment: 0, interestRatePct: 0, isMortgage: false, mortgageTracks: [] };
+      return { kind: 'debt', outstandingBalance: 0, monthlyPayment: 0, interestRatePct: 0, isMortgage: false, mortgageTracks: [], essential: false };
     case 'goal':
       return { kind: 'goal', targetAmount: 1, currentAmount: 0 };
     case 'realEstate':
@@ -705,6 +705,10 @@ export function EntityFormPanel({
             <div className={styles.checkboxRow}>
               <input type="checkbox" checked={d.isMortgage} onChange={(e) => updateDetail({ isMortgage: e.target.checked })} />
               <span>זו משכנתא (עם תמהיל מסלולים)</span>
+            </div>
+            <div className={styles.checkboxRow}>
+              <input type="checkbox" checked={d.essential} onChange={(e) => updateDetail({ essential: e.target.checked })} />
+              <span>ימשיך להיות רלוונטי גם אחרי עצמאות כלכלית (למשל התחייבות מתמשכת כמו מזונות, לא הלוואה שתיפרע)</span>
             </div>
 
             {d.isMortgage && (
