@@ -95,6 +95,11 @@ export function computeHealth(entity: FinancialEntity, ctx: HealthContext): Heal
       return 'debt';
     }
     case 'insurance': {
+      // no coverage figure entered yet (a freshly created entity, or one just switched from
+      // another category via EntityFormPanel's setCategory) — nothing to judge yet, so this
+      // shouldn't read as the worst possible score. Same "no data, no verdict" idea as the
+      // ctx.totalMonthlyExpenses <= 0 / totalMonthlyIncome <= 0 guards below.
+      if (d.coverageAmount <= 0) return 'insurance';
       // never 'good'/green (income's color) — being well insured is its own kind of fine, not
       // "money in", so it gets its own color even at its best.
       if (d.insuranceType === 'life' || d.insuranceType === 'disability') {
