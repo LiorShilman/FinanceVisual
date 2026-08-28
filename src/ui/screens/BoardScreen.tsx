@@ -309,10 +309,12 @@ function BoardCanvas() {
     setCreating({ category, overrides: presetKey ? GHOST_PRESETS[presetKey] : undefined });
   }, []);
 
-  // remembers which suggestion the currently-open EntityFormPanel was opened *from* (null when
+  // remembers which suggestion(s) the currently-open EntityFormPanel was opened *from* (null when
   // it wasn't — the plain "+ ישות" button, or editing an existing entity) — a ref, not state,
-  // since it only needs to be read once when that form closes, not drive its own render.
-  const creatingFromSuggestionRef = useRef<string | null>(null);
+  // since it only needs to be read once when that form closes, not drive its own render. An array
+  // since the combined-variable-expense flow below resolves several businesses in one save, not
+  // just one.
+  const creatingFromSuggestionRef = useRef<string[] | null>(null);
 
   // a suggestion becomes a real entity via the exact same EntityFormPanel every other creation
   // path uses — pre-filled with the suggested name/category/amount and pre-linked to the RiseUp
@@ -322,13 +324,32 @@ function BoardCanvas() {
   // though no entity was ever created for it. Either way, closing the form (saved or cancelled)
   // reopens the suggestions list automatically instead of leaving the user to reopen it by hand.
   const handleAddRiseupSuggestion = useCallback((suggestion: RiseupEntitySuggestion) => {
-    creatingFromSuggestionRef.current = suggestion.businessName;
+    creatingFromSuggestionRef.current = [suggestion.businessName];
     setShowRiseupSuggestions(false);
     setCreating({
       category: suggestion.category,
       name: suggestion.businessName,
       overrides: { [suggestion.linkField]: suggestion.suggestedAmount, ...(suggestion.expenseType ? { expenseType: suggestion.expenseType } : {}) } as Partial<EntityDetails>,
       riseupLink: { field: suggestion.linkField, businessNames: [suggestion.businessName] },
+    });
+  }, []);
+
+  // several variable-expense suggestions folded into one entity, rather than one entity per
+  // business — tracking each discretionary purchase separately is far more granular than most
+  // people want, and the budget split (domain/budgetSplit.ts) only needs one combined "wants"
+  // figure anyway. essential: false is forced explicitly — EntityFormPanel's own expense default
+  // is essential: true, and this entity is definitionally the *non*-essential/discretionary side
+  // of spending, the whole reason it counts toward the 30% "wants" bucket instead of "needs".
+  const handleAddCombinedVariableExpense = useCallback((selected: RiseupEntitySuggestion[]) => {
+    if (selected.length === 0) return;
+    creatingFromSuggestionRef.current = selected.map((s) => s.businessName);
+    setShowRiseupSuggestions(false);
+    const totalAmount = selected.reduce((sum, s) => sum + s.suggestedAmount, 0);
+    setCreating({
+      category: 'expense',
+      name: 'הוצאות משתנות',
+      overrides: { monthlyAmount: totalAmount, essential: false } as Partial<EntityDetails>,
+      riseupLink: { field: 'monthlyAmount', businessNames: selected.map((s) => s.businessName) },
     });
   }, []);
 
@@ -662,10 +683,10 @@ function BoardCanvas() {
           onClose={(saved) => {
             setEditingId(null);
             setCreating(null);
-            const businessName = creatingFromSuggestionRef.current;
-            if (businessName) {
+            const businessNames = creatingFromSuggestionRef.current;
+            if (businessNames) {
               creatingFromSuggestionRef.current = null;
-              if (saved) riseupSuggestions.markResolved(businessName);
+              if (saved) for (const name of businessNames) riseupSuggestions.markResolved(name);
               setShowRiseupSuggestions(true);
             }
           }}
@@ -692,6 +713,7 @@ function BoardCanvas() {
           onClose={() => setShowRiseupSuggestions(false)}
           onAddSuggestion={handleAddRiseupSuggestion}
           onLinkExisting={handleLinkExistingRiseupSuggestion}
+          onAddCombinedVariableExpense={handleAddCombinedVariableExpense}
         />
       )}
 

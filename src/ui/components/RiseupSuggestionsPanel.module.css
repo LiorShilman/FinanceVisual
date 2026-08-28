@@ -71,6 +71,25 @@
   overflow-y: auto;
 }
 
+.sectionHeader {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  padding: 6px 2px 0;
+}
+
+.sectionHeader:first-child {
+  padding-top: 0;
+}
+
+.sectionHint {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  margin: -4px 2px 0;
+}
+
 .card {
   display: flex;
   flex-direction: column;
@@ -85,6 +104,27 @@
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+.cardCheckbox {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.combineBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: var(--accent-dim);
+  font-size: 0.78rem;
+  font-weight: 600;
 }
 
 .linkRow {

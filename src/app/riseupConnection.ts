@@ -73,6 +73,9 @@ export interface RiseupTransaction {
   amount: number;
   isIncome: boolean;
   categoryLabel?: string;
+  /** RiseUp's own fixed/variable classification for this transaction (confirmed present on real
+   * API responses — not inferred here). Absent on income and a handful of uncategorized entries. */
+  actualType?: 'fixed' | 'variable';
 }
 
 /** `cashflowMonth` must be a resolved 'YYYY-MM' (RiseUp/server's `/api/transactions` doesn't

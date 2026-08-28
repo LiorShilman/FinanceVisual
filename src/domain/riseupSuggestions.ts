@@ -33,6 +33,12 @@ export interface RiseupEntitySuggestion {
   monthsSeen: number;
   totalMonths: number;
   expenseType?: ExpenseType;
+  /** RiseUp's own fixed/variable classification (RiseupTransaction.actualType), taken as the most
+   * common value across this business's own occurrences — not inferred here, since RiseUp already
+   * tags every transaction with this directly. Undefined for income or the rare untagged entry;
+   * the suggestions panel groups on this to separate fixed commitments from discretionary
+   * spending the user can pick and choose from. */
+  actualType?: 'fixed' | 'variable';
 }
 
 // how many *fetched* months apart consecutive occurrences typically sit, and how tightly clustered
@@ -139,27 +145,31 @@ function alreadyLinkedBusinessNames(entities: FinancialEntity[]): Set<string> {
 export function buildRiseupSuggestions(monthly: MonthlyTransactions[], entities: FinancialEntity[]): RiseupEntitySuggestion[] {
   const linked = alreadyLinkedBusinessNames(entities);
   const totalMonths = monthly.length;
-  const byBusiness = new Map<string, { amounts: number[]; monthKeys: string[]; isIncome: boolean; categories: string[] }>();
+  const byBusiness = new Map<
+    string,
+    { amounts: number[]; monthKeys: string[]; isIncome: boolean; categories: string[]; actualTypes: string[] }
+  >();
 
   for (const { month, transactions } of monthly) {
-    const perBusinessThisMonth = new Map<string, { amount: number; isIncome: boolean; category?: string }>();
+    const perBusinessThisMonth = new Map<string, { amount: number; isIncome: boolean; category?: string; actualType?: string }>();
     for (const t of transactions) {
       if (linked.has(t.businessName)) continue;
       const existing = perBusinessThisMonth.get(t.businessName);
       if (existing) existing.amount += Math.abs(t.amount);
-      else perBusinessThisMonth.set(t.businessName, { amount: Math.abs(t.amount), isIncome: t.isIncome, category: t.categoryLabel });
+      else perBusinessThisMonth.set(t.businessName, { amount: Math.abs(t.amount), isIncome: t.isIncome, category: t.categoryLabel, actualType: t.actualType });
     }
     for (const [name, v] of perBusinessThisMonth) {
-      const entry = byBusiness.get(name) ?? { amounts: [], monthKeys: [], isIncome: v.isIncome, categories: [] };
+      const entry = byBusiness.get(name) ?? { amounts: [], monthKeys: [], isIncome: v.isIncome, categories: [], actualTypes: [] };
       entry.amounts.push(v.amount);
       entry.monthKeys.push(month);
       if (v.category) entry.categories.push(v.category);
+      if (v.actualType) entry.actualTypes.push(v.actualType);
       byBusiness.set(name, entry);
     }
   }
 
   const suggestions: RiseupEntitySuggestion[] = [];
-  for (const [businessName, { amounts, monthKeys, isIncome, categories }] of byBusiness) {
+  for (const [businessName, { amounts, monthKeys, isIncome, categories, actualTypes }] of byBusiness) {
     const frequency = classifyFrequency(monthKeys, amounts);
     const rawAvg = amounts.reduce((a, b) => a + b, 0) / amounts.length;
     if (frequency === 'possiblyAnnual' && rawAvg < MIN_SINGLE_OCCURRENCE_AMOUNT) continue;
@@ -177,6 +187,7 @@ export function buildRiseupSuggestions(monthly: MonthlyTransactions[], entities:
       monthsSeen: amounts.length,
       totalMonths,
       expenseType: category === 'expense' ? inferExpenseType(riseupCategory, businessName) : undefined,
+      actualType: mostCommon(actualTypes) as 'fixed' | 'variable' | undefined,
     });
   }
 

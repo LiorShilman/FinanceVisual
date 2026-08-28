@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useBoardStore } from '../../app/boardStore';
 import type { RiseupSuggestionsLoadState } from '../../app/useRiseupSuggestions';
 import { computeMonthlyAmount, SUGGESTION_FREQUENCIES, type RiseupEntitySuggestion, type SuggestionFrequency } from '../../domain/riseupSuggestions';
@@ -13,6 +13,9 @@ interface Props {
   onClose: () => void;
   onAddSuggestion: (suggestion: RiseupEntitySuggestion) => void;
   onLinkExisting: (businessName: string, entityId: string, field: string) => void;
+  /** The "add several variable-expense suggestions as one combined entity" flow — see this
+   * panel's own variable section below. */
+  onAddCombinedVariableExpense: (suggestions: RiseupEntitySuggestion[]) => void;
 }
 
 const FREQUENCY_LABEL: Record<RiseupEntitySuggestion['frequency'], string> = {
@@ -33,6 +36,9 @@ interface CardProps {
   linkableEntities: FinancialEntity[];
   onAdd: (suggestion: RiseupEntitySuggestion) => void;
   onLinkExisting: (businessName: string, entityId: string, field: string) => void;
+  /** Present only for cards in the variable section — the checkbox that feeds the "combine into
+   * one entity" flow below. Fixed-section cards render without one. */
+  selection?: { checked: boolean; onToggle: () => void };
 }
 
 /** One suggestion, with two ways to resolve it: create it as a brand-new entity (the common case),
@@ -42,7 +48,7 @@ interface CardProps {
  * (monthly/bimonthly/possibly-annual) is only ever a best guess from a few months of data — the
  * dropdown lets the user override it, which live-recomputes the suggested monthly amount to match
  * (see domain/riseupSuggestions.ts's computeMonthlyAmount). */
-function SuggestionCard({ suggestion: s, linkableEntities, onAdd, onLinkExisting }: CardProps) {
+function SuggestionCard({ suggestion: s, linkableEntities, onAdd, onLinkExisting, selection }: CardProps) {
   const [frequency, setFrequency] = useState<SuggestionFrequency>(s.frequency);
   const suggestedAmount = computeMonthlyAmount(s.rawAverageAmount, frequency);
 
@@ -54,6 +60,15 @@ function SuggestionCard({ suggestion: s, linkableEntities, onAdd, onLinkExisting
   return (
     <div className={styles.card}>
       <div className={styles.cardTopRow}>
+        {selection && (
+          <input
+            type="checkbox"
+            className={styles.cardCheckbox}
+            checked={selection.checked}
+            onChange={selection.onToggle}
+            aria-label={`בחר ${s.businessName} להוצאה משתנה מאוחדת`}
+          />
+        )}
         <div className={styles.cardMain}>
           <span className={styles.cardName}>{s.businessName}</span>
           <span className={styles.cardMeta}>
@@ -126,9 +141,25 @@ function SuggestionCard({ suggestion: s, linkableEntities, onAdd, onLinkExisting
  * multi-month scan) — a subscription, a recurring transfer to savings, a salary. Turn any of them
  * into a real entity with one click, pre-filled and pre-linked so it's never suggested again, or
  * link it onto an entity that already exists but just isn't linked to this business name yet.
+ *
+ * Split into fixed/variable sections using RiseUp's own actualType classification (not inferred —
+ * RiseUp already tags every transaction with this) — the variable section additionally lets the
+ * user check off several businesses and fold them into one combined "variable expenses" entity,
+ * since tracking each discretionary purchase as its own entity is far more granular than most
+ * people want, and a single combined figure is what the budget split (see domain/budgetSplit.ts)
+ * actually needs to count toward the 30% "wants" bucket.
  */
-export function RiseupSuggestionsPanel({ loadState, suggestions, hasPat, onClose, onAddSuggestion, onLinkExisting }: Props) {
+export function RiseupSuggestionsPanel({
+  loadState,
+  suggestions,
+  hasPat,
+  onClose,
+  onAddSuggestion,
+  onLinkExisting,
+  onAddCombinedVariableExpense,
+}: Props) {
   const entities = useBoardStore((s) => s.entities);
+  const [selectedVariable, setSelectedVariable] = useState<Set<string>>(new Set());
 
   // only entities whose kind actually has a numeric field worth linking to (a 'source' node has
   // none) — same filter RiseupTransactionsPanel's own linking UI uses. Sorted alphabetically so a
@@ -137,6 +168,31 @@ export function RiseupSuggestionsPanel({ loadState, suggestions, hasPat, onClose
   const linkableEntities = entities
     .filter((e) => (LINKABLE_FIELDS[e.details.kind]?.length ?? 0) > 0)
     .sort((a, b) => a.name.localeCompare(b.name, 'he'));
+
+  const fixedSuggestions = suggestions.filter((s) => s.actualType === 'fixed');
+  const variableSuggestions = suggestions.filter((s) => s.actualType === 'variable');
+  const unclassifiedSuggestions = suggestions.filter((s) => s.actualType == null);
+
+  const selectedSuggestions = useMemo(
+    () => variableSuggestions.filter((s) => selectedVariable.has(s.businessName)),
+    [variableSuggestions, selectedVariable],
+  );
+  const selectedTotal = selectedSuggestions.reduce((sum, s) => sum + s.suggestedAmount, 0);
+
+  function toggleVariable(businessName: string) {
+    setSelectedVariable((prev) => {
+      const next = new Set(prev);
+      if (next.has(businessName)) next.delete(businessName);
+      else next.add(businessName);
+      return next;
+    });
+  }
+
+  function handleAddCombined() {
+    if (selectedSuggestions.length === 0) return;
+    onAddCombinedVariableExpense(selectedSuggestions);
+    setSelectedVariable(new Set());
+  }
 
   return (
     <div className={styles.overlay} onClick={onClose}>
@@ -163,15 +219,50 @@ export function RiseupSuggestionsPanel({ loadState, suggestions, hasPat, onClose
 
         {loadState === 'ready' && suggestions.length > 0 && (
           <div className={styles.list}>
-            {suggestions.map((s) => (
-              <SuggestionCard
-                key={s.businessName}
-                suggestion={s}
-                linkableEntities={linkableEntities}
-                onAdd={onAddSuggestion}
-                onLinkExisting={onLinkExisting}
-              />
-            ))}
+            {fixedSuggestions.length > 0 && (
+              <>
+                <div className={styles.sectionHeader}>קבועות</div>
+                {fixedSuggestions.map((s) => (
+                  <SuggestionCard key={s.businessName} suggestion={s} linkableEntities={linkableEntities} onAdd={onAddSuggestion} onLinkExisting={onLinkExisting} />
+                ))}
+              </>
+            )}
+
+            {variableSuggestions.length > 0 && (
+              <>
+                <div className={styles.sectionHeader}>משתנות</div>
+                <div className={styles.sectionHint}>סמן כמה עסקים כדי לאחד אותם לישות אחת של "הוצאות משתנות"</div>
+                {variableSuggestions.map((s) => (
+                  <SuggestionCard
+                    key={s.businessName}
+                    suggestion={s}
+                    linkableEntities={linkableEntities}
+                    onAdd={onAddSuggestion}
+                    onLinkExisting={onLinkExisting}
+                    selection={{ checked: selectedVariable.has(s.businessName), onToggle: () => toggleVariable(s.businessName) }}
+                  />
+                ))}
+                {selectedSuggestions.length > 0 && (
+                  <div className={styles.combineBar}>
+                    <span>
+                      נבחרו {selectedSuggestions.length} · סה"כ {formatCurrency(selectedTotal)} לחודש
+                    </span>
+                    <button type="button" className={styles.addBtn} onClick={handleAddCombined}>
+                      + הוסף כהוצאה משתנה מאוחדת
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+
+            {unclassifiedSuggestions.length > 0 && (
+              <>
+                <div className={styles.sectionHeader}>אחר</div>
+                {unclassifiedSuggestions.map((s) => (
+                  <SuggestionCard key={s.businessName} suggestion={s} linkableEntities={linkableEntities} onAdd={onAddSuggestion} onLinkExisting={onLinkExisting} />
+                ))}
+              </>
+            )}
           </div>
         )}
       </div>
