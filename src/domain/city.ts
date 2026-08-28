@@ -204,9 +204,6 @@ export function depthIndex(entity: FinancialEntity): number {
 // by the ground/camera still framing the *old* fixed total width while the real content shrank
 // out from under it (see computeDistrictSpan below, now used to size the ground dynamically
 // instead of assuming a constant).
-// never scales *up* past DISTRICT_SPACING, only down: capping it there keeps every populated
-// category's own footprint exactly as wide as it always was, so this only ever reclaims empty
-// ground, never crowds a busy district tighter than before.
 const MIN_DISTRICT_WIDTH = DISTRICT_SPACING * 0.5;
 // how much extra drag room the rightmost district (source) gets on its own outer edge, past its
 // own population-based width — see the computeCityLayout call site below. Pulled back in from an
@@ -218,9 +215,29 @@ export interface DistrictLayout {
   width: number;
 }
 
+// the categories a person actually spreads several individual entities across day to day (several
+// savings pots, investment accounts, recurring expenses, debts, insurance policies) — as opposed
+// to source/income/checking/donation/pension/studyFund/goal/realEstate, which are usually just one
+// or two entities and stay naturally tight. Without this, a category's drag area is sized to
+// exactly what its *current* population needs (cols = ceil(sqrt(count))), so with only 2-3
+// entities so far it starts out cramped — and a cramped area is itself what discourages someone
+// from dragging a few more entities into it, a chicken-and-egg the flat sqrt formula can't escape
+// on its own. Giving these five one extra column of slack up front breaks that loop.
+const PRIORITY_WIDTH_CATEGORIES = new Set<EntityCategory>(['savings', 'investment', 'expense', 'debt', 'insurance']);
+
+// NOT capped at DISTRICT_SPACING — an earlier version was, on the theory that no category should
+// ever need to scale *up* past the old flat width. That was wrong: a category with enough
+// entities in one depth tier that its own auto-grid needs more than DISTRICT_SPACING worth of
+// columns (cols >= 4, i.e. 10+ entities in that tier) still had its *drag* bounds artificially
+// capped at the old flat width, even though the auto-layout itself correctly used the real,
+// larger `cols` to lay the row out. The result: entities visibly auto-placed across, say, 5
+// columns, but only ~3 of those columns actually clamped as draggable — the drag bound was
+// narrower than the content it was supposed to bound. A district's width now always tracks
+// exactly what its own busiest row needs, with no ceiling, only the MIN_DISTRICT_WIDTH floor for
+// sparse categories.
 function districtWidthForCols(cols: number): number {
   if (cols === 0) return MIN_DISTRICT_WIDTH;
-  return Math.min(DISTRICT_SPACING, Math.max(MIN_DISTRICT_WIDTH, cols * LOT_SIZE + DRAG_MARGIN_X * 2));
+  return Math.max(MIN_DISTRICT_WIDTH, cols * LOT_SIZE + DRAG_MARGIN_X * 2);
 }
 
 /**
@@ -241,7 +258,8 @@ export function computeDistrictLayout(entities: FinancialEntity[]): Record<Entit
   }
   for (const [key, count] of countByCategoryDepth) {
     const [cat] = key.split('|') as [EntityCategory, string];
-    const cols = Math.max(1, Math.ceil(Math.sqrt(count)));
+    const slack = PRIORITY_WIDTH_CATEGORIES.has(cat) ? 1 : 0;
+    const cols = Math.max(1, Math.ceil(Math.sqrt(count)) + slack);
     colsByCategory.set(cat, Math.max(colsByCategory.get(cat) ?? 0, cols));
   }
 

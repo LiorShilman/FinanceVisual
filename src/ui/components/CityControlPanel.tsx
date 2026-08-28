@@ -19,6 +19,7 @@ interface Props {
   isCameraLocked: boolean;
   onLockCamera: () => void;
   onResetCamera: () => void;
+  onTopView: () => void;
   onDownloadImage: () => void;
   onShareImage: () => void;
   canShareImage: boolean;
@@ -48,6 +49,7 @@ export function CityControlPanel({
   isCameraLocked,
   onLockCamera,
   onResetCamera,
+  onTopView,
   onDownloadImage,
   onShareImage,
   canShareImage,
@@ -189,6 +191,14 @@ export function CityControlPanel({
                     📌 קבע זווית מצלמה
                   </button>
                 )}
+                <button
+                  type="button"
+                  className={styles.panelBtn}
+                  onClick={onTopView}
+                  title="מרכז את המצלמה ישר מעל העיר, בגובה שמכניס את כל השטח לתמונה"
+                >
+                  🔝 תצוגת על ממורכזת
+                </button>
               </div>
 
               <div className={styles.section}>

@@ -1,4 +1,4 @@
-import { useMemo, useState, type ElementRef, type RefObject } from 'react';
+import { useEffect, useMemo, useRef, useState, type ElementRef, type RefObject } from 'react';
 import * as THREE from 'three';
 import { Canvas } from '@react-three/fiber';
 import { Billboard, OrbitControls, Text } from '@react-three/drei';
@@ -83,6 +83,10 @@ interface Props {
   // into here; a plain ref works across that boundary just fine since it's dereferenced lazily.
   controlsRef: RefObject<ElementRef<typeof OrbitControls> | null>;
   lockedCamera: LockedCamera | null;
+  // bumped (any change, not a specific value) by CityControlPanel's own "top view" button — a
+  // counter rather than a boolean so clicking it twice in a row (already in top view, wants to
+  // re-center) still triggers the effect below both times.
+  topViewTrigger: number;
   // the entity currently open in the growth-forecast calculator (CityControlPanel), and its
   // already-computed projection — both null when the calculator is closed. Computed once in
   // BoardScreen (not here) so the same points feed both the panel's headline numbers and these
@@ -106,6 +110,15 @@ const DEPTH_LABELS: { text: string; color: string }[] = [
 // drags through, just under one fixed synthetic key instead of an entity id.
 const CHECKING_BRIDGE_KEY = 'checkingBridge';
 
+// shared between OrbitControls' own maxDistance and the "top view" button below, so top view
+// always snaps to the real maximum zoom-out the camera can ever reach — not some smaller,
+// independently-computed "fit the content" guess that left extra unused zoom range beyond it.
+// Comfortably under a healthy board's own fog-far distance (320, see domain/atmosphere.ts) so the
+// city still reads clearly at max zoom on a healthy board; a badly distressed board's much closer
+// fog (190) already sits inside the *previous* 200 max too, a pre-existing tradeoff this doesn't
+// newly introduce.
+const MAX_CAMERA_DISTANCE = 300;
+
 // the four growth categories render as trees, not towers — each gets its own species so they stay
 // visually distinct from one another (investment's 'alternative' assetType is handled separately,
 // as CityCrystalMesh, before this map is even consulted).
@@ -123,6 +136,7 @@ export function CityView({
   riseupHistory,
   controlsRef,
   lockedCamera,
+  topViewTrigger,
   growthForecastEntityId,
   growthForecastPoints,
   onOpen,
@@ -381,6 +395,45 @@ export function CityView({
     { center: water.lakeCenter, radius: water.outerRingRadius } satisfies CircularExtent,
     { center: valley.center, radius: valley.radius } satisfies CircularExtent,
   ]);
+  // "top view" button (CityControlPanel) — a toggle, not a one-shot snap. First click: camera
+  // jumps straight above the real ground center, at its own maximum zoom-out
+  // (MAX_CAMERA_DISTANCE, not a smaller "fit the content" guess — the point is to see everything
+  // at once), and lighting/fog boost to their own maximum (see effectiveAtmosphere below) — a
+  // board's real health-driven dimness/haze is exactly the wrong thing to see from this far
+  // zoomed out. Second click (while still in top view): just clears isTopView and leaves the
+  // camera exactly where the user panned/zoomed/rotated it — nothing here reacts to camera
+  // movement at all, on purpose. An earlier version tied the exit to OrbitControls' own
+  // start/change events instead, so any accidental brush of the map (a stray click, a single
+  // wheel tick — either fires those events even with ~zero real camera movement) killed the
+  // boosted lighting instantly; explicit-only exit (this button, again) is simpler and matches
+  // what a person actually means by "leave top view". topViewTriggerRef guards against firing on
+  // mount (both start equal to the same initial prop value) — only an actual *change* in the
+  // trigger counter (a real click) should act; isTopViewRef (not just the isTopView state) is
+  // what decides enter-vs-exit, since the effect only reruns on topViewTrigger changing and would
+  // otherwise close over a stale isTopView from whenever it last ran.
+  const topViewTriggerRef = useRef(topViewTrigger);
+  const [isTopView, setIsTopView] = useState(false);
+  const isTopViewRef = useRef(isTopView);
+  useEffect(() => {
+    if (topViewTrigger === topViewTriggerRef.current) return;
+    topViewTriggerRef.current = topViewTrigger;
+    if (isTopViewRef.current) {
+      isTopViewRef.current = false;
+      setIsTopView(false);
+      return;
+    }
+    const controls = controlsRef.current;
+    if (!controls) return;
+    controls.object.position.set(bounds.center[0], MAX_CAMERA_DISTANCE, bounds.center[1] + 0.01);
+    controls.target.set(bounds.center[0], 0, bounds.center[1]);
+    controls.update();
+    isTopViewRef.current = true;
+    setIsTopView(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [topViewTrigger]);
+  const effectiveAtmosphere = isTopView
+    ? { ...atmosphere, fogNear: MAX_CAMERA_DISTANCE * 1.5, fogFar: MAX_CAMERA_DISTANCE * 2.5, ambientIntensity: 2, ambientColor: '#ffffff' }
+    : atmosphere;
   // to the right of the income faucet's own arm (higher x — see CitySun's own x=width*0.78 for
   // the same "higher x reads as further right" convention in this RTL city) and level with it —
   // the faucet's valve/arm mechanism floats at a fixed absolute FAUCET_Y (13), independent of the
@@ -416,15 +469,16 @@ export function CityView({
       dpr={[1, 2]}
     >
       {/* background/fog/ambient all come from computeCityAtmosphere — a healthy board renders
-          these exact fixed values (fog pushed out past the raised maxDistance=200, so it stays
-          lit well past normal viewing range); the more of the city reads as at-risk, the further
+          these exact fixed values (fog pushed out past MAX_CAMERA_DISTANCE, so it stays lit well
+          past normal viewing range, including the "top view" button's own max-zoom-out framing);
+          the more of the city reads as at-risk, the further
           they drift toward a dim, hazy red "weather", entirely driven by real board data, not a
           decorative toggle. */}
-      <color attach="background" args={[atmosphere.background]} />
-      <fog attach="fog" args={[atmosphere.background, atmosphere.fogNear, atmosphere.fogFar]} />
-      <ambientLight intensity={atmosphere.ambientIntensity} color={atmosphere.ambientColor} />
-      <directionalLight position={[width * 0.4, 26, 14]} intensity={2.6} />
-      <directionalLight position={[-10, 14, -10]} intensity={0.85} color="#6c8dff" />
+      <color attach="background" args={[effectiveAtmosphere.background]} />
+      <fog attach="fog" args={[effectiveAtmosphere.background, effectiveAtmosphere.fogNear, effectiveAtmosphere.fogFar]} />
+      <ambientLight intensity={effectiveAtmosphere.ambientIntensity} color={effectiveAtmosphere.ambientColor} />
+      <directionalLight position={[width * 0.4, 26, 14]} intensity={isTopView ? 4 : 2.6} />
+      <directionalLight position={[-10, 14, -10]} intensity={isTopView ? 1.4 : 0.85} color="#6c8dff" />
 
       <CityGround groundCenter={groundCenter} groundSizeX={groundSizeX} groundSizeZ={groundSizeZ} water={water} valley={valley} />
       <CityIndependenceDome
@@ -712,7 +766,7 @@ export function CityView({
         mouseButtons={{ LEFT: THREE.MOUSE.PAN, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.ROTATE }}
         screenSpacePanning
         minDistance={10}
-        maxDistance={200}
+        maxDistance={MAX_CAMERA_DISTANCE}
         maxPolarAngle={Math.PI / 2.15}
         // explicit false, not just the omitted default — a pan/rotate drag should stop exactly
         // where the mouse was released, not keep gliding on its own momentum afterward.

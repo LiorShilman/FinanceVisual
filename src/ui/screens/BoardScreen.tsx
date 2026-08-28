@@ -149,6 +149,13 @@ function BoardCanvas() {
     setLockedCamera(null);
   }
 
+  // a counter, not a boolean — CityView's own effect fires on any *change*, so clicking "top
+  // view" again while already there still re-centers instead of doing nothing the second time.
+  const [topViewTrigger, setTopViewTrigger] = useState(0);
+  function handleTopView() {
+    setTopViewTrigger((t) => t + 1);
+  }
+
   // years and monthly-deposit are "what if" scenario knobs, local to this calculator session —
   // the assumed return % is the one number saved back onto the entity itself (see
   // handleChangeForecastReturnPct), since that's a real belief about the account worth
@@ -627,6 +634,7 @@ function BoardCanvas() {
           isCameraLocked={lockedCamera !== null}
           onLockCamera={handleLockCamera}
           onResetCamera={handleResetCamera}
+          onTopView={handleTopView}
           onDownloadImage={handleDownloadCity}
           onShareImage={handleShareCity}
           canShareImage={canShareFiles}
@@ -651,6 +659,7 @@ function BoardCanvas() {
             riseupHistory={riseupHistory}
             controlsRef={controlsRef}
             lockedCamera={lockedCamera}
+            topViewTrigger={topViewTrigger}
             growthForecastEntityId={growthForecast?.entityId ?? null}
             growthForecastPoints={growthForecastPoints}
             onOpen={openEditor}
