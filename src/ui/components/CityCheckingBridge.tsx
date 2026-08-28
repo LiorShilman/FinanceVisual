@@ -94,12 +94,15 @@ const CHECKING_COLOR = '#2fb0a0';
 const CHECKING_STRUCTURE_COLOR = '#1c7d70';
 // the reserved/"don't touch" portion of the deck surface.
 const RESERVED_COLOR = '#3a4a46';
-// the available-for-investment portion — deliberately gold, not the same teal the rails already
-// own. A first pass used teal for both, and with the rails sitting right on top of the available
-// zone in the same hue, the two blended into one shapeless mass with no visible edge between
-// "structure" and "surface." Gold is also this city's own established "money/value" color
-// (income pipe, medal frames), so it doubles as "this cash is ready to move."
-const AVAILABLE_COLOR = '#c2921f';
+// the available-for-investment portion — deliberately its own hue, not the same teal the rails
+// already own (a first pass used teal for both, and with the rails sitting right on top of the
+// available zone in the same hue, the two blended into one shapeless mass with no visible edge
+// between "structure" and "surface"), and not gold either (this city's own money/value color,
+// but already doing that job elsewhere — income pipe, medals, the pension ring — and reading as
+// "yellow" specifically was the thing asked to change here). A cool sky-blue instead — brighter/
+// lighter than both the lake's own deeper blue and the checking teal right next to it, so it
+// still reads as "cash, liquid, ready to move" without repeating either.
+const AVAILABLE_COLOR = '#4fb8d9';
 // how many plate-seams per world unit of deck length — keeps plate spacing visually consistent
 // regardless of how long a given zone actually is, rather than always stretching one texture
 // tile across the whole zone (which would make a short zone's plates look huge).

@@ -358,8 +358,8 @@ const MAX_STREAM_RADIUS = 0.26;
 // thicker treatment; a calm, static water stream stays at the original, thinner size, so the
 // thickness itself doubles as a visual cue for "is this actively being fed" rather than making
 // every stream uniformly bigger regardless of that distinction.
-const MIN_FLOWING_STREAM_RADIUS = 0.1;
-const MAX_FLOWING_STREAM_RADIUS = 0.38;
+const MIN_FLOWING_STREAM_RADIUS = 0.13;
+const MAX_FLOWING_STREAM_RADIUS = 0.46;
 
 // Direct magnitude, not rank — rank-based sizing (used for buildings/pyramid) deliberately
 // guarantees every item looks different even when two values are nearly equal, which is exactly
