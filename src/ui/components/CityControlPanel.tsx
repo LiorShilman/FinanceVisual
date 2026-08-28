@@ -23,6 +23,7 @@ interface Props {
   onShareImage: () => void;
   canShareImage: boolean;
   onOpenAssetTable: () => void;
+  onOpenBudgetSplitTable: () => void;
   // present only while the growth-forecast calculator is open for some entity — forces the panel
   // open (see the effect below) so a person clicking "תחזית צמיחה" on a tree actually sees the
   // calculator appear, instead of it silently filling a collapsed panel.
@@ -51,6 +52,7 @@ export function CityControlPanel({
   onShareImage,
   canShareImage,
   onOpenAssetTable,
+  onOpenBudgetSplitTable,
   growthForecast,
   onChangeForecastYears,
   onChangeForecastMonthlyDeposit,
@@ -109,6 +111,9 @@ export function CityControlPanel({
             <h3 className={styles.sectionTitle}>נתונים</h3>
             <button type="button" className={styles.panelBtn} onClick={onOpenAssetTable}>
               📊 טבלת נכסים
+            </button>
+            <button type="button" className={styles.panelBtn} onClick={onOpenBudgetSplitTable}>
+              📊 חלוקת הכנסות 50/30/20
             </button>
           </div>
 

@@ -1,0 +1,196 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(4, 5, 8, 0.65);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 60;
+  padding: 24px;
+}
+
+.panel {
+  width: min(720px, 96vw);
+  max-height: 90vh;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-panel);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.title {
+  font-size: 1.15rem;
+  font-weight: 800;
+  margin: 0 0 4px;
+}
+
+.subtitle {
+  font-size: 0.78rem;
+  color: var(--text-dim);
+}
+
+.closeBtn {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  border-radius: var(--radius-sm);
+  width: 32px;
+  height: 32px;
+  font-size: 0.9rem;
+  flex-shrink: 0;
+}
+
+.empty {
+  padding: 48px 24px;
+  text-align: center;
+  color: var(--text-dim);
+}
+
+.summaryRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+}
+
+.summaryCard {
+  flex: 1;
+  min-width: 120px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.summaryCardTotal {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+}
+
+.summaryCardHead {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  font-weight: 600;
+}
+
+.summaryAmount {
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: var(--amount-accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.summaryMeta {
+  font-size: 0.7rem;
+  color: var(--text-dim);
+}
+
+.tableScroll {
+  overflow: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.84rem;
+}
+
+.table th {
+  position: sticky;
+  top: 0;
+  background: var(--surface-3);
+  color: var(--text-dim);
+  font-weight: 700;
+  font-size: 0.72rem;
+  text-align: start;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  z-index: 1;
+}
+
+.table td {
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+.table tbody tr:not(.subtotalRow):not(.bucketHeaderRow):hover {
+  background: var(--surface-2);
+  cursor: pointer;
+}
+
+.colName {
+  font-weight: 700;
+  min-width: 140px;
+}
+
+.colNum {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.categoryPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 3px 9px;
+  font-size: 0.74rem;
+  white-space: nowrap;
+}
+
+.bucketHeaderRow {
+  background: var(--surface-3);
+  font-weight: 700;
+  font-size: 0.76rem;
+}
+
+.bucketHeaderRow td {
+  padding: 8px 12px;
+}
+
+.subtotalRow {
+  background: var(--surface-2);
+  font-weight: 700;
+  color: var(--text-dim);
+}
+
+.subtotalRow td {
+  padding-top: 7px;
+  padding-bottom: 7px;
+}
+
+.grandTotalRow {
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface-3));
+  font-weight: 800;
+  color: var(--text);
+}
+
+.grandTotalRow td {
+  border-bottom: none;
+  padding: 12px;
+}

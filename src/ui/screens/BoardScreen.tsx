@@ -36,6 +36,7 @@ import { CityView } from '../components/CityView';
 import { clearLockedCamera, loadLockedCamera, saveLockedCamera, type LockedCamera } from '../components/cityCameraLock';
 import { CurrencyControl } from '../components/CurrencyControl';
 import { InvestmentsTablePanel } from '../components/InvestmentsTablePanel';
+import { BudgetSplitTablePanel } from '../components/BudgetSplitTablePanel';
 import { RiseupTransactionsPanel } from '../components/RiseupTransactionsPanel';
 import { RiseupSuggestionsPanel } from '../components/RiseupSuggestionsPanel';
 import { formatCurrency } from '../format';
@@ -108,6 +109,7 @@ function BoardCanvas() {
   } | null>(null);
   const [showFamilyPanel, setShowFamilyPanel] = useState(false);
   const [showInvestmentsTable, setShowInvestmentsTable] = useState(false);
+  const [showBudgetSplitTable, setShowBudgetSplitTable] = useState(false);
   const [showRiseupTransactions, setShowRiseupTransactions] = useState(false);
   const [showRiseupSuggestions, setShowRiseupSuggestions] = useState(false);
   // enabled by showRiseupSuggestions itself — the hook only actually starts its scan the *first*
@@ -629,6 +631,7 @@ function BoardCanvas() {
           onShareImage={handleShareCity}
           canShareImage={canShareFiles}
           onOpenAssetTable={() => setShowInvestmentsTable(true)}
+          onOpenBudgetSplitTable={() => setShowBudgetSplitTable(true)}
           growthForecast={growthForecastPanelData}
           onChangeForecastYears={(years) => setGrowthForecast((f) => (f ? { ...f, years } : f))}
           onChangeForecastMonthlyDeposit={(monthlyDeposit) => setGrowthForecast((f) => (f ? { ...f, monthlyDeposit } : f))}
@@ -722,6 +725,16 @@ function BoardCanvas() {
           onClose={() => setShowInvestmentsTable(false)}
           onOpenEntity={(id) => {
             setShowInvestmentsTable(false);
+            openEditor(id);
+          }}
+        />
+      )}
+
+      {showBudgetSplitTable && (
+        <BudgetSplitTablePanel
+          onClose={() => setShowBudgetSplitTable(false)}
+          onOpenEntity={(id) => {
+            setShowBudgetSplitTable(false);
             openEditor(id);
           }}
         />
