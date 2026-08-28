@@ -144,6 +144,9 @@ export const LONG_TERM_MIN_Z = depthBaseZ(0) - (DEPTH_SPACING * LONG_TERM_DEPTH_
 // row-spread) short-term entity could land at or past that line, reading as if it belonged to the
 // long-term tier instead. Long-term's own tier is deliberately exempt from this floor — it's the
 // one tier that's actually meant to recede past its own front line (see LONG_TERM_DEPTH_REACH).
+// Expenses in the short-term tier are *also* exempt (see the cat !== 'expense' check at the
+// computeCellBounds call site below) — requested so a short-term expense's own drag space
+// genuinely extends into long-term's own territory instead of stopping right at its edge.
 const SHORT_TERM_MIN_Z_FLOOR = depthBaseZ(0) + DRAG_MARGIN_Z_BACK;
 
 function computeCellBounds(baseX: number, baseZ: number, depthReach: number, minZFloor = -Infinity): CityCellBounds {
@@ -239,7 +242,14 @@ export function computeCityLayout(entities: FinancialEntity[], overrides: Record
     const cols = Math.max(1, Math.ceil(Math.sqrt(list.length)));
     const depthReach =
       depth === 0 ? LONG_TERM_DEPTH_REACH : depth === 1 ? SHORT_TERM_DEPTH_REACH : (DEPTH_REACH[cat] ?? DEFAULT_DEPTH_REACH);
-    const cellBounds = computeCellBounds(baseX, baseZ, depthReach, depth === 1 ? SHORT_TERM_MIN_Z_FLOOR : -Infinity);
+    // expense is exempt from the short-term floor (see SHORT_TERM_MIN_Z_FLOOR's own comment) —
+    // its space should reach *into* long-term's territory, not just up to its front line.
+    const minZFloor = depth === 1 && cat !== 'expense' ? SHORT_TERM_MIN_Z_FLOOR : -Infinity;
+    const cellBounds = computeCellBounds(baseX, baseZ, depthReach, minZFloor);
+    // ...and not just partway in — a short-term expense gets long-term's *entire* own drag
+    // extent tacked onto its own, all the way to LONG_TERM_MIN_Z itself (long-term's own real
+    // minZ, reused directly so this stays correct if long-term's own reach constants ever change).
+    if (cat === 'expense' && depth === 1) cellBounds.minZ = LONG_TERM_MIN_Z;
     const lotSize = depth === 1 ? SHORT_TERM_LOT_SIZE : LOT_SIZE;
 
     list.forEach((entity, i) => {
