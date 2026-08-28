@@ -53,7 +53,7 @@ export const SEED_ENTITIES: FinancialEntity[] = [
     ownerIds: ['self'],
     currency: 'ils',
     linkedEntityIds: ['debt-mortgage'],
-    details: { kind: 'insurance', coverageAmount: 500000, monthlyPremium: 180, insuranceType: 'life' },
+    details: { kind: 'insurance', coverageAmount: 500000, monthlyPremium: 180, insuranceType: 'life', essential: true },
   },
   {
     id: 'debt-mortgage',

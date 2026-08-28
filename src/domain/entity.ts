@@ -122,6 +122,13 @@ const InsuranceDetails = z.object({
   coverageAmount: z.number().nonnegative(),
   monthlyPremium: z.number().nonnegative(),
   insuranceType: z.enum(INSURANCE_TYPES),
+  // unlike an expense's own `essential` (which splits needs from wants — every insurance premium
+  // still counts as a current "need" regardless of this flag, see domain/budgetSplit.ts), this
+  // means "will this premium still matter once actually financially independent" — used only by
+  // domain/independence.ts's computeEssentialMonthlyExpenses. Defaults true (most insurance keeps
+  // running after retirement); a specific policy — e.g. life insurance meant only to bridge to
+  // pension age — can be unchecked without affecting every other policy of the same type.
+  essential: z.boolean().default(true),
 });
 // A mortgage's own track types (Israeli mortgages are near-universally split across several of
 // these, each with its own rate/term) — not a separate entity category from 'debt' (see

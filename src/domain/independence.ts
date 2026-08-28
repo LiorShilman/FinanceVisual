@@ -34,11 +34,17 @@ export interface IndependenceProgress {
 
 /** Shared with domain/emergencyFund.ts — "how much do I actually need to keep living" is the
  * same real-world number whether it's being multiplied by 300 for the FI target or compared
- * against an emergency fund's balance for a runway. */
+ * against an emergency fund's balance for a runway. Insurance counts only when its own `essential`
+ * flag says so (see entity.ts's InsuranceDetails — a per-policy judgment call, not a blanket rule
+ * by insuranceType: disability insurance replaces lost *work* income and usually stops mattering
+ * once independent, and a life policy meant only to bridge to pension age is exactly the same
+ * story, but neither is true for every policy of that type, so it's the household's own call per
+ * policy, not this function's). */
 export function computeEssentialMonthlyExpenses(entities: FinancialEntity[]): number {
   let essentialMonthly = 0;
   for (const e of entities) {
     if (e.details.kind === 'expense' && e.details.essential) essentialMonthly += e.details.monthlyAmount;
+    if (e.details.kind === 'insurance' && e.details.essential) essentialMonthly += e.details.monthlyPremium;
   }
   return essentialMonthly;
 }

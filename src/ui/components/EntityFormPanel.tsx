@@ -57,7 +57,7 @@ function defaultDetails(category: EntityCategory): EntityDetails {
     case 'studyFund':
       return { kind: 'studyFund', balance: 0, monthlyContribution: 0, expectedAnnualReturnPct: 5, fromIncome: false };
     case 'insurance':
-      return { kind: 'insurance', coverageAmount: 0, monthlyPremium: 0, insuranceType: 'life' };
+      return { kind: 'insurance', coverageAmount: 0, monthlyPremium: 0, insuranceType: 'life', essential: true };
     case 'debt':
       return { kind: 'debt', outstandingBalance: 0, monthlyPayment: 0, interestRatePct: 0, isMortgage: false, mortgageTracks: [] };
     case 'goal':
@@ -661,6 +661,10 @@ export function EntityFormPanel({
                   onChange={(v) => updateDetail({ monthlyPremium: fromDisplay(v) })}
                 />
               </label>
+            </div>
+            <div className={styles.checkboxRow}>
+              <input type="checkbox" checked={d.essential} onChange={(e) => updateDetail({ essential: e.target.checked })} />
+              <span>ימשיך להיות רלוונטי גם אחרי עצמאות כלכלית</span>
             </div>
           </>
         )}
