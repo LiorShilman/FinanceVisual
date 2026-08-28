@@ -714,6 +714,9 @@ export function CityView({
         minDistance={10}
         maxDistance={200}
         maxPolarAngle={Math.PI / 2.15}
+        // explicit false, not just the omitted default — a pan/rotate drag should stop exactly
+        // where the mouse was released, not keep gliding on its own momentum afterward.
+        enableDamping={false}
       />
       <CityWalkControls controlsRef={controlsRef} enabled={controlsEnabled} />
       <CityCameraFocus controlsRef={controlsRef} target={growthForecastTarget} />
