@@ -4,7 +4,7 @@ import type { FinancialEntity } from './entity';
 
 export interface BudgetSplit {
   income: number;
-  // essential expenses + every debt's own monthly payment — the "50."
+  // essential expenses + every debt's own monthly payment + every insurance premium — the "50."
   needs: number;
   // non-essential expenses only — discretionary spending on yourself. The "30."
   wants: number;
@@ -45,7 +45,7 @@ export function computeBudgetSplit(entities: FinancialEntity[]): BudgetSplit {
   }
 
   const income = burden.income;
-  const needs = burden.essentialExpenses + burden.debtPayments;
+  const needs = burden.essentialExpenses + burden.debtPayments + burden.insurancePremiums;
   const savingsContribution = savingsFromIncome.amount;
   const savings = savingsContribution + donations;
   const committed = needs + wants + savings;
