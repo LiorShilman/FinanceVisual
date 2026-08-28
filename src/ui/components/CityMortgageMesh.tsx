@@ -3,6 +3,9 @@ import { Billboard, Text } from '@react-three/drei';
 import type { ThreeEvent } from '@react-three/fiber';
 import * as THREE from 'three';
 import { getFacadeTexture, getRoofTexture } from './cityTowerShared';
+import { CityThickOutline } from './CityThickOutline';
+
+const OUTLINE_COLOR = '#0a0c11';
 
 interface Props {
   x: number;
@@ -48,10 +51,14 @@ export function CityMortgageMesh({ x, z, height, footprint, color, name, amount,
   const flagH = poleHeight * 0.45;
   const roofPeakY = wallHeight + roofHeight;
 
+  const wallGeometry = useMemo(() => new THREE.BoxGeometry(base, wallHeight, base), [base, wallHeight]);
+  const wallEdges = useMemo(() => new THREE.EdgesGeometry(wallGeometry), [wallGeometry]);
+  const roofGeometry = useMemo(() => new THREE.ConeGeometry((base * Math.SQRT2) / 2, roofHeight, 4), [base, roofHeight]);
+  const roofEdges = useMemo(() => new THREE.EdgesGeometry(roofGeometry), [roofGeometry]);
+
   return (
     <group position={[x, 0, z]}>
-      <mesh position={[0, wallHeight / 2, 0]} frustumCulled={false} onClick={handleClick}>
-        <boxGeometry args={[base, wallHeight, base]} />
+      <mesh geometry={wallGeometry} position={[0, wallHeight / 2, 0]} frustumCulled={false} onClick={handleClick}>
         <meshStandardMaterial
           color="#4a5162"
           map={facadeTexture}
@@ -61,11 +68,11 @@ export function CityMortgageMesh({ x, z, height, footprint, color, name, amount,
           roughness={0.55}
         />
       </mesh>
+      <CityThickOutline geometry={wallEdges} color={OUTLINE_COLOR} linewidth={1.6} position={[0, wallHeight / 2, 0]} />
       {/* a muted clay/slate tint, not the vivid orange-red the shared shingle texture defaults
           to elsewhere (CityExpenseMesh's housing type) — keeps the same texture map for real
           shingle detail without reading as a flat, solid-red cap. */}
-      <mesh position={[0, wallHeight + roofHeight / 2, 0]} rotation={[0, Math.PI / 4, 0]} frustumCulled={false} onClick={handleClick}>
-        <coneGeometry args={[(base * Math.SQRT2) / 2, roofHeight, 4]} />
+      <mesh geometry={roofGeometry} position={[0, wallHeight + roofHeight / 2, 0]} rotation={[0, Math.PI / 4, 0]} frustumCulled={false} onClick={handleClick}>
         <meshStandardMaterial
           color="#8a7060"
           map={roofTexture}
@@ -75,6 +82,13 @@ export function CityMortgageMesh({ x, z, height, footprint, color, name, amount,
           roughness={0.85}
         />
       </mesh>
+      <CityThickOutline
+        geometry={roofEdges}
+        color={OUTLINE_COLOR}
+        linewidth={1.6}
+        position={[0, wallHeight + roofHeight / 2, 0]}
+        rotation={[0, Math.PI / 4, 0]}
+      />
 
       <mesh position={[0, roofPeakY + poleHeight / 2, 0]} frustumCulled={false}>
         <cylinderGeometry args={[0.04, 0.04, poleHeight, 6]} />

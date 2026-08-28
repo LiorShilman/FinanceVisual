@@ -103,6 +103,7 @@ export function BudgetSplitTablePanel({ onClose, onOpenEntity }: Props) {
                   <tr>
                     <th className={styles.colName}>שם</th>
                     <th>קטגוריה</th>
+                    <th>תאריך חיוב</th>
                     <th className={styles.colNum}>סכום חודשי</th>
                   </tr>
                 </thead>
@@ -113,7 +114,7 @@ export function BudgetSplitTablePanel({ onClose, onOpenEntity }: Props) {
                     const summary = summaries.find((s) => s.bucket === bucket)!;
                     return [
                       <tr key={`${bucket}-header`} className={styles.bucketHeaderRow}>
-                        <td colSpan={3}>
+                        <td colSpan={4}>
                           {BUCKET_ICONS[bucket]} {BUCKET_LABELS[bucket]}
                         </td>
                       </tr>,
@@ -125,11 +126,17 @@ export function BudgetSplitTablePanel({ onClose, onOpenEntity }: Props) {
                               {CATEGORY_ICONS[row.category]} {CATEGORY_LABELS[row.category]}
                             </span>
                           </td>
+                          {/* '' (blank), not "unknown"/"—" as a distinct word — no chargeDay set is
+                              the common case (RiseUp-linked entities get their real day shown
+                              elsewhere, on the cash runway itself, once actual history exists; this
+                              is just the manually-entered fallback field), not an error state worth
+                              calling out row by row. */}
+                          <td className={styles.colDate}>{row.chargeDay !== undefined ? `${row.chargeDay} לחודש` : ''}</td>
                           <td className={styles.colNum}>{money(row.amount)}</td>
                         </tr>
                       )),
                       <tr key={`${bucket}-subtotal`} className={styles.subtotalRow}>
-                        <td colSpan={2}>סה״כ {BUCKET_LABELS[bucket]}</td>
+                        <td colSpan={3}>סה״כ {BUCKET_LABELS[bucket]}</td>
                         <td className={styles.colNum}>{money(summary.amount)}</td>
                       </tr>,
                     ];
@@ -137,7 +144,7 @@ export function BudgetSplitTablePanel({ onClose, onOpenEntity }: Props) {
                 </tbody>
                 <tfoot>
                   <tr className={styles.grandTotalRow}>
-                    <td colSpan={2}>סה״כ מוקצה</td>
+                    <td colSpan={3}>סה״כ מוקצה</td>
                     <td className={styles.colNum}>{money(split.needs + split.wants + split.savings)}</td>
                   </tr>
                 </tfoot>

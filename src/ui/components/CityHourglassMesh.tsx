@@ -3,6 +3,9 @@ import * as THREE from 'three';
 import { Billboard, Text } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
 import type { ThreeEvent } from '@react-three/fiber';
+import { CityThickOutline } from './CityThickOutline';
+
+const OUTLINE_COLOR = '#0a0c11';
 
 interface Props {
   x: number;
@@ -85,16 +88,29 @@ export function CityHourglassMesh({ x, z, height, footprint, color, name, amount
   );
   const frameMaterial = <meshStandardMaterial color={FRAME_COLOR} roughness={0.6} metalness={0.35} flatShading />;
 
+  const capGeometry = useMemo(() => new THREE.CylinderGeometry(frameCapRadius, frameCapRadius, frameCapHeight, 8), [frameCapRadius, frameCapHeight]);
+  const capEdges = useMemo(() => new THREE.EdgesGeometry(capGeometry), [capGeometry]);
+  const bottomBulbGeometry = useMemo(
+    () => new THREE.CylinderGeometry(neckRadius, bulbRadius, bulbHeight, 8, 1, true),
+    [neckRadius, bulbRadius, bulbHeight],
+  );
+  const bottomBulbEdges = useMemo(() => new THREE.EdgesGeometry(bottomBulbGeometry), [bottomBulbGeometry]);
+  const topBulbGeometry = useMemo(
+    () => new THREE.CylinderGeometry(bulbRadius, neckRadius, bulbHeight, 8, 1, true),
+    [bulbRadius, neckRadius, bulbHeight],
+  );
+  const topBulbEdges = useMemo(() => new THREE.EdgesGeometry(topBulbGeometry), [topBulbGeometry]);
+
   return (
     <group position={[x, 0, z]}>
-      <mesh position={[0, bottomCapY, 0]} frustumCulled={false} onClick={handleClick}>
-        <cylinderGeometry args={[frameCapRadius, frameCapRadius, frameCapHeight, 8]} />
+      <mesh geometry={capGeometry} position={[0, bottomCapY, 0]} frustumCulled={false} onClick={handleClick}>
         {frameMaterial}
       </mesh>
-      <mesh position={[0, topCapY, 0]} frustumCulled={false} onClick={handleClick}>
-        <cylinderGeometry args={[frameCapRadius, frameCapRadius, frameCapHeight, 8]} />
+      <CityThickOutline geometry={capEdges} color={OUTLINE_COLOR} linewidth={1.4} position={[0, bottomCapY, 0]} />
+      <mesh geometry={capGeometry} position={[0, topCapY, 0]} frustumCulled={false} onClick={handleClick}>
         {frameMaterial}
       </mesh>
+      <CityThickOutline geometry={capEdges} color={OUTLINE_COLOR} linewidth={1.4} position={[0, topCapY, 0]} />
       {posts.map((a, i) => (
         <mesh
           key={i}
@@ -106,15 +122,13 @@ export function CityHourglassMesh({ x, z, height, footprint, color, name, amount
         </mesh>
       ))}
 
-      {/* bottom bulb — narrow at the neck (top), wide at the base */}
-      <mesh position={[0, bottomBulbY, 0]} frustumCulled={false} onClick={handleClick}>
-        <cylinderGeometry args={[neckRadius, bulbRadius, bulbHeight, 8, 1, true]} />
+      {/* bottom bulb — narrow at the neck (top), wide at the base. Real edges now, not the previous
+          scaled-up wireframe copy (same reasoning as the fountain/trophy's own switch — see
+          CityThickOutline's own doc-comment). */}
+      <mesh geometry={bottomBulbGeometry} position={[0, bottomBulbY, 0]} frustumCulled={false} onClick={handleClick}>
         {glassMaterial}
       </mesh>
-      <mesh position={[0, bottomBulbY, 0]} scale={[1.03, 1, 1.03]} frustumCulled={false}>
-        <cylinderGeometry args={[neckRadius, bulbRadius, bulbHeight, 8, 1, true]} />
-        <meshBasicMaterial color={color} wireframe transparent opacity={0.4} depthWrite={false} />
-      </mesh>
+      <CityThickOutline geometry={bottomBulbEdges} color={OUTLINE_COLOR} linewidth={1.4} position={[0, bottomBulbY, 0]} />
       {/* the sand that's already fallen — a small static mound resting in the bottom bulb */}
       <mesh position={[0, frameCapHeight + bulbHeight * 0.22, 0]} frustumCulled={false}>
         <coneGeometry args={[bulbRadius * 0.55, bulbHeight * 0.32, 10]} />
@@ -122,14 +136,10 @@ export function CityHourglassMesh({ x, z, height, footprint, color, name, amount
       </mesh>
 
       {/* top bulb — wide at the base (top), narrow at the neck (bottom) */}
-      <mesh position={[0, topBulbY, 0]} frustumCulled={false} onClick={handleClick}>
-        <cylinderGeometry args={[bulbRadius, neckRadius, bulbHeight, 8, 1, true]} />
+      <mesh geometry={topBulbGeometry} position={[0, topBulbY, 0]} frustumCulled={false} onClick={handleClick}>
         {glassMaterial}
       </mesh>
-      <mesh position={[0, topBulbY, 0]} scale={[1.03, 1, 1.03]} frustumCulled={false}>
-        <cylinderGeometry args={[bulbRadius, neckRadius, bulbHeight, 8, 1, true]} />
-        <meshBasicMaterial color={color} wireframe transparent opacity={0.4} depthWrite={false} />
-      </mesh>
+      <CityThickOutline geometry={topBulbEdges} color={OUTLINE_COLOR} linewidth={1.4} position={[0, topBulbY, 0]} />
 
       {grainPhases.map((_, i) => (
         <mesh

@@ -9,7 +9,15 @@ export const LIQUIDITY_LABELS: Record<Liquidity, string> = {
   locked: 'נעול',
 };
 
-const IncomeDetails = z.object({ kind: z.literal('income'), monthlyAmount: z.number().nonnegative() });
+// 1-31, the calendar day this recurring amount typically lands/charges on — optional everywhere
+// it appears (income's payDay, expense/debt/insurance's chargeDay below) because domain/cashRunway.ts
+// only needs it as a *fallback*: a riseupLink with real transaction history already gives a much
+// more reliable real-world day than anyone would type in by hand, so this field only matters for
+// entities RiseUp doesn't (or can't) track — no active subscription, cash income, an obligation
+// like alimony that never shows up as a RiseUp transaction at all. When both exist, the real
+// RiseUp history wins.
+const DAY_OF_MONTH = z.number().int().min(1).max(31).optional();
+const IncomeDetails = z.object({ kind: z.literal('income'), monthlyAmount: z.number().nonnegative(), payDay: DAY_OF_MONTH });
 export const EXPENSE_TYPES = ['housing', 'food', 'transport', 'other'] as const;
 export type ExpenseType = (typeof EXPENSE_TYPES)[number];
 export const EXPENSE_TYPE_LABELS: Record<ExpenseType, string> = {
@@ -27,6 +35,7 @@ const ExpenseDetails = z.object({
   // `.default`) so an entity saved under a since-removed enum value still loads as 'other'
   // instead of failing validation outright.
   expenseType: z.enum(EXPENSE_TYPES).catch('other'),
+  chargeDay: DAY_OF_MONTH,
 });
 // same shape as expense (a recurring monthly outflow) but tracked separately — giving isn't a
 // cost to minimize the way rent or groceries are, so it shouldn't inherit expense's "risk" color
@@ -56,6 +65,7 @@ const SavingsDetails = z.object({
   // here, so it defaults to counting toward the 20% savings figure (see domain/savingsRate.ts).
   monthlyContribution: z.number().nonnegative().default(0),
   fromIncome: z.boolean().default(true),
+  chargeDay: DAY_OF_MONTH,
 });
 // A broad "alternative" bucket, not an enumerated list of specific instruments — crypto and
 // forex are examples, not the only members, and hard-coding just those two would leave every
@@ -82,6 +92,7 @@ const InvestmentDetails = z.object({
   // figure (see domain/savingsRate.ts). An investment contribution has no employer-match concept,
   // so it defaults to counting.
   fromIncome: z.boolean().default(true),
+  chargeDay: DAY_OF_MONTH,
 });
 const PensionDetails = z.object({
   kind: z.literal('pension'),
@@ -129,6 +140,7 @@ const InsuranceDetails = z.object({
   // running after retirement); a specific policy — e.g. life insurance meant only to bridge to
   // pension age — can be unchecked without affecting every other policy of the same type.
   essential: z.boolean().default(true),
+  chargeDay: DAY_OF_MONTH,
 });
 // A mortgage's own track types (Israeli mortgages are near-universally split across several of
 // these, each with its own rate/term) — not a separate entity category from 'debt' (see
@@ -175,6 +187,7 @@ const DebtDetails = z.object({
   // being the clearest example — can be flagged true to count toward the target/runway like any
   // other unavoidable monthly cost.
   essential: z.boolean().default(false),
+  chargeDay: DAY_OF_MONTH,
 });
 const GoalDetails = z.object({
   kind: z.literal('goal'),

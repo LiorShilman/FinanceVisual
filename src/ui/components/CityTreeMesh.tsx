@@ -3,6 +3,9 @@ import * as THREE from 'three';
 import { Billboard, Text } from '@react-three/drei';
 import type { ThreeEvent } from '@react-three/fiber';
 import { computeCanopyRadius, computeTreeLabelY, computeTrunkHeight, computeTrunkRadius, type TreeVariant } from './cityGrowthGeometry';
+import { CityThickOutline } from './CityThickOutline';
+
+const OUTLINE_COLOR = '#0a0c11';
 
 // One shared, module-level soft-shadow texture (dark center fading to fully transparent) — every
 // tree tints and sizes the same texture instead of each generating its own canvas.
@@ -74,6 +77,21 @@ export function CityTreeMesh({ x, z, height, footprint, name, amount, variant, h
   const trunkRadiusTop = trunkRadiusBottom * 0.7;
   const canopyRadius = computeCanopyRadius(height, footprint, variant);
 
+  const trunkGeometry = useMemo(
+    () => new THREE.CylinderGeometry(trunkRadiusTop, trunkRadiusBottom, trunkHeight, 7),
+    [trunkRadiusTop, trunkRadiusBottom, trunkHeight],
+  );
+  const trunkEdges = useMemo(() => new THREE.EdgesGeometry(trunkGeometry), [trunkGeometry]);
+  const pineTierGeometries = useMemo(() => {
+    if (variant !== 'pine') return [];
+    return [0, 1, 2].map((i) => {
+      const tierR = canopyRadius * (1 - i * 0.24);
+      const tierH = canopyRadius * 0.95;
+      const geometry = new THREE.ConeGeometry(tierR, tierH, 8);
+      return { geometry, edges: new THREE.EdgesGeometry(geometry) };
+    });
+  }, [variant, canopyRadius]);
+
   // deterministic per-building jitter (position-seeded, not Math.random()) so the canopy clumps
   // stay stable across re-renders instead of reshuffling every frame.
   const seed = x * 12.9898 + z * 78.233;
@@ -94,6 +112,14 @@ export function CityTreeMesh({ x, z, height, footprint, name, amount, variant, h
       };
     });
   }, [seed, canopyRadius, variant]);
+  const blobGeometries = useMemo(
+    () =>
+      blobs.map((b) => {
+        const geometry = new THREE.IcosahedronGeometry(canopyRadius * b.scale, 1);
+        return { geometry, edges: new THREE.EdgesGeometry(geometry) };
+      }),
+    [blobs, canopyRadius],
+  );
 
   // anchored to each leaf blob's own surface, pushed out along that blob's own direction away
   // from the trunk (not a uniformly random point on the sphere) and well past its radius — the
@@ -136,38 +162,46 @@ export function CityTreeMesh({ x, z, height, footprint, name, amount, variant, h
         <meshBasicMaterial map={getShadowTexture()} transparent opacity={0.6} depthWrite={false} />
       </mesh>
 
-      <mesh position={[0, trunkHeight / 2, 0]} frustumCulled={false} onClick={handleClick}>
-        <cylinderGeometry args={[trunkRadiusTop, trunkRadiusBottom, trunkHeight, 7]} />
+      <mesh geometry={trunkGeometry} position={[0, trunkHeight / 2, 0]} frustumCulled={false} onClick={handleClick}>
         <meshStandardMaterial color={palette.bark} roughness={0.85} />
       </mesh>
+      <CityThickOutline geometry={trunkEdges} color={OUTLINE_COLOR} linewidth={1.6} position={[0, trunkHeight / 2, 0]} />
 
       {variant === 'pine' ? (
         // a stack of three shrinking cones — the classic conifer silhouette, distinct from every
         // other variant's rounded clump canopy.
         [0, 1, 2].map((i) => {
-          const tierR = canopyRadius * (1 - i * 0.24);
           const tierH = canopyRadius * 0.95;
           const tierY = trunkHeight + i * tierH * 0.62;
           return (
-            <mesh key={i} position={[0, tierY + tierH / 2, 0]} frustumCulled={false} onClick={handleClick}>
-              <coneGeometry args={[tierR, tierH, 8]} />
-              <meshStandardMaterial color={palette.base} emissive={palette.base} emissiveIntensity={0.18} roughness={0.8} />
-            </mesh>
+            <group key={i}>
+              <mesh geometry={pineTierGeometries[i].geometry} position={[0, tierY + tierH / 2, 0]} frustumCulled={false} onClick={handleClick}>
+                <meshStandardMaterial color={palette.base} emissive={palette.base} emissiveIntensity={0.18} roughness={0.8} />
+              </mesh>
+              <CityThickOutline geometry={pineTierGeometries[i].edges} color={OUTLINE_COLOR} linewidth={1.6} position={[0, tierY + tierH / 2, 0]} />
+            </group>
           );
         })
       ) : (
         <>
           {blobs.map((b, i) => (
-            <mesh key={i} position={[b.x, canopyBaseY + b.y, b.z]} frustumCulled={false} onClick={handleClick}>
-              <icosahedronGeometry args={[canopyRadius * b.scale, 1]} />
-              <meshStandardMaterial
-                color={b.light ? palette.light : palette.base}
-                emissive={b.light ? palette.light : palette.base}
-                emissiveIntensity={0.22}
-                roughness={0.85}
-                flatShading
+            <group key={i}>
+              <mesh geometry={blobGeometries[i].geometry} position={[b.x, canopyBaseY + b.y, b.z]} frustumCulled={false} onClick={handleClick}>
+                <meshStandardMaterial
+                  color={b.light ? palette.light : palette.base}
+                  emissive={b.light ? palette.light : palette.base}
+                  emissiveIntensity={0.22}
+                  roughness={0.85}
+                  flatShading
+                />
+              </mesh>
+              <CityThickOutline
+                geometry={blobGeometries[i].edges}
+                color={OUTLINE_COLOR}
+                linewidth={1.3}
+                position={[b.x, canopyBaseY + b.y, b.z]}
               />
-            </mesh>
+            </group>
           ))}
           {fruits.map((f, i) => (
             <mesh key={i} position={[f.x, canopyBaseY + f.y, f.z]} frustumCulled={false}>

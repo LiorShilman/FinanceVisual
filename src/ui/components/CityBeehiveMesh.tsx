@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { Billboard, Text } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
 import type { ThreeEvent } from '@react-three/fiber';
+import { CityThickOutline } from './CityThickOutline';
 
 interface Props {
   x: number;
@@ -18,6 +19,7 @@ interface Props {
 
 const STRAW_LIGHT = '#c2921f';
 const STRAW_DARK = '#a9822f';
+const OUTLINE_COLOR = '#0a0c11';
 const BAND_COUNT = 5;
 const BEE_COUNT = 3;
 
@@ -63,6 +65,14 @@ export function CityBeehiveMesh({ x, z, height, footprint, color, name, amount, 
       }),
     [hiveHeight, baseRadius],
   );
+  const bandGeometries = useMemo(
+    () =>
+      bands.map((band) => {
+        const geometry = new THREE.CylinderGeometry(band.radiusTop, band.radiusBottom, band.h, 12);
+        return { geometry, edges: new THREE.EdgesGeometry(geometry) };
+      }),
+    [bands],
+  );
 
   // deterministic per-position orbit parameters (not Math.random — impure during render, and
   // would reshuffle the bees on every re-render anyway).
@@ -94,8 +104,7 @@ export function CityBeehiveMesh({ x, z, height, footprint, color, name, amount, 
     <group position={[x, 0, z]}>
       {bands.map((band, i) => (
         <group key={i}>
-          <mesh position={[0, band.y + band.h / 2, 0]} frustumCulled={false} onClick={handleClick}>
-            <cylinderGeometry args={[band.radiusTop, band.radiusBottom, band.h, 12]} />
+          <mesh geometry={bandGeometries[i].geometry} position={[0, band.y + band.h / 2, 0]} frustumCulled={false} onClick={handleClick}>
             <meshStandardMaterial
               color={i % 2 === 0 ? STRAW_LIGHT : STRAW_DARK}
               emissive={color}
@@ -103,6 +112,7 @@ export function CityBeehiveMesh({ x, z, height, footprint, color, name, amount, 
               roughness={0.85}
             />
           </mesh>
+          <CityThickOutline geometry={bandGeometries[i].edges} color={OUTLINE_COLOR} linewidth={1.6} position={[0, band.y + band.h / 2, 0]} />
           {i < bands.length - 1 && (
             <mesh position={[0, band.y + band.h, 0]} frustumCulled={false}>
               <torusGeometry args={[band.radiusTop * 1.03, band.h * 0.09, 6, 16]} />

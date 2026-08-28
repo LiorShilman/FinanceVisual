@@ -23,6 +23,11 @@ const STONE_COLOR = '#1c1e24';
 // "money" accent) is the only color the entity's own hue would otherwise have carried.
 const STAR_COLOR = '#a7adb6';
 const RIM_COLOR = '#c2921f';
+// a crisp dark contour, not the same warm gold as the pedestal/glow — matching the same
+// EdgesGeometry treatment used on the cash-runway plane (CityCashRunway.tsx): a near-black outline
+// pops much more clearly against the star's own pale metal than the previous gold rim did, which
+// tended to blend into the star's own warm-toned glow instead of reading as a defined edge.
+const OUTLINE_COLOR = '#0a0c11';
 const SPIN_SPEED = 0.5;
 
 function hash(seed: number): number {
@@ -105,7 +110,7 @@ export function CityGivingPillarMesh({ x, z, height, footprint, name, amount, la
           <meshStandardMaterial color={STAR_COLOR} emissive={STAR_COLOR} emissiveIntensity={0.28} roughness={0.35} metalness={0.55} flatShading />
         </mesh>
         <lineSegments geometry={starEdges} frustumCulled={false}>
-          <lineBasicMaterial color={RIM_COLOR} transparent opacity={0.75} />
+          <lineBasicMaterial color={OUTLINE_COLOR} />
         </lineSegments>
       </group>
       <pointLight position={[0, starY, 0]} color={RIM_COLOR} intensity={0.4} distance={4} decay={2} />

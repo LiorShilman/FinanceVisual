@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { Billboard, Text } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
 import type { ThreeEvent } from '@react-three/fiber';
+import { CityThickOutline } from './CityThickOutline';
 
 interface Props {
   x: number;
@@ -18,6 +19,7 @@ interface Props {
 
 const WATER_COLOR = '#4ab8d8';
 const DROP_COUNT = 6;
+const OUTLINE_COLOR = '#0a0c11';
 
 function hash(seed: number): number {
   const s = Math.sin(seed * 12.9898) * 43758.5453;
@@ -43,6 +45,14 @@ export function CityFountainMesh({ x, z, height, footprint, color, name, amount,
   const basinHeight = Math.max(0.7, Math.min(1.3, height * 0.24));
   const pillarHeight = Math.max(1.5, Math.min(3.4, height * 0.8));
 
+  const basinGeometry = useMemo(() => new THREE.CylinderGeometry(basinRadius, basinRadius * 1.08, basinHeight, 10), [basinRadius, basinHeight]);
+  const basinEdges = useMemo(() => new THREE.EdgesGeometry(basinGeometry), [basinGeometry]);
+  const pillarGeometry = useMemo(
+    () => new THREE.CylinderGeometry(basinRadius * 0.13, basinRadius * 0.19, pillarHeight, 8),
+    [basinRadius, pillarHeight],
+  );
+  const pillarEdges = useMemo(() => new THREE.EdgesGeometry(pillarGeometry), [pillarGeometry]);
+
   // deterministic per-position phase (not Math.random — impure during render, and would
   // reshuffle every drop's timing on each re-render anyway).
   const seed = x * 12.9898 + z * 78.233;
@@ -65,16 +75,14 @@ export function CityFountainMesh({ x, z, height, footprint, color, name, amount,
 
   return (
     <group position={[x, 0, z]}>
-      <mesh position={[0, basinHeight / 2, 0]} frustumCulled={false} onClick={handleClick}>
-        <cylinderGeometry args={[basinRadius, basinRadius * 1.08, basinHeight, 10]} />
+      <mesh geometry={basinGeometry} position={[0, basinHeight / 2, 0]} frustumCulled={false} onClick={handleClick}>
         <meshStandardMaterial color="#1c1e24" emissive={color} emissiveIntensity={0.55} roughness={0.7} flatShading />
       </mesh>
-      {/* a bright wireframe rim on the basin's own facet edges — same trick the shield/trophy
-          use so the facets read even without a texture. */}
-      <mesh position={[0, basinHeight / 2, 0]} scale={[1.03, 1.02, 1.03]} frustumCulled={false}>
-        <cylinderGeometry args={[basinRadius, basinRadius * 1.08, basinHeight, 10]} />
-        <meshBasicMaterial color={color} wireframe transparent opacity={0.4} />
-      </mesh>
+      {/* real edges, not the previous bright wireframe-rim trick (a scaled-up wireframe copy) — a
+          wireframe draws every triangle's own diagonal split too, reading busier/less clean than a
+          real EdgesGeometry outline, and washed-out color-matched rather than the crisp dark
+          contour used everywhere else in the city now. */}
+      <CityThickOutline geometry={basinEdges} color={OUTLINE_COLOR} linewidth={2} position={[0, basinHeight / 2, 0]} />
       <mesh position={[0, basinHeight + 0.01, 0]} rotation={[-Math.PI / 2, 0, 0]} frustumCulled={false}>
         <circleGeometry args={[basinRadius * 0.88, 20]} />
         <meshStandardMaterial
@@ -87,10 +95,10 @@ export function CityFountainMesh({ x, z, height, footprint, color, name, amount,
           metalness={0.2}
         />
       </mesh>
-      <mesh position={[0, basinHeight + pillarHeight / 2, 0]} frustumCulled={false} onClick={handleClick}>
-        <cylinderGeometry args={[basinRadius * 0.13, basinRadius * 0.19, pillarHeight, 8]} />
+      <mesh geometry={pillarGeometry} position={[0, basinHeight + pillarHeight / 2, 0]} frustumCulled={false} onClick={handleClick}>
         <meshStandardMaterial color="#1c1e24" emissive={color} emissiveIntensity={0.55} roughness={0.7} flatShading />
       </mesh>
+      <CityThickOutline geometry={pillarEdges} color={OUTLINE_COLOR} linewidth={2} position={[0, basinHeight + pillarHeight / 2, 0]} />
       <pointLight position={[0, basinHeight + pillarHeight * 0.6, 0]} color={WATER_COLOR} intensity={0.6} distance={4} decay={2} />
 
       {Array.from({ length: DROP_COUNT }).map((_, i) => (

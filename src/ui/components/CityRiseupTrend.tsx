@@ -1,7 +1,9 @@
+import { useMemo } from 'react';
 import * as THREE from 'three';
 import { Billboard, Text } from '@react-three/drei';
 import type { MonthHistoryPoint } from '../../app/riseupHistory';
 import { formatCurrency } from '../format';
+import { CityThickOutline } from './CityThickOutline';
 
 interface Props {
   x: number;
@@ -37,8 +39,24 @@ function formatMonthShort(monthKey: string): string {
  * of the account's absolute scale.
  */
 export function CityRiseupTrend({ x, y, z, history }: Props) {
-  if (history.length === 0) return null;
   const maxAbs = Math.max(1, ...history.map((h) => Math.abs(h.net)));
+  // one geometry+edges per bar, built unconditionally (even for an empty `history`, which just
+  // makes an empty array) — the early return for `history.length === 0` below has to come *after*
+  // this useMemo call, not before it, or the hook would run on some renders and not others
+  // depending on that prop, which breaks React's own rule that every hook runs in the same order
+  // every render (see CityExpenseMesh.tsx's own doc-comment on the exact same mistake, caught and
+  // fixed there first).
+  const barGeometries = useMemo(
+    () =>
+      history.map((h) => {
+        const barHeight = Math.max(0.18, (Math.abs(h.net) / maxAbs) * MAX_BAR_HEIGHT);
+        const geometry = new THREE.BoxGeometry(BAR_WIDTH, barHeight, BAR_WIDTH);
+        return { geometry, edges: new THREE.EdgesGeometry(geometry) };
+      }),
+    [history, maxAbs],
+  );
+
+  if (history.length === 0) return null;
   const totalWidth = (history.length - 1) * (BAR_WIDTH + BAR_GAP);
 
   return (
@@ -74,15 +92,14 @@ export function CityRiseupTrend({ x, y, z, history }: Props) {
         // everything else", not a ranking of how old each past month is.
         const isCurrent = i === history.length - 1;
         // the fill stays a bit dimmer for past months (still "current vs. everything else", not a
-        // ranking) but far less faded than before (was 0.35) — the rim below carries its own,
-        // even higher opacity so the box's own edges/depth stay crisp regardless of how dim the
-        // fill is, instead of both fading together into a flat, hard-to-read silhouette.
+        // ranking) but far less faded than before (was 0.35) — the outline below stays fully
+        // opaque regardless (CityThickOutline's fat-line material has no transparency knob), which
+        // keeps the box's own edges/depth crisp even where the fill itself is dim, differentiated
+        // by linewidth instead (see below) rather than by fading out along with the fill.
         const opacity = isCurrent ? 1 : 0.6;
-        const rimOpacity = isCurrent ? 1 : 0.9;
         return (
           <group key={h.month} position={[bx, 0, 0]}>
-            <mesh position={[0, barHeight / 2, 0]} frustumCulled={false}>
-              <boxGeometry args={[BAR_WIDTH, barHeight, BAR_WIDTH]} />
+            <mesh geometry={barGeometries[i].geometry} position={[0, barHeight / 2, 0]} frustumCulled={false}>
               <meshStandardMaterial
                 color="#171a22"
                 emissive={color}
@@ -92,16 +109,16 @@ export function CityRiseupTrend({ x, y, z, history }: Props) {
                 opacity={opacity}
               />
             </mesh>
-            {/* a bright rim on the bar's own edges — the same trick every other faceted mesh in the
-                city (shield/trophy/fountain/lantern) uses so it reads as an actual box with depth
-                instead of a flat painted rectangle. EdgesGeometry, not `wireframe` on the box
-                itself — a plain BoxGeometry face is two triangles, and `wireframe` draws that
-                internal diagonal seam along with the real edges; EdgesGeometry keeps only the
-                real edges/corners. */}
-            <lineSegments position={[0, barHeight / 2, 0]} scale={[1.05, 1.02, 1.05]} frustumCulled={false}>
-              <edgesGeometry args={[new THREE.BoxGeometry(BAR_WIDTH, barHeight, BAR_WIDTH)]} />
-              <lineBasicMaterial color={color} transparent opacity={rimOpacity} />
-            </lineSegments>
+            {/* a real thick outline on the bar's own edges (CityThickOutline, see its own doc-
+                comment for why plain lineBasicMaterial never actually rendered at the linewidth it
+                was given) — real edges/corners only, not a wireframe's own extra internal diagonal
+                seam. */}
+            <CityThickOutline
+              geometry={barGeometries[i].edges}
+              color={color}
+              linewidth={isCurrent ? 2.4 : 1.8}
+              position={[0, barHeight / 2, 0]}
+            />
             {isCurrent && <pointLight position={[0, barHeight * 0.6, 0]} color={color} intensity={0.6} distance={3} decay={2} />}
             {/* gold, not the bar's own green/red — the bar already carries that signal, and a
                 green label on a green bar (or red-on-red) was nearly unreadable. Gold matches

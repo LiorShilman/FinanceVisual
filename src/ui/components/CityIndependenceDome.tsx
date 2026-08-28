@@ -6,6 +6,14 @@ interface Props {
   x: number;
   z: number;
   radius: number;
+  // where the floating progress text sits — deliberately NOT always {x,z} (the dome's own center,
+  // which has to stay there to keep enclosing the whole map) — a first version anchored the label
+  // to the dome's own center too, which put it right over whatever happened to occupy the middle
+  // of the map (the RiseUp-linked income/insurance/debt cluster's own tangle of connector lines,
+  // once the cash runway's own flight path started passing through that same region). Callers
+  // anchor it somewhere clearer instead, e.g. above the lake.
+  labelX: number;
+  labelZ: number;
   // uncapped (can exceed 1 once past the target) — the visual intensity below clamps it, the
   // headline text doesn't, so reaching or passing 100% still reads correctly.
   progress: number;
@@ -97,7 +105,7 @@ function createSkyTexture(): THREE.CanvasTexture {
  * shell's* opacity/color/glow by progress keeps the one big enclosing dome the user asked for,
  * stays legible at any camera angle, and never competes with or covers a specific building.
  */
-export function CityIndependenceDome({ x, z, radius, progress, amountLabel, monthlyLabel, yearsLabel }: Props) {
+export function CityIndependenceDome({ x, z, radius, labelX, labelZ, progress, amountLabel, monthlyLabel, yearsLabel }: Props) {
   const skyTexture = useMemo(() => createSkyTexture(), []);
   const clampedProgress = Math.max(0, Math.min(1, progress));
 
@@ -131,7 +139,7 @@ export function CityIndependenceDome({ x, z, radius, progress, amountLabel, mont
         <meshBasicMaterial color={shellColor} transparent opacity={ringOpacity} side={THREE.DoubleSide} />
       </mesh>
 
-      <Billboard position={[0, labelY, 0]}>
+      <Billboard position={[labelX - x, labelY, labelZ - z]}>
         <Text
           fontSize={1.8}
           color={GOLD}

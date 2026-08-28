@@ -69,6 +69,31 @@ function defaultDetails(category: EntityCategory): EntityDetails {
   }
 }
 
+/** Shared field for income's payDay / expense·debt·insurance's chargeDay — the calendar day (1-31)
+ * domain/cashRunway.ts falls back to when there's no RiseUp history to derive a real one from (see
+ * that field's own doc-comment in domain/entity.ts for why it's a fallback, not the primary
+ * source). Optional, so the input has to support clearing back to "unset" (empty string), not just
+ * numbers — a plain NumberField (built for currency amounts, always some number) doesn't fit here. */
+function renderDayOfMonthField(value: number | undefined, onChange: (day: number | undefined) => void, label: string) {
+  return (
+    <label className={styles.field}>
+      <span className={styles.label}>{label} (אופציונלי)</span>
+      <input
+        type="number"
+        min={1}
+        max={31}
+        className={styles.input}
+        value={value ?? ''}
+        placeholder="ימולא אוטומטית אם יש חיבור RISEUP"
+        onChange={(e) => {
+          const raw = e.target.value;
+          onChange(raw === '' ? undefined : Math.max(1, Math.min(31, Math.round(Number(raw)))));
+        }}
+      />
+    </label>
+  );
+}
+
 /** The one number that best represents "how much this entity is worth/costs", across every kind's
  * own different field name for that idea — read before a category switch replaces `details`
  * wholesale with a blank default, so that figure can be carried into whichever field the new
@@ -454,14 +479,17 @@ export function EntityFormPanel({
         </div>
 
         {d.kind === 'income' && (
-          <label className={styles.field}>
-            <span className={styles.label}>סכום חודשי ({currencySymbol})</span>
-            <NumberField
-              className={styles.input}
-              value={toDisplay(d.monthlyAmount)}
-              onChange={(v) => updateDetail({ monthlyAmount: fromDisplay(v) })}
-            />
-          </label>
+          <>
+            <label className={styles.field}>
+              <span className={styles.label}>סכום חודשי ({currencySymbol})</span>
+              <NumberField
+                className={styles.input}
+                value={toDisplay(d.monthlyAmount)}
+                onChange={(v) => updateDetail({ monthlyAmount: fromDisplay(v) })}
+              />
+            </label>
+            {renderDayOfMonthField(d.payDay, (payDay) => updateDetail({ payDay }), 'יום קבלת המשכורת בחודש')}
+          </>
         )}
 
         {d.kind === 'expense' && (
@@ -496,6 +524,7 @@ export function EntityFormPanel({
               />
               <span>הוצאה קבועה/הכרחית</span>
             </div>
+            {renderDayOfMonthField(d.chargeDay, (chargeDay) => updateDetail({ chargeDay }), 'יום חיוב טיפוסי בחודש')}
           </>
         )}
 
@@ -563,6 +592,7 @@ export function EntityFormPanel({
               />
               <span>זו קרן החירום המשפחתית</span>
             </div>
+            {renderDayOfMonthField(d.chargeDay, (chargeDay) => updateDetail({ chargeDay }), 'יום הפקדה טיפוסי בחודש')}
           </>
         )}
 
@@ -590,6 +620,8 @@ export function EntityFormPanel({
               <input type="checkbox" checked={d.fromIncome} onChange={(e) => updateDetail({ fromIncome: e.target.checked })} />
               <span>ההפקדה נחשבת חיסכון מההכנסה (חלק מה-20%)</span>
             </div>
+            {d.kind === 'investment' &&
+              renderDayOfMonthField(d.chargeDay, (chargeDay) => updateDetail({ chargeDay }), 'יום הפקדה טיפוסי בחודש')}
           </>
         )}
 
@@ -666,6 +698,7 @@ export function EntityFormPanel({
               <input type="checkbox" checked={d.essential} onChange={(e) => updateDetail({ essential: e.target.checked })} />
               <span>ימשיך להיות רלוונטי גם אחרי עצמאות כלכלית</span>
             </div>
+            {renderDayOfMonthField(d.chargeDay, (chargeDay) => updateDetail({ chargeDay }), 'יום חיוב טיפוסי בחודש')}
           </>
         )}
 
@@ -710,6 +743,7 @@ export function EntityFormPanel({
               <input type="checkbox" checked={d.essential} onChange={(e) => updateDetail({ essential: e.target.checked })} />
               <span>ימשיך להיות רלוונטי גם אחרי עצמאות כלכלית (למשל התחייבות מתמשכת כמו מזונות, לא הלוואה שתיפרע)</span>
             </div>
+            {renderDayOfMonthField(d.chargeDay, (chargeDay) => updateDetail({ chargeDay }), 'יום חיוב טיפוסי בחודש')}
 
             {d.isMortgage && (
               <div className={styles.mortgageTracks}>

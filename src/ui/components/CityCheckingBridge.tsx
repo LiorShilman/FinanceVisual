@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { Billboard, Text } from '@react-three/drei';
 import type { ThreeEvent } from '@react-three/fiber';
 import { getTerrainHeight } from '../../domain/terrain';
+import { computeCheckingDeckY } from './cityCheckingLayout';
 
 // world-space ground plane for ray intersection — same technique CityBuildingItem uses for its
 // own drag.
@@ -111,11 +112,6 @@ const DECK_WIDTH = 3.2;
 const DECK_THICKNESS = 0.3;
 const RAIL_HEIGHT = 0.5;
 const RAIL_THICKNESS = 0.12;
-// well clear of everything that might pass underneath — not just the income circuit tubes
-// (CityIncomeLinks, top around terrainY+0.14) and the water/valley streams (CityGround, top up
-// to terrainY+0.78), but high enough that the label hanging below the deck (see labelY) also
-// clears them, instead of sitting at the same height where those pipes/streams tend to cross.
-const DECK_CLEARANCE = 5.5;
 const PILLAR_RADIUS = 0.16;
 
 /**
@@ -149,10 +145,7 @@ export function CityCheckingBridge({
 
   const span = Math.abs(zFar - zNear);
   const centerZ = (zNear + zFar) / 2;
-  const deckY = useMemo(
-    () => Math.max(getTerrainHeight(x, zNear), getTerrainHeight(x, zFar)) + DECK_CLEARANCE,
-    [x, zNear, zFar],
-  );
+  const deckY = useMemo(() => computeCheckingDeckY(x, zNear, zFar), [x, zNear, zFar]);
 
   const clampedAvailable = Math.max(0, Math.min(1, availableRatio));
   const availableLen = clampedAvailable * span;

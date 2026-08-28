@@ -7,6 +7,13 @@ import { computeMagnitudeShare } from '../../domain/sizing';
 import { getTerrainHeight } from '../../domain/terrain';
 import type { ValleyFeature, ValleyStreamKind } from '../../domain/valley';
 import type { StreamKind, WaterFeature } from '../../domain/water';
+import { getFlowTexture } from './cityFlowTexture';
+import { CityThickOutline } from './CityThickOutline';
+
+// the same crisp dark contour used on the cash-runway plane and the donation stars — a single
+// shared constant here since the ground now uses it in more than one place (lake, and any future
+// water/valley additions), not because it's meant to vary per feature.
+const OUTLINE_COLOR = '#0a0c11';
 
 interface Props {
   groundCenter: [number, number];
@@ -132,40 +139,6 @@ function createWaterTexture(stops: [number, string][], rippleColor: string): THR
   // static painted pattern — pivoting around the texture's own center, not the default (0,0)
   // corner, so it actually spins in place rather than sliding/skewing around an off-center point.
   texture.center.set(0.5, 0.5);
-  return texture;
-}
-
-// One shared, module-level "flow" texture — a repeating brightness pulse along the U axis
-// (TubeGeometry's own along-length coordinate — see three.js's TubeGeometry.generateUVs), used as
-// both `map` and `emissiveMap` on every stream tube so one animated offset (see CityGround's own
-// useFrame) makes every stream's base color/glow pulse and travel along its own length, reading as
-// flowing water instead of a static painted tube. Shared across every stream (water and valley
-// alike) rather than one texture per stream — much cheaper, and the synchronized pulse across the
-// whole city reads as coherent rather than each stream flowing to its own independent clock.
-let sharedFlowTexture: THREE.CanvasTexture | null = null;
-function getFlowTexture(): THREE.CanvasTexture {
-  if (sharedFlowTexture) return sharedFlowTexture;
-  const w = 128;
-  const h = 16;
-  const canvas = document.createElement('canvas');
-  canvas.width = w;
-  canvas.height = h;
-  const ctx = canvas.getContext('2d')!;
-  const grad = ctx.createLinearGradient(0, 0, w, 0);
-  grad.addColorStop(0, '#3a3a3a');
-  grad.addColorStop(0.1, '#ffffff');
-  grad.addColorStop(0.26, '#3a3a3a');
-  grad.addColorStop(0.6, '#3a3a3a');
-  grad.addColorStop(0.72, '#ffffff');
-  grad.addColorStop(0.88, '#3a3a3a');
-  grad.addColorStop(1, '#3a3a3a');
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, w, h);
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.wrapS = THREE.RepeatWrapping;
-  texture.wrapT = THREE.RepeatWrapping;
-  texture.repeat.set(3, 1);
-  sharedFlowTexture = texture;
   return texture;
 }
 
@@ -438,9 +411,15 @@ export function CityGround({ groundCenter, groundSizeX, groundSizeZ, water, vall
 
   const ringShape = useMemo(() => buildBlobShape(water.outerRingRadius), [water.outerRingRadius]);
   const pensionRingGeometry = useMemo(() => buildBlobGeometryFromShape(ringShape, water.outerRingRadius), [ringShape, water.outerRingRadius]);
+  const pensionRingEdges = useMemo(() => new THREE.EdgesGeometry(pensionRingGeometry), [pensionRingGeometry]);
   const ringWallGeometry = useMemo(() => buildBasinWallGeometry(ringShape, RING_BASIN_DEPTH), [ringShape]);
   const lakeShape = useMemo(() => buildBlobShape(water.lakeRadius), [water.lakeRadius]);
   const lakeGeometry = useMemo(() => buildBlobGeometryFromShape(lakeShape, water.lakeRadius), [lakeShape, water.lakeRadius]);
+  // real edges/corners only (see CityThickOutline's own doc-comment for why this needs the fat-line
+  // module, not a plain lineBasicMaterial) — the lake's own surface is flat/coplanar throughout, so
+  // EdgesGeometry's angle threshold naturally keeps only its outer boundary loop, not every
+  // internal triangulation seam.
+  const lakeEdges = useMemo(() => new THREE.EdgesGeometry(lakeGeometry), [lakeGeometry]);
   // spans only the rise *above* the ring's own already-raised surface, not the full height from
   // the ground — the wall's own position is offset up to RING_BASIN_DEPTH to start exactly there.
   const lakeWallGeometry = useMemo(() => buildBasinWallGeometry(lakeShape, LAKE_BASIN_DEPTH - RING_BASIN_DEPTH), [lakeShape]);
@@ -548,6 +527,13 @@ export function CityGround({ groundCenter, groundSizeX, groundSizeZ, water, vall
       <mesh geometry={pensionRingGeometry} rotation-x={-Math.PI / 2} position={[lakeX, ringSurfaceY, lakeZ]} frustumCulled={false}>
         <meshStandardMaterial map={ringTexture} emissive="#c2921f" emissiveIntensity={0.3} roughness={0.15} metalness={0.12} side={THREE.DoubleSide} />
       </mesh>
+      <CityThickOutline
+        geometry={pensionRingEdges}
+        color={OUTLINE_COLOR}
+        linewidth={2.2}
+        rotation={[-Math.PI / 2, 0, 0]}
+        position={[lakeX, ringSurfaceY + 0.02, lakeZ]}
+      />
 
       {/* the lake's own wall continues rising from the *ring's* own raised surface (not the
           ground) up to the lake's higher one, following the lake's own outline exactly (see
@@ -581,6 +567,13 @@ export function CityGround({ groundCenter, groundSizeX, groundSizeZ, water, vall
       <mesh geometry={lakeGeometry} rotation-x={-Math.PI / 2} position={[lakeX, lakeSurfaceY, lakeZ]} frustumCulled={false}>
         <meshStandardMaterial map={lakeTexture} emissive="#155a82" emissiveIntensity={0.28} roughness={0.12} metalness={0.15} side={THREE.DoubleSide} />
       </mesh>
+      <CityThickOutline
+        geometry={lakeEdges}
+        color={OUTLINE_COLOR}
+        linewidth={2.2}
+        rotation={[-Math.PI / 2, 0, 0]}
+        position={[lakeX, lakeSurfaceY + 0.02, lakeZ]}
+      />
 
       {/* same tinted-glass treatment as the lake wall, in the valley's own ember red instead of
           blue. */}

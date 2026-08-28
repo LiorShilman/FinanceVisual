@@ -1,5 +1,10 @@
+import { useMemo } from 'react';
+import * as THREE from 'three';
 import { Billboard, Text } from '@react-three/drei';
 import type { ThreeEvent } from '@react-three/fiber';
+import { CityThickOutline } from './CityThickOutline';
+
+const OUTLINE_COLOR = '#0a0c11';
 
 interface Props {
   x: number;
@@ -33,8 +38,11 @@ export function CityShieldMesh({ x, z, height, footprint, color, name, amount, l
     onOpen();
   };
 
-  const width = Math.max(2.1, footprint * 2.35);
-  const bodyHeight = Math.max(2.4, height * 1.3);
+  // bumped from 2.1/2.35 and 2.4/1.3 — the shield read as small even at a healthy weight, the
+  // same complaint the shield's own doc-comment above already notes was true of an earlier design
+  // too ("Sized up from the original scale, which read as small next to a full tower").
+  const width = Math.max(2.7, footprint * 2.9);
+  const bodyHeight = Math.max(3.1, height * 1.6);
   const radiusTop = width / 2;
   const collarY = bodyHeight * 0.72;
   const collarHeight = bodyHeight * 0.14;
@@ -42,13 +50,17 @@ export function CityShieldMesh({ x, z, height, footprint, color, name, amount, l
   const crossSize = width * 0.4;
   const crossArm = crossSize * 0.32;
 
+  const bodyGeometry = useMemo(() => new THREE.CylinderGeometry(radiusTop, radiusTop * 0.06, bodyHeight, 6), [radiusTop, bodyHeight]);
+  const bodyEdges = useMemo(() => new THREE.EdgesGeometry(bodyGeometry), [bodyGeometry]);
+  const collarGeometry = useMemo(() => new THREE.CylinderGeometry(collarRadius, collarRadius, collarHeight, 6), [collarRadius, collarHeight]);
+  const collarEdges = useMemo(() => new THREE.EdgesGeometry(collarGeometry), [collarGeometry]);
+
   return (
     <group position={[x, 0, z]}>
       {/* base color near-black (not the usual dark-navy every tiered tower uses) so the emissive
           tint is the only thing determining the visible color, regardless of how bright the
           scene's ambient/directional lights are — a lit navy base here washed out to flat grey. */}
-      <mesh position={[0, bodyHeight / 2, 0]} frustumCulled={false} onClick={handleClick}>
-        <cylinderGeometry args={[radiusTop, radiusTop * 0.06, bodyHeight, 6]} />
+      <mesh geometry={bodyGeometry} position={[0, bodyHeight / 2, 0]} frustumCulled={false} onClick={handleClick}>
         <meshStandardMaterial color="#020203" emissive={color} emissiveIntensity={0.7} roughness={0.5} metalness={0.25} flatShading />
       </mesh>
       {/* the collar — a distinct metallic band, not just the same body color repeated, so the
@@ -56,15 +68,14 @@ export function CityShieldMesh({ x, z, height, footprint, color, name, amount, l
           A mid-grey base (not a light silver) — under this city's bright ambient/directional
           lighting, a light diffuse base plus high metalness plus its own emissive all stacked
           together and blew out toward white. */}
-      <mesh position={[0, collarY, 0]} frustumCulled={false} onClick={handleClick}>
-        <cylinderGeometry args={[collarRadius, collarRadius, collarHeight, 6]} />
+      <mesh geometry={collarGeometry} position={[0, collarY, 0]} frustumCulled={false} onClick={handleClick}>
         <meshStandardMaterial color="#4a4e5c" roughness={0.45} metalness={0.55} flatShading />
       </mesh>
-      {/* thin bright rim outline on the main facets so the edges pop against the emissive glow */}
-      <mesh position={[0, bodyHeight / 2, 0]} scale={[1.03, 1.01, 1.03]} frustumCulled={false}>
-        <cylinderGeometry args={[radiusTop, radiusTop * 0.06, bodyHeight, 6]} />
-        <meshBasicMaterial color={color} wireframe transparent opacity={0.4} />
-      </mesh>
+      <CityThickOutline geometry={collarEdges} color={OUTLINE_COLOR} linewidth={1.4} position={[0, collarY, 0]} />
+      {/* real edges on the main facets, not the previous scaled-up wireframe copy (see
+          CityThickOutline's own doc-comment) — pop against the emissive glow the same way, just
+          crisper and at a real controllable thickness. */}
+      <CityThickOutline geometry={bodyEdges} color={OUTLINE_COLOR} linewidth={1.6} position={[0, bodyHeight / 2, 0]} />
       <pointLight position={[0, bodyHeight * 0.8, 0]} color={color} intensity={0.35} distance={3} decay={2} />
 
       {/* the actual protection signal — always turned to face the camera via Billboard, so it

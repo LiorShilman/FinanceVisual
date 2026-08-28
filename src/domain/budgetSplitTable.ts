@@ -8,6 +8,17 @@ export interface BudgetSplitRow {
   bucket: BudgetBucket;
   category: EntityCategory;
   amount: number;
+  /** The calendar day (1-31) this recurring amount typically charges/deposits on, straight off the
+   * entity's own chargeDay/payDay field (see domain/entity.ts's DAY_OF_MONTH) — undefined for any
+   * entity that never had one set, or whose kind doesn't carry the field at all (donation, pension,
+   * study fund). This is the manually-entered value only, not RiseUp's own real transaction history
+   * — domain/cashRunway.ts is where that richer, RiseUp-aware projection lives; this is just
+   * exposing the same raw field the table's own entities already carry. */
+  chargeDay?: number;
+}
+
+function chargeDayOf(details: FinancialEntity['details']): number | undefined {
+  return (details as { chargeDay?: number }).chargeDay;
 }
 
 export interface BudgetBucketSummary {
@@ -29,16 +40,17 @@ export function buildBudgetSplitRows(entities: FinancialEntity[]): BudgetSplitRo
   const rows: BudgetSplitRow[] = [];
   for (const e of entities) {
     const d = e.details;
+    const chargeDay = chargeDayOf(d);
     if (d.kind === 'expense') {
-      if (d.monthlyAmount > 0) rows.push({ id: e.id, name: e.name, bucket: d.essential ? 'needs' : 'wants', category: 'expense', amount: d.monthlyAmount });
+      if (d.monthlyAmount > 0) rows.push({ id: e.id, name: e.name, bucket: d.essential ? 'needs' : 'wants', category: 'expense', amount: d.monthlyAmount, chargeDay });
     } else if (d.kind === 'debt') {
-      if (d.monthlyPayment > 0) rows.push({ id: e.id, name: e.name, bucket: 'needs', category: 'debt', amount: d.monthlyPayment });
+      if (d.monthlyPayment > 0) rows.push({ id: e.id, name: e.name, bucket: 'needs', category: 'debt', amount: d.monthlyPayment, chargeDay });
     } else if (d.kind === 'insurance') {
-      if (d.monthlyPremium > 0) rows.push({ id: e.id, name: e.name, bucket: 'needs', category: 'insurance', amount: d.monthlyPremium });
+      if (d.monthlyPremium > 0) rows.push({ id: e.id, name: e.name, bucket: 'needs', category: 'insurance', amount: d.monthlyPremium, chargeDay });
     } else if (d.kind === 'donation') {
       if (d.monthlyAmount > 0) rows.push({ id: e.id, name: e.name, bucket: 'donations', category: 'donation', amount: d.monthlyAmount });
     } else if ((d.kind === 'savings' || d.kind === 'investment' || d.kind === 'pension' || d.kind === 'studyFund') && d.fromIncome) {
-      if (d.monthlyContribution > 0) rows.push({ id: e.id, name: e.name, bucket: 'savings', category: d.kind, amount: d.monthlyContribution });
+      if (d.monthlyContribution > 0) rows.push({ id: e.id, name: e.name, bucket: 'savings', category: d.kind, amount: d.monthlyContribution, chargeDay });
     }
   }
   return rows;

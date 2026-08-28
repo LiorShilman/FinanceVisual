@@ -112,11 +112,12 @@ function BoardCanvas() {
   const [showBudgetSplitTable, setShowBudgetSplitTable] = useState(false);
   const [showRiseupTransactions, setShowRiseupTransactions] = useState(false);
   const [showRiseupSuggestions, setShowRiseupSuggestions] = useState(false);
-  // enabled by showRiseupSuggestions itself — the hook only actually starts its scan the *first*
-  // time this turns true, then keeps the result cached across close/reopen (see the hook's own
-  // comment for why: closing and reopening the panel used to re-run the whole multi-month RiseUp
-  // scan from scratch every time, which was the real reason adding entities this way felt slow).
-  const riseupSuggestions = useRiseupSuggestions(showRiseupSuggestions);
+  const riseupPat = useBoardStore((s) => s.riseupPat);
+  // enabled as soon as a PAT is connected, not just once the suggestions panel opens — the cash
+  // runway (see domain/cashRunway.ts, rendered unconditionally in CityView) needs this same
+  // multi-month scan ready before the user ever opens that panel. The hook's own cache (keyed per
+  // PAT) still means this only actually fires once per PAT, however many times `enabled` changes.
+  const riseupSuggestions = useRiseupSuggestions(riseupPat.trim() !== '');
   const [menuOpen, setMenuOpen] = useState(false);
   // the account owner's own photo, if they've added one in the family panel — shown as a small
   // corner badge in the header, not rounded into a circle (a family crest/logo can be a
@@ -240,7 +241,6 @@ function BoardCanvas() {
     }
   }
 
-  const riseupPat = useBoardStore((s) => s.riseupPat);
   // only ever written from the async chain's resolution, never synchronously — same "checking"
   // pattern as FamilyPanel/RiseupTransactionsPanel. Two calls chained (budget status first, for
   // its resolved budgetDate, then transactions for that exact month) since /api/transactions
@@ -657,6 +657,7 @@ function BoardCanvas() {
             familyMembers={familyMembers}
             riseupMismatchIds={riseupMismatchIds}
             riseupHistory={riseupHistory}
+            riseupMonthlyTransactions={riseupSuggestions.monthly}
             controlsRef={controlsRef}
             lockedCamera={lockedCamera}
             topViewTrigger={topViewTrigger}

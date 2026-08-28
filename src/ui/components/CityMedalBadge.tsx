@@ -1,7 +1,10 @@
-import { useRef } from 'react';
+import { useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { Billboard, Text } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
+import { CityThickOutline } from './CityThickOutline';
+
+const OUTLINE_COLOR = '#0a0c11';
 
 interface Props {
   x: number;
@@ -70,6 +73,13 @@ export function CityMedalBadge({ x, z, y, rank, name, amount, labelScale = 1 }: 
     <meshStandardMaterial color="#020203" emissive={style.metal} emissiveIntensity={intensity} metalness={0.4} roughness={0.4} flatShading />
   );
 
+  const baseGeometry = useMemo(() => new THREE.CylinderGeometry(baseRadius, baseRadius * 1.15, baseHeight, 8), [baseRadius, baseHeight]);
+  const baseEdges = useMemo(() => new THREE.EdgesGeometry(baseGeometry), [baseGeometry]);
+  const stemGeometry = useMemo(() => new THREE.CylinderGeometry(stemRadius, stemRadius * 1.5, stemHeight, 8), [stemRadius, stemHeight]);
+  const stemEdges = useMemo(() => new THREE.EdgesGeometry(stemGeometry), [stemGeometry]);
+  const cupGeometry = useMemo(() => new THREE.CylinderGeometry(cupTopRadius, cupBottomRadius, cupHeight, 8), [cupTopRadius, cupBottomRadius, cupHeight]);
+  const cupEdges = useMemo(() => new THREE.EdgesGeometry(cupGeometry), [cupGeometry]);
+
   return (
     <group ref={groupRef} position={[x, y, z]}>
       <Billboard>
@@ -90,24 +100,21 @@ export function CityMedalBadge({ x, z, y, rank, name, amount, labelScale = 1 }: 
       <group position={[0, trophyLift, 0]}>
         <pointLight color={style.metal} intensity={0.75} distance={4} decay={2} />
 
-        <mesh position={[0, baseHeight / 2, 0]} frustumCulled={false}>
-          <cylinderGeometry args={[baseRadius, baseRadius * 1.15, baseHeight, 8]} />
+        <mesh geometry={baseGeometry} position={[0, baseHeight / 2, 0]} frustumCulled={false}>
           {material(0.5)}
         </mesh>
-        <mesh position={[0, baseHeight + stemHeight / 2, 0]} frustumCulled={false}>
-          <cylinderGeometry args={[stemRadius, stemRadius * 1.5, stemHeight, 8]} />
+        <CityThickOutline geometry={baseEdges} color={OUTLINE_COLOR} linewidth={1.4} position={[0, baseHeight / 2, 0]} />
+        <mesh geometry={stemGeometry} position={[0, baseHeight + stemHeight / 2, 0]} frustumCulled={false}>
           {material(0.5)}
         </mesh>
-        <mesh position={[0, cupY, 0]} frustumCulled={false}>
-          <cylinderGeometry args={[cupTopRadius, cupBottomRadius, cupHeight, 8]} />
+        <CityThickOutline geometry={stemEdges} color={OUTLINE_COLOR} linewidth={1.4} position={[0, baseHeight + stemHeight / 2, 0]} />
+        <mesh geometry={cupGeometry} position={[0, cupY, 0]} frustumCulled={false}>
           {material(0.85)}
         </mesh>
-        {/* a bright wireframe rim on the cup's own facet edges — same trick the insurance shield
-            uses so the facets read even without a texture. */}
-        <mesh position={[0, cupY, 0]} scale={[1.04, 1.02, 1.04]} frustumCulled={false}>
-          <cylinderGeometry args={[cupTopRadius, cupBottomRadius, cupHeight, 8]} />
-          <meshBasicMaterial color={style.metal} wireframe transparent opacity={0.45} />
-        </mesh>
+        {/* real edges, not the previous bright wireframe-rim trick — see CityThickOutline's own
+            doc-comment for why every facet-highlight of this kind in the city has been switching
+            over to it. */}
+        <CityThickOutline geometry={cupEdges} color={OUTLINE_COLOR} linewidth={1.6} position={[0, cupY, 0]} />
 
         <Billboard position={[0, trophyTopY + 0.95, 0]}>
           <Text

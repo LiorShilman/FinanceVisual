@@ -151,6 +151,13 @@
   white-space: nowrap;
 }
 
+.colDate {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--text-muted, #9aa3b5);
+  font-size: 0.9em;
+}
+
 .categoryPill {
   display: inline-flex;
   align-items: center;

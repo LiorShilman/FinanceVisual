@@ -5,6 +5,7 @@ import { Billboard, OrbitControls, Text } from '@react-three/drei';
 import { useBoardStore } from '../../app/boardStore';
 import type { MonthHistoryPoint } from '../../app/riseupHistory';
 import { computeCityAtmosphere } from '../../domain/atmosphere';
+import { computeCashRunway } from '../../domain/cashRunway';
 import {
   computeCityLayout,
   computeDistrictLayout,
@@ -31,6 +32,7 @@ import type { FamilyMember } from '../../domain/familyMember';
 import { computeIncomeLinkPaths } from '../../domain/incomeLinks';
 import { computeIndependenceProgress } from '../../domain/independence';
 import { computeNetWorthBreakdown } from '../../domain/netWorth';
+import type { MonthlyTransactions } from '../../domain/riseupSuggestions';
 import { getTerrainHeight } from '../../domain/terrain';
 import { computeValleyFeature } from '../../domain/valley';
 import { computeWaterFeature } from '../../domain/water';
@@ -40,6 +42,7 @@ import { CityBudgetBar } from './CityBudgetBar';
 import { CityBuildingItem } from './CityBuildingItem';
 import { CityBuildingMesh } from './CityBuildingMesh';
 import { CityCameraFocus } from './CityCameraFocus';
+import { CityCashRunway } from './CityCashRunway';
 import { CityCheckingBridge } from './CityCheckingBridge';
 import { CityCrystalMesh } from './CityCrystalMesh';
 import { CityDebtChains } from './CityDebtChains';
@@ -78,6 +81,10 @@ interface Props {
   // last few months of real RiseUp totals, oldest first — drives the in-city trend chart; empty
   // when disconnected or still loading, which just skips rendering it.
   riseupHistory: MonthHistoryPoint[];
+  // the same multi-month raw RiseUp transactions useRiseupSuggestions already scans (see that
+  // hook's own comment) — reused here to project the cash runway (domain/cashRunway.ts) instead of
+  // firing a second independent multi-month fetch for the same data.
+  riseupMonthlyTransactions: MonthlyTransactions[];
   // owned by BoardScreen (not this component) so the new left-side CityControlPanel — which lives
   // outside the Canvas tree — can trigger a lock/reset without needing an imperative handle back
   // into here; a plain ref works across that boundary just fine since it's dereferenced lazily.
@@ -134,6 +141,7 @@ export function CityView({
   familyMembers,
   riseupMismatchIds,
   riseupHistory,
+  riseupMonthlyTransactions,
   controlsRef,
   lockedCamera,
   topViewTrigger,
@@ -212,6 +220,10 @@ export function CityView({
     [entities],
   );
   const checkingAvailableRatio = checkingTotal > 0 ? checkingAvailable / checkingTotal : 0;
+  // recomputed on every render (not memoized against `entities`/`riseupMonthlyTransactions` alone)
+  // — `new Date()` has to stay live so "today" advances as the day changes while the board stays
+  // open, not frozen at whatever moment the city first mounted.
+  const cashRunway = computeCashRunway(entities, riseupMonthlyTransactions, checkingTotal, new Date());
   const firstCheckingId = useMemo(() => entities.find((e) => e.details.kind === 'checking')?.id ?? null, [entities]);
   // ground-level, same as every other water stream — the income link (gold pipe) into checking
   // also terminates at ground level (see CityIncomeLinks's own getTerrainHeight-based Y), not at
@@ -485,6 +497,8 @@ export function CityView({
         x={bounds.center[0]}
         z={bounds.center[1]}
         radius={independenceDomeRadius}
+        labelX={water.lakeCenter[0]}
+        labelZ={water.lakeCenter[1]}
         progress={independenceProgress.progress}
         amountLabel={
           hideAmounts
@@ -558,6 +572,16 @@ export function CityView({
           onMoveX={(newX) => setCityPosition(CHECKING_BRIDGE_KEY, { x: newX, z: 0 })}
           setControlsEnabled={setControlsEnabled}
           onOpen={() => onOpen(firstCheckingId)}
+        />
+      )}
+      {populatedCategories.has('checking') && firstCheckingId && (
+        <CityCashRunway
+          x={checkingX}
+          zNear={checkingBridgeZNear}
+          zFar={checkingBridgeZFar}
+          runway={cashRunway}
+          hideAmounts={hideAmounts}
+          formatCurrency={formatCurrency}
         />
       )}
       <gridHelper
