@@ -1,0 +1,200 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(4, 5, 8, 0.65);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 60;
+  padding: 24px;
+}
+
+.panel {
+  width: min(760px, 96vw);
+  max-height: 90vh;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-panel);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.title {
+  font-size: 1.15rem;
+  font-weight: 800;
+  margin: 0 0 4px;
+}
+
+.subtitle {
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+
+.closeBtn {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  border-radius: var(--radius-sm);
+  width: 32px;
+  height: 32px;
+  font-size: 0.9rem;
+  flex-shrink: 0;
+}
+
+.empty {
+  padding: 48px 24px;
+  text-align: center;
+  color: var(--text-dim);
+}
+
+.tableScroll {
+  overflow: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.84rem;
+}
+
+.table th {
+  position: sticky;
+  top: 0;
+  background: var(--surface-3);
+  color: var(--text-dim);
+  font-weight: 700;
+  font-size: 0.72rem;
+  text-align: start;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  z-index: 1;
+}
+
+.table td {
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+.table tbody tr {
+  cursor: pointer;
+}
+
+.table tbody tr:hover {
+  background: var(--surface-2);
+}
+
+.colName {
+  font-weight: 700;
+  min-width: 140px;
+}
+
+.colNum {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.priorityBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  font-weight: 800;
+  font-size: 0.76rem;
+}
+
+.topRow {
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+}
+
+.topRow .priorityBadge {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--surface);
+}
+
+.mortgagePill {
+  display: inline-block;
+  margin-inline-start: 6px;
+  font-size: 0.68rem;
+  color: var(--text-dim);
+}
+
+.neverRow {
+  background: color-mix(in srgb, var(--health-risk) 14%, var(--surface));
+}
+
+.neverBadge {
+  color: var(--health-risk);
+  font-weight: 700;
+  font-size: 0.78rem;
+}
+
+.footnote {
+  padding: 14px 24px;
+  font-size: 0.74rem;
+  color: var(--text-dim);
+  border-top: 1px solid var(--border);
+  line-height: 1.6;
+}
+
+.simulator {
+  margin: 4px 20px 0;
+  padding: 14px 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+}
+
+.simulatorLabel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.simulatorInputRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+
+.simulatorInput {
+  width: 90px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  padding: 6px 8px;
+  font-size: 0.86rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.simulatorResult {
+  margin: 10px 0 0;
+  font-size: 0.84rem;
+  line-height: 1.6;
+}

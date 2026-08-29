@@ -21,7 +21,9 @@ export interface CashRunway {
   ratio: number;
 }
 
-function daysInMonth(year: number, monthIndex0: number): number {
+// exported for domain/paymentCalendar.ts, which needs the same "how many days does this month
+// actually have" logic to build a whole-month view, not just the next-occurrence projection below.
+export function daysInMonth(year: number, monthIndex0: number): number {
   return new Date(year, monthIndex0 + 1, 0).getDate();
 }
 
@@ -41,7 +43,9 @@ function daysBetween(from: Date, to: Date): number {
   return Math.round((to.getTime() - from.getTime()) / (1000 * 60 * 60 * 24));
 }
 
-function amountFieldFor(details: FinancialEntity['details']): number | null {
+// exported for domain/paymentCalendar.ts — same "which field actually represents this entity's
+// recurring checking withdrawal" question, reused rather than re-decided per caller.
+export function amountFieldFor(details: FinancialEntity['details']): number | null {
   switch (details.kind) {
     case 'expense':
       return details.monthlyAmount;
@@ -66,12 +70,15 @@ function amountFieldFor(details: FinancialEntity['details']): number | null {
 /** Manually-entered fallback day (see domain/entity.ts's DAY_OF_MONTH) — only the expense/debt/
  * insurance/savings/investment kinds carry a chargeDay field, so this has to read past the
  * discriminated union the same way getLinkedFieldValue does, rather than switching on `.kind`
- * again for one field. */
-function manualChargeDay(details: FinancialEntity['details']): number | undefined {
+ * again for one field. Exported for domain/paymentCalendar.ts, same reason as amountFieldFor. */
+export function manualChargeDay(details: FinancialEntity['details']): number | undefined {
   return (details as { chargeDay?: number }).chargeDay;
 }
 
-const RUNWAY_ENTITY_KINDS = new Set(['expense', 'debt', 'insurance', 'savings', 'investment']);
+// exported for domain/paymentCalendar.ts — the whole-month calendar shows every one of these kinds
+// plus income (which it handles separately, since income's own amount/day fields live directly on
+// IncomeDetails rather than needing amountFieldFor/manualChargeDay at all).
+export const RUNWAY_ENTITY_KINDS = new Set(['expense', 'debt', 'insurance', 'savings', 'investment']);
 
 /**
  * Projects, from today, when the next salary lands and what's due to be charged before it —

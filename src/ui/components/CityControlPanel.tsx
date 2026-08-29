@@ -25,6 +25,9 @@ interface Props {
   canShareImage: boolean;
   onOpenAssetTable: () => void;
   onOpenBudgetSplitTable: () => void;
+  onOpenDebtPriority: () => void;
+  onOpenPaymentCalendar: () => void;
+  onOpenActionPlan: () => void;
   // whether CityIncomeLinks' own gold connector tubes are hidden — a pure display-clarity
   // experiment (see boardStore's own hideIncomeConnectors doc-comment), gated by isCityMode like
   // the camera/export sections since the tubes themselves only ever exist in city view.
@@ -60,6 +63,9 @@ export function CityControlPanel({
   canShareImage,
   onOpenAssetTable,
   onOpenBudgetSplitTable,
+  onOpenDebtPriority,
+  onOpenPaymentCalendar,
+  onOpenActionPlan,
   hideIncomeConnectors,
   onToggleHideIncomeConnectors,
   growthForecast,
@@ -118,6 +124,14 @@ export function CityControlPanel({
         <div className={styles.body}>
           <div className={styles.section}>
             <h3 className={styles.sectionTitle}>נתונים</h3>
+            <button
+              type="button"
+              className={styles.panelBtn}
+              onClick={onOpenActionPlan}
+              title="סינתזה מדורגת של כל הסימנים בלוח — מה הכי דחוף לטפל בו עכשיו"
+            >
+              🧭 מה לעשות עכשיו
+            </button>
             {/* 💎/🥧 instead of a repeated, generic 📊 for both — per feedback (2026-08-29) that
                 these read as too plain/standard next to the camera section's own icon. 💎 evokes
                 the assets themselves (not just "a chart exists"); 🥧 is a literal pie sliced into
@@ -127,6 +141,22 @@ export function CityControlPanel({
             </button>
             <button type="button" className={styles.panelBtn} onClick={onOpenBudgetSplitTable}>
               🥧 חלוקת הכנסות 50/30/20
+            </button>
+            <button
+              type="button"
+              className={styles.panelBtn}
+              onClick={onOpenDebtPriority}
+              title="איזה חוב הכי משתלם לסגור קודם, ולכמה זמן/ריבית זה עדיין צפוי"
+            >
+              🎯 עדיפות סגירת חובות
+            </button>
+            <button
+              type="button"
+              className={styles.panelBtn}
+              onClick={onOpenPaymentCalendar}
+              title="מתי בחודש כסף באמת נכנס ויוצא, יום אחר יום"
+            >
+              📅 לוח תזרים חודשי
             </button>
           </div>
 
