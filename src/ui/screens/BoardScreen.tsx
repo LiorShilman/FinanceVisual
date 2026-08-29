@@ -692,6 +692,7 @@ function BoardCanvas() {
           presetName={creating?.name}
           presetRiseupLink={creating?.riseupLink}
           riseupTransactions={riseupTransactions}
+          riseupMonthlyTransactions={riseupSuggestions.monthly}
           onOpenGrowthForecast={handleOpenGrowthForecast}
           onClose={(saved) => {
             setEditingId(null);
@@ -747,6 +748,7 @@ function BoardCanvas() {
             setShowBudgetSplitTable(false);
             openEditor(id);
           }}
+          riseupMonthlyTransactions={riseupSuggestions.monthly}
         />
       )}
     </div>

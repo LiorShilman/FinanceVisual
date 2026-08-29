@@ -6,6 +6,32 @@ export interface MonthlyTransactions {
   transactions: RiseupTransaction[];
 }
 
+function dayOfMonth(iso: string): number {
+  return new Date(iso).getDate();
+}
+
+/** The middle value, not the mean — one early/late outlier (a salary that landed a day early over
+ * a weekend, a bill charged a few days late once) shouldn't drag the whole projection off the date
+ * it actually lands on every other month. */
+function medianDay(days: number[]): number {
+  const sorted = [...days].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0 ? Math.round((sorted[mid - 1] + sorted[mid]) / 2) : sorted[mid];
+}
+
+/** This business's own real historical day-of-month, if RiseUp has any matching transactions for
+ * it — the shared source of truth wherever an entity's real charge/pay date should reflect actual
+ * RiseUp history instead of a manually-typed guess (domain/cashRunway.ts's runway projection,
+ * domain/budgetSplitTable.ts's date column, EntityFormPanel's own chargeDay/payDay field). See
+ * domain/entity.ts's chargeDay/payDay doc-comment for why RiseUp wins whenever both exist.
+ * `wantIncome` distinguishes a salary deposit from an outgoing charge — the same business name
+ * never means both. Undefined when nothing in the fetched history matches. */
+export function deriveRiseupDay(businessNames: string[], transactions: RiseupTransaction[], wantIncome: boolean): number | undefined {
+  const names = new Set(businessNames);
+  const days = transactions.filter((t) => t.isIncome === wantIncome && names.has(t.businessName)).map((t) => dayOfMonth(t.transactionDate));
+  return days.length > 0 ? medianDay(days) : undefined;
+}
+
 export const SUGGESTION_FREQUENCIES = ['monthly', 'bimonthly', 'possiblyAnnual', 'irregular'] as const;
 export type SuggestionFrequency = (typeof SUGGESTION_FREQUENCIES)[number];
 

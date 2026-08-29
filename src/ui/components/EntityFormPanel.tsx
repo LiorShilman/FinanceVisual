@@ -32,6 +32,7 @@ import {
 import { useBoardStore } from '../../app/boardStore';
 import type { RiseupTransaction } from '../../app/riseupConnection';
 import { sumRiseupForBusinesses } from '../../app/riseupSync';
+import { deriveRiseupDay, type MonthlyTransactions } from '../../domain/riseupSuggestions';
 import { CATEGORY_ICONS } from '../icons';
 import { formatCurrency } from '../format';
 import { MortgageScheduleModal } from './MortgageScheduleModal';
@@ -69,12 +70,27 @@ function defaultDetails(category: EntityCategory): EntityDetails {
   }
 }
 
+// Every entity kind that carries a chargeDay/payDay field at all (see domain/entity.ts's
+// DAY_OF_MONTH) — donation/checking/pension/studyFund/goal/realEstate/source have no such field,
+// so handleSubmit's own derived-day auto-fill below has to know not to touch them.
+const DAY_FIELD_KINDS = new Set(['expense', 'debt', 'insurance', 'savings', 'investment']);
+
 /** Shared field for income's payDay / expense·debt·insurance's chargeDay — the calendar day (1-31)
  * domain/cashRunway.ts falls back to when there's no RiseUp history to derive a real one from (see
  * that field's own doc-comment in domain/entity.ts for why it's a fallback, not the primary
  * source). Optional, so the input has to support clearing back to "unset" (empty string), not just
- * numbers — a plain NumberField (built for currency amounts, always some number) doesn't fit here. */
-function renderDayOfMonthField(value: number | undefined, onChange: (day: number | undefined) => void, label: string) {
+ * numbers — a plain NumberField (built for currency amounts, always some number) doesn't fit here.
+ *
+ * `derivedDay` (see the caller's own derivedDay memo) is RiseUp's own real answer for this exact
+ * field, live-computed from this month's fetched history — shown as the input's displayed value
+ * whenever `value` is still unset, so the field never looks empty just because nobody's typed in it
+ * yet. Typing over it fires the normal onChange and turns it into a real saved override, same as
+ * typing into a genuinely empty box always did. On save (see handleSubmit), an unset `value` next
+ * to a real `derivedDay` gets genuinely persisted too — not just shown — so this field's own
+ * "ימולא אוטומטית אם יש חיבור RISEUP" placeholder promise is literally true both on screen and in
+ * what's actually saved, without ever overwriting a value someone actually typed in by hand. */
+function renderDayOfMonthField(value: number | undefined, onChange: (day: number | undefined) => void, label: string, derivedDay?: number) {
+  const showingDerived = value === undefined && derivedDay !== undefined;
   return (
     <label className={styles.field}>
       <span className={styles.label}>{label} (אופציונלי)</span>
@@ -83,13 +99,14 @@ function renderDayOfMonthField(value: number | undefined, onChange: (day: number
         min={1}
         max={31}
         className={styles.input}
-        value={value ?? ''}
+        value={value ?? derivedDay ?? ''}
         placeholder="ימולא אוטומטית אם יש חיבור RISEUP"
         onChange={(e) => {
           const raw = e.target.value;
           onChange(raw === '' ? undefined : Math.max(1, Math.min(31, Math.round(Number(raw)))));
         }}
       />
+      {showingDerived && <p className={styles.hint}>מולא אוטומטית לפי היסטוריית RiseUp — אפשר לדרוס ידנית</p>}
     </label>
   );
 }
@@ -203,6 +220,10 @@ interface Props {
   // this month's real RiseUp transactions, for the linked-field discrepancy indicator below —
   // empty when disconnected or still loading, which just hides the indicator.
   riseupTransactions: RiseupTransaction[];
+  // the same multi-month history domain/cashRunway.ts uses (see useRiseupSuggestions's own
+  // `monthly`) — lets the payDay/chargeDay field below show RiseUp's own real charge/pay date
+  // instead of staying blank until someone types one in by hand.
+  riseupMonthlyTransactions: MonthlyTransactions[];
   // opens the growth-forecast calculator (in the left-side CityControlPanel) for this saved
   // entity — absent for a not-yet-created entity, since there's nothing to project until it
   // exists.
@@ -221,6 +242,7 @@ export function EntityFormPanel({
   presetName,
   presetRiseupLink,
   riseupTransactions,
+  riseupMonthlyTransactions,
   onOpenGrowthForecast,
   onClose,
 }: Props) {
@@ -331,6 +353,18 @@ export function EntityFormPanel({
     }
     const riseupLink = existing ? retarget(existing.riseupLink) : retarget(presetRiseupLink);
 
+    // Genuinely persist RiseUp's derived day into the entity on save, not just show it live (see
+    // derivedDay's own doc-comment above) — only when the field is still empty, so a real
+    // hand-typed value is never clobbered. `dayField` covers every kind that actually has one;
+    // everything else (donation, checking, pension, studyFund, goal, realEstate, source) has no
+    // such field to fill, so it's left alone regardless of `derivedDay`.
+    const dayField = draft.details.kind === 'income' ? 'payDay' : DAY_FIELD_KINDS.has(draft.details.kind) ? 'chargeDay' : undefined;
+    const currentDay = dayField ? (draft.details as Record<string, unknown>)[dayField] : undefined;
+    const details =
+      riseupLink && dayField && currentDay === undefined && derivedDay !== undefined
+        ? ({ ...draft.details, [dayField]: derivedDay } as EntityDetails)
+        : draft.details;
+
     const payload = {
       name: draft.name.trim(),
       ownerIds: draft.ownerIds,
@@ -338,7 +372,7 @@ export function EntityFormPanel({
       linkedEntityIds: draft.linkedEntityIds,
       notes: draft.notes.trim() || undefined,
       link: draft.link.trim() || undefined,
-      details: draft.details,
+      details,
       currency: draft.currency,
       riseupLink,
     };
@@ -410,6 +444,24 @@ export function EntityFormPanel({
   }
 
   const d = draft.details;
+
+  // RiseUp's own real charge/pay date for this entity's linked business names, if this month's
+  // history has any — feeds the day-of-month field's own live display (see renderDayOfMonthField)
+  // and, on save (see handleSubmit below), actually gets written into the entity whenever the
+  // field is still empty — per explicit user judgment call (2026-08-29): a RiseUp-linked entity's
+  // date should end up genuinely stored, not just shown live, so every other consumer (the 50/30/20
+  // table, a future export, anything that only reads the raw field) sees it too. `existing?.riseupLink
+  // ?? presetRiseupLink` covers both an entity already saved with a link and a brand-new one being
+  // created from a RiseupSuggestion (which only carries the link as a preset before the first save).
+  // `wantIncome` follows the same rule domain/cashRunway.ts uses: only an income entity's field is
+  // ever a salary deposit, everything else is an outgoing charge, no matter which numeric field it
+  // links to.
+  const derivedDay = useMemo(() => {
+    const link = existing?.riseupLink ?? presetRiseupLink;
+    if (!link) return undefined;
+    const allTransactions = riseupMonthlyTransactions.flatMap((m) => m.transactions);
+    return deriveRiseupDay(link.businessNames, allTransactions, d.kind === 'income');
+  }, [existing, presetRiseupLink, riseupMonthlyTransactions, d.kind]);
 
   // read-only comparison against this month's real RiseUp data for whichever field is linked
   // (see domain/entity.ts's riseupLink) — never written back automatically; the entity's own
@@ -488,7 +540,7 @@ export function EntityFormPanel({
                 onChange={(v) => updateDetail({ monthlyAmount: fromDisplay(v) })}
               />
             </label>
-            {renderDayOfMonthField(d.payDay, (payDay) => updateDetail({ payDay }), 'יום קבלת המשכורת בחודש')}
+            {renderDayOfMonthField(d.payDay, (payDay) => updateDetail({ payDay }), 'יום קבלת המשכורת בחודש', derivedDay)}
           </>
         )}
 
@@ -524,7 +576,7 @@ export function EntityFormPanel({
               />
               <span>הוצאה קבועה/הכרחית</span>
             </div>
-            {renderDayOfMonthField(d.chargeDay, (chargeDay) => updateDetail({ chargeDay }), 'יום חיוב טיפוסי בחודש')}
+            {renderDayOfMonthField(d.chargeDay, (chargeDay) => updateDetail({ chargeDay }), 'יום חיוב טיפוסי בחודש', derivedDay)}
           </>
         )}
 
@@ -592,7 +644,7 @@ export function EntityFormPanel({
               />
               <span>זו קרן החירום המשפחתית</span>
             </div>
-            {renderDayOfMonthField(d.chargeDay, (chargeDay) => updateDetail({ chargeDay }), 'יום הפקדה טיפוסי בחודש')}
+            {renderDayOfMonthField(d.chargeDay, (chargeDay) => updateDetail({ chargeDay }), 'יום הפקדה טיפוסי בחודש', derivedDay)}
           </>
         )}
 
@@ -621,7 +673,7 @@ export function EntityFormPanel({
               <span>ההפקדה נחשבת חיסכון מההכנסה (חלק מה-20%)</span>
             </div>
             {d.kind === 'investment' &&
-              renderDayOfMonthField(d.chargeDay, (chargeDay) => updateDetail({ chargeDay }), 'יום הפקדה טיפוסי בחודש')}
+              renderDayOfMonthField(d.chargeDay, (chargeDay) => updateDetail({ chargeDay }), 'יום הפקדה טיפוסי בחודש', derivedDay)}
           </>
         )}
 
@@ -698,7 +750,7 @@ export function EntityFormPanel({
               <input type="checkbox" checked={d.essential} onChange={(e) => updateDetail({ essential: e.target.checked })} />
               <span>ימשיך להיות רלוונטי גם אחרי עצמאות כלכלית</span>
             </div>
-            {renderDayOfMonthField(d.chargeDay, (chargeDay) => updateDetail({ chargeDay }), 'יום חיוב טיפוסי בחודש')}
+            {renderDayOfMonthField(d.chargeDay, (chargeDay) => updateDetail({ chargeDay }), 'יום חיוב טיפוסי בחודש', derivedDay)}
           </>
         )}
 
@@ -743,7 +795,7 @@ export function EntityFormPanel({
               <input type="checkbox" checked={d.essential} onChange={(e) => updateDetail({ essential: e.target.checked })} />
               <span>ימשיך להיות רלוונטי גם אחרי עצמאות כלכלית (למשל התחייבות מתמשכת כמו מזונות, לא הלוואה שתיפרע)</span>
             </div>
-            {renderDayOfMonthField(d.chargeDay, (chargeDay) => updateDetail({ chargeDay }), 'יום חיוב טיפוסי בחודש')}
+            {renderDayOfMonthField(d.chargeDay, (chargeDay) => updateDetail({ chargeDay }), 'יום חיוב טיפוסי בחודש', derivedDay)}
 
             {d.isMortgage && (
               <div className={styles.mortgageTracks}>

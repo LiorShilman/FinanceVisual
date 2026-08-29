@@ -3,6 +3,7 @@ import { useBoardStore } from '../../app/boardStore';
 import { computeBudgetSplit } from '../../domain/budgetSplit';
 import { buildBudgetSplitRows, summarizeBudgetBuckets, type BudgetBucket, type BudgetSplitRow } from '../../domain/budgetSplitTable';
 import { CATEGORY_LABELS } from '../../domain/entity';
+import type { MonthlyTransactions } from '../../domain/riseupSuggestions';
 import { CATEGORY_ICONS } from '../icons';
 import { formatCurrency } from '../format';
 import styles from './BudgetSplitTablePanel.module.css';
@@ -10,6 +11,10 @@ import styles from './BudgetSplitTablePanel.module.css';
 interface Props {
   onClose: () => void;
   onOpenEntity: (id: string) => void;
+  // same multi-month RiseUp history domain/cashRunway.ts uses (see useRiseupSuggestions's own
+  // `monthly`) — lets each row's date column show a real RiseUp charge date, not just whatever was
+  // typed in by hand (see domain/budgetSplitTable.ts's own chargeDayOf).
+  riseupMonthlyTransactions: MonthlyTransactions[];
 }
 
 // needs/wants together are the literal "50/30" — savings and donations are both part of the same
@@ -35,12 +40,12 @@ const BUCKET_ICONS: Record<BudgetBucket, string> = {
 };
 const BUCKET_ORDER: BudgetBucket[] = ['needs', 'wants', 'savings', 'donations'];
 
-export function BudgetSplitTablePanel({ onClose, onOpenEntity }: Props) {
+export function BudgetSplitTablePanel({ onClose, onOpenEntity, riseupMonthlyTransactions }: Props) {
   const entities = useBoardStore((s) => s.entities);
   const hideAmounts = useBoardStore((s) => s.hideAmounts);
 
   const split = useMemo(() => computeBudgetSplit(entities), [entities]);
-  const rows = useMemo(() => buildBudgetSplitRows(entities), [entities]);
+  const rows = useMemo(() => buildBudgetSplitRows(entities, riseupMonthlyTransactions), [entities, riseupMonthlyTransactions]);
   const summaries = useMemo(() => summarizeBudgetBuckets(rows, split.income), [rows, split.income]);
   const rowsByBucket = useMemo(() => {
     const map = new Map<BudgetBucket, BudgetSplitRow[]>();
@@ -126,11 +131,10 @@ export function BudgetSplitTablePanel({ onClose, onOpenEntity }: Props) {
                               {CATEGORY_ICONS[row.category]} {CATEGORY_LABELS[row.category]}
                             </span>
                           </td>
-                          {/* '' (blank), not "unknown"/"—" as a distinct word — no chargeDay set is
-                              the common case (RiseUp-linked entities get their real day shown
-                              elsewhere, on the cash runway itself, once actual history exists; this
-                              is just the manually-entered fallback field), not an error state worth
-                              calling out row by row. */}
+                          {/* '' (blank), not "unknown"/"—" as a distinct word — no chargeDay at all
+                              (no RiseUp-derived date and no manually-entered one either) is a
+                              common, unremarkable case, not an error state worth calling out row
+                              by row. */}
                           <td className={styles.colDate}>{row.chargeDay !== undefined ? `${row.chargeDay} לחודש` : ''}</td>
                           <td className={styles.colNum}>{money(row.amount)}</td>
                         </tr>

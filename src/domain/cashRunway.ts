@@ -1,5 +1,5 @@
 import type { FinancialEntity } from './entity';
-import type { MonthlyTransactions } from './riseupSuggestions';
+import { deriveRiseupDay, type MonthlyTransactions } from './riseupSuggestions';
 
 export interface UpcomingCharge {
   entityId: string;
@@ -19,19 +19,6 @@ export interface CashRunway {
   /** currentBalance / recommendedBalance, clamped to [0, 1.4] — the cap keeps a big cash cushion
    * from stretching the color gradient's "comfortably ahead" end past where it reads as meaningful. */
   ratio: number;
-}
-
-function dayOfMonth(iso: string): number {
-  return new Date(iso).getDate();
-}
-
-/** The middle value, not the mean — one early/late outlier (a salary that landed a day early over
- * a weekend, a bill charged a few days late once) shouldn't drag the whole projection off the
- * date it actually lands on every other month. */
-function medianDay(days: number[]): number {
-  const sorted = [...days].sort((a, b) => a - b);
-  const mid = Math.floor(sorted.length / 2);
-  return sorted.length % 2 === 0 ? Math.round((sorted[mid - 1] + sorted[mid]) / 2) : sorted[mid];
 }
 
 function daysInMonth(year: number, monthIndex0: number): number {
@@ -86,26 +73,24 @@ function manualChargeDay(details: FinancialEntity['details']): number | undefine
 
 const RUNWAY_ENTITY_KINDS = new Set(['expense', 'debt', 'insurance', 'savings', 'investment']);
 
-/** This business's own real historical day-of-month, if RiseUp has any matching transactions for
- * it — the more reliable source whenever it's available (see manualChargeDay's own doc-comment on
- * why the manual field is only ever a fallback). */
-function riseupDerivedDay(businessNames: string[], transactions: MonthlyTransactions['transactions'][number][], wantIncome: boolean): number | undefined {
-  const names = new Set(businessNames);
-  const days = transactions.filter((t) => t.isIncome === wantIncome && names.has(t.businessName)).map((t) => dayOfMonth(t.transactionDate));
-  return days.length > 0 ? medianDay(days) : undefined;
-}
-
 /**
  * Projects, from today, when the next salary lands and what's due to be charged before it —
  * "how much should be sitting in checking right now" for someone who spends last month's pay, not
  * next month's. "Charged" includes recurring savings/investment transfers, not just bills — a
  * scheduled deposit out of checking is exactly as real a withdrawal as a bill payment for this
  * purpose. Each entity's real-world day comes from its own RiseUp transaction history where
- * available (riseupDerivedDay), falling back to a manually-entered day (income's payDay,
- * expense/debt/insurance/savings/investment's chargeDay) for anyone without an active RiseUp
- * subscription, or for an obligation like alimony that never shows up as a RiseUp transaction at
- * all. Returns null when nothing at all anchors a payday date — no fabricated payday; the caller
- * (CityCashRunway) simply doesn't render anything in that case.
+ * available (deriveRiseupDay, see domain/riseupSuggestions.ts), falling back to a manually-entered
+ * day (income's payDay, expense/debt/insurance/savings/investment's chargeDay) for anyone without
+ * an active RiseUp subscription, or for an obligation like alimony that never shows up as a RiseUp
+ * transaction at all. Returns null when nothing at all anchors a payday date — no fabricated
+ * payday; the caller (CityCashRunway) simply doesn't render anything in that case.
+ *
+ * Deliberately fixed-only: an entity with no resolved date at all (no RiseUp history and no manual
+ * chargeDay/payDay) is simply left out, not folded in as a rough prorated/average guess — every
+ * number in `recommendedBalance` should trace back to a real, named, dated obligation the caller
+ * can see in `upcomingCharges`, not a silently-included estimate. Same reasoning excludes RiseUp's
+ * own `variable`-tagged transaction history entirely — a historical daily-spend average is exactly
+ * the kind of invisible, unauditable number this was kept away from.
  */
 export function computeCashRunway(
   entities: FinancialEntity[],
@@ -118,7 +103,7 @@ export function computeCashRunway(
   let payDay: number | undefined;
   for (const entity of entities) {
     if (entity.details.kind !== 'income') continue;
-    payDay = (entity.riseupLink && riseupDerivedDay(entity.riseupLink.businessNames, allTransactions, true)) ?? entity.details.payDay;
+    payDay = (entity.riseupLink && deriveRiseupDay(entity.riseupLink.businessNames, allTransactions, true)) ?? entity.details.payDay;
     if (payDay !== undefined) break;
   }
   if (payDay === undefined) return null;
@@ -127,7 +112,6 @@ export function computeCashRunway(
   const daysUntilPayday = daysBetween(today, nextPaydayDate);
 
   const upcomingCharges: UpcomingCharge[] = [];
-  let unanchoredMonthlyTotal = 0;
 
   for (const entity of entities) {
     if (!RUNWAY_ENTITY_KINDS.has(entity.details.kind)) continue;
@@ -135,27 +119,15 @@ export function computeCashRunway(
     if (amount === null) continue;
 
     const chargeDay =
-      (entity.riseupLink && riseupDerivedDay(entity.riseupLink.businessNames, allTransactions, false)) ?? manualChargeDay(entity.details);
-    if (chargeDay === undefined) {
-      unanchoredMonthlyTotal += amount;
-      continue;
-    }
+      (entity.riseupLink && deriveRiseupDay(entity.riseupLink.businessNames, allTransactions, false)) ?? manualChargeDay(entity.details);
+    if (chargeDay === undefined) continue; // no known date at all — left out, not estimated
     const date = projectNextOccurrence(today, chargeDay);
     if (date > nextPaydayDate) continue;
     upcomingCharges.push({ entityId: entity.id, label: entity.name, amount, date, daysFromToday: daysBetween(today, date) });
   }
   upcomingCharges.sort((a, b) => a.date.getTime() - b.date.getTime());
 
-  const daysThisMonth = daysInMonth(today.getFullYear(), today.getMonth());
-  const unanchoredShare = unanchoredMonthlyTotal * (daysUntilPayday / daysThisMonth);
-
-  const variableAmounts = allTransactions.filter((t) => t.actualType === 'variable').map((t) => Math.abs(t.amount));
-  const totalDaysSpanned = monthly.length * daysThisMonth;
-  const variablePerDay = totalDaysSpanned > 0 ? variableAmounts.reduce((a, b) => a + b, 0) / totalDaysSpanned : 0;
-  const variableEstimate = variablePerDay * daysUntilPayday;
-
-  const fixedTotal = upcomingCharges.reduce((sum, c) => sum + c.amount, 0);
-  const recommendedBalance = fixedTotal + unanchoredShare + variableEstimate;
+  const recommendedBalance = upcomingCharges.reduce((sum, c) => sum + c.amount, 0);
   const ratio = recommendedBalance > 0 ? Math.min(1.4, checkingTotal / recommendedBalance) : 0;
 
   return { nextPaydayDate, daysUntilPayday, upcomingCharges, recommendedBalance, currentBalance: checkingTotal, ratio };

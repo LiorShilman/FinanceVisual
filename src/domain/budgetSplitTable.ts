@@ -1,4 +1,6 @@
+import type { RiseupTransaction } from '../app/riseupConnection';
 import type { EntityCategory, FinancialEntity } from './entity';
+import { deriveRiseupDay, type MonthlyTransactions } from './riseupSuggestions';
 
 export type BudgetBucket = 'needs' | 'wants' | 'savings' | 'donations';
 
@@ -8,17 +10,21 @@ export interface BudgetSplitRow {
   bucket: BudgetBucket;
   category: EntityCategory;
   amount: number;
-  /** The calendar day (1-31) this recurring amount typically charges/deposits on, straight off the
-   * entity's own chargeDay/payDay field (see domain/entity.ts's DAY_OF_MONTH) — undefined for any
-   * entity that never had one set, or whose kind doesn't carry the field at all (donation, pension,
-   * study fund). This is the manually-entered value only, not RiseUp's own real transaction history
-   * — domain/cashRunway.ts is where that richer, RiseUp-aware projection lives; this is just
-   * exposing the same raw field the table's own entities already carry. */
+  /** The calendar day (1-31) this recurring amount typically charges/deposits on — RiseUp's own
+   * real transaction history for this entity's linked business names when one is linked and a
+   * matching charge shows up in `monthly` (same precedence domain/cashRunway.ts's own runway
+   * projection uses), falling back to the entity's own manually-entered chargeDay field otherwise.
+   * Undefined when neither exists, or the entity's kind doesn't carry the field at all (donation,
+   * pension, study fund). */
   chargeDay?: number;
 }
 
-function chargeDayOf(details: FinancialEntity['details']): number | undefined {
-  return (details as { chargeDay?: number }).chargeDay;
+/** None of these rows are ever built for an income entity (see buildBudgetSplitRows below), so
+ * this only ever needs to match an *outgoing* RiseUp transaction — never a salary deposit. */
+function chargeDayOf(entity: FinancialEntity, allTransactions: RiseupTransaction[]): number | undefined {
+  const manual = (entity.details as { chargeDay?: number }).chargeDay;
+  if (!entity.riseupLink) return manual;
+  return deriveRiseupDay(entity.riseupLink.businessNames, allTransactions, false) ?? manual;
 }
 
 export interface BudgetBucketSummary {
@@ -35,12 +41,16 @@ export interface BudgetBucketSummary {
  * can show *what* makes up each bucket, not only how much. Savings and donations are both part of
  * the same "20%" zone (budgetSplit.ts's own `savings = savingsContribution + donations`) but kept
  * as separate buckets here so the table can show them as two distinct groups within that zone,
- * matching that file's own stated intent. */
-export function buildBudgetSplitRows(entities: FinancialEntity[]): BudgetSplitRow[] {
+ * matching that file's own stated intent. `monthly` is optional (defaults to none, same as before
+ * this had any RiseUp awareness) — pass the same multi-month history domain/cashRunway.ts uses
+ * (see useRiseupSuggestions's own `monthly`) so each row's chargeDay reflects real RiseUp charge
+ * dates, not just whatever was typed in by hand. */
+export function buildBudgetSplitRows(entities: FinancialEntity[], monthly: MonthlyTransactions[] = []): BudgetSplitRow[] {
+  const allTransactions = monthly.flatMap((m) => m.transactions);
   const rows: BudgetSplitRow[] = [];
   for (const e of entities) {
     const d = e.details;
-    const chargeDay = chargeDayOf(d);
+    const chargeDay = chargeDayOf(e, allTransactions);
     if (d.kind === 'expense') {
       if (d.monthlyAmount > 0) rows.push({ id: e.id, name: e.name, bucket: d.essential ? 'needs' : 'wants', category: 'expense', amount: d.monthlyAmount, chargeDay });
     } else if (d.kind === 'debt') {
