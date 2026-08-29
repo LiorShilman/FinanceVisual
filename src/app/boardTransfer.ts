@@ -28,6 +28,8 @@ export const PersistedBoardStateSchema = z.object({
   openaiKey: z.string().default(''),
   aiInsights: z.string().array().default([]),
   aiInsightsUpdatedAt: z.string().nullable().default(null),
+  monthlySummary: z.string().default(''),
+  monthlySummaryUpdatedAt: z.string().nullable().default(null),
 });
 
 export type PersistedBoardState = z.infer<typeof PersistedBoardStateSchema>;
@@ -53,6 +55,8 @@ export const EMPTY_BOARD_STATE: PersistedBoardState = {
   openaiKey: '',
   aiInsights: [],
   aiInsightsUpdatedAt: null,
+  monthlySummary: '',
+  monthlySummaryUpdatedAt: null,
 };
 
 /** Pulls just the persisted fields out of the live store — same shape the JSON file holds. */
@@ -74,6 +78,8 @@ export function getPersistedBoardState(): PersistedBoardState {
     openaiKey: state.openaiKey,
     aiInsights: state.aiInsights,
     aiInsightsUpdatedAt: state.aiInsightsUpdatedAt,
+    monthlySummary: state.monthlySummary,
+    monthlySummaryUpdatedAt: state.monthlySummaryUpdatedAt,
   };
 }
 

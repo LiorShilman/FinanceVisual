@@ -55,6 +55,13 @@ interface BoardState {
    * (see FamilyPanel's own "רענן תובנות" button), never fetched automatically. */
   aiInsights: string[];
   aiInsightsUpdatedAt: string | null;
+  /** A longer, plain-language narrative (a few sentences, not bullets) built via the same
+   * /api/ask endpoint the free-question feature already uses — see app/insights.ts's askQuestion
+   * and FamilyPanel's own "צור סיכום חודשי" button — with a fixed prompt instead of a user-typed
+   * question. Synced like aiInsights (survives a reload/device switch), separate field since it's
+   * a different shape (one paragraph) and refreshed independently. */
+  monthlySummary: string;
+  monthlySummaryUpdatedAt: string | null;
 
   setLayoutMode: (mode: LayoutMode) => void;
   toggleHideAmounts: () => void;
@@ -64,6 +71,7 @@ interface BoardState {
   setRiseupPat: (pat: string) => void;
   setOpenaiKey: (key: string) => void;
   setAiInsights: (insights: string[], updatedAt?: string) => void;
+  setMonthlySummary: (summary: string, updatedAt?: string) => void;
 
   addFamilyMember: (member: Omit<FamilyMember, 'id'>) => void;
   updateFamilyMember: (id: string, patch: Partial<Omit<FamilyMember, 'id'>>) => void;
@@ -95,6 +103,8 @@ export const useBoardStore = create<BoardState>()((set) => ({
   openaiKey: '',
   aiInsights: [],
   aiInsightsUpdatedAt: null,
+  monthlySummary: '',
+  monthlySummaryUpdatedAt: null,
 
   setLayoutMode: (mode) => set({ layoutMode: mode }),
   toggleHideAmounts: () => set((state) => ({ hideAmounts: !state.hideAmounts })),
@@ -104,6 +114,7 @@ export const useBoardStore = create<BoardState>()((set) => ({
   setRiseupPat: (pat) => set({ riseupPat: pat }),
   setOpenaiKey: (key) => set({ openaiKey: key }),
   setAiInsights: (insights, updatedAt) => set({ aiInsights: insights, aiInsightsUpdatedAt: updatedAt ?? new Date().toISOString() }),
+  setMonthlySummary: (summary, updatedAt) => set({ monthlySummary: summary, monthlySummaryUpdatedAt: updatedAt ?? new Date().toISOString() }),
 
   addFamilyMember: (member) =>
     set((state) => ({
