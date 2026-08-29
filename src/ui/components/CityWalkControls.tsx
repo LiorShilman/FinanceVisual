@@ -13,8 +13,10 @@ const WALK_SPEED = 14; // world units per second — a bit over one LOT_SIZE (2.
 const TURN_SPEED = 0.7; // radians per second — gentle, not a snap-to-angle turn
 // roughly person-scale against this city's own buildings (MIN_HEIGHT 0.6, LOT_SIZE 2.6) — high
 // enough to clear the low hedges/ground clutter, low enough that walking actually reads as
-// walking, not the same bird's-eye height the free-orbit camera starts at.
-const EYE_HEIGHT = 2.2;
+// walking, not the same bird's-eye height the free-orbit camera starts at. Raised from 2.2 per
+// feedback (2026-08-29) — at person height the view sat below a lot of the taller growth trees'
+// own canopies instead of looking out across them.
+const EYE_HEIGHT = 3.4;
 // how quickly the camera settles toward walking height once movement starts — snapping straight
 // there on the very first frame reads as a jump-cut; easing it in over roughly half a second feels
 // like crouching down into the walk instead.

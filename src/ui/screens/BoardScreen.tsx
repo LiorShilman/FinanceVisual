@@ -94,6 +94,8 @@ function BoardCanvas() {
   const reorderWithinBucket = useBoardStore((s) => s.reorderWithinBucket);
   const hideAmounts = useBoardStore((s) => s.hideAmounts);
   const toggleHideAmounts = useBoardStore((s) => s.toggleHideAmounts);
+  const hideIncomeConnectors = useBoardStore((s) => s.hideIncomeConnectors);
+  const toggleHideIncomeConnectors = useBoardStore((s) => s.toggleHideIncomeConnectors);
   const { positions, regions } = useBoardLayout();
   const { fitView, setViewport } = useReactFlow();
 
@@ -640,6 +642,8 @@ function BoardCanvas() {
           canShareImage={canShareFiles}
           onOpenAssetTable={() => setShowInvestmentsTable(true)}
           onOpenBudgetSplitTable={() => setShowBudgetSplitTable(true)}
+          hideIncomeConnectors={hideIncomeConnectors}
+          onToggleHideIncomeConnectors={toggleHideIncomeConnectors}
           growthForecast={growthForecastPanelData}
           onChangeForecastYears={(years) => setGrowthForecast((f) => (f ? { ...f, years } : f))}
           onChangeForecastMonthlyDeposit={(monthlyDeposit) => setGrowthForecast((f) => (f ? { ...f, monthlyDeposit } : f))}

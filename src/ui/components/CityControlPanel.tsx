@@ -25,6 +25,11 @@ interface Props {
   canShareImage: boolean;
   onOpenAssetTable: () => void;
   onOpenBudgetSplitTable: () => void;
+  // whether CityIncomeLinks' own gold connector tubes are hidden — a pure display-clarity
+  // experiment (see boardStore's own hideIncomeConnectors doc-comment), gated by isCityMode like
+  // the camera/export sections since the tubes themselves only ever exist in city view.
+  hideIncomeConnectors: boolean;
+  onToggleHideIncomeConnectors: () => void;
   // present only while the growth-forecast calculator is open for some entity — forces the panel
   // open (see the effect below) so a person clicking "תחזית צמיחה" on a tree actually sees the
   // calculator appear, instead of it silently filling a collapsed panel.
@@ -55,6 +60,8 @@ export function CityControlPanel({
   canShareImage,
   onOpenAssetTable,
   onOpenBudgetSplitTable,
+  hideIncomeConnectors,
+  onToggleHideIncomeConnectors,
   growthForecast,
   onChangeForecastYears,
   onChangeForecastMonthlyDeposit,
@@ -111,11 +118,15 @@ export function CityControlPanel({
         <div className={styles.body}>
           <div className={styles.section}>
             <h3 className={styles.sectionTitle}>נתונים</h3>
+            {/* 💎/🥧 instead of a repeated, generic 📊 for both — per feedback (2026-08-29) that
+                these read as too plain/standard next to the camera section's own icon. 💎 evokes
+                the assets themselves (not just "a chart exists"); 🥧 is a literal pie sliced into
+                portions, matching what a 50/30/20 split actually is. */}
             <button type="button" className={styles.panelBtn} onClick={onOpenAssetTable}>
-              📊 טבלת נכסים
+              💎 טבלת נכסים
             </button>
             <button type="button" className={styles.panelBtn} onClick={onOpenBudgetSplitTable}>
-              📊 חלוקת הכנסות 50/30/20
+              🥧 חלוקת הכנסות 50/30/20
             </button>
           </div>
 
@@ -202,13 +213,27 @@ export function CityControlPanel({
               </div>
 
               <div className={styles.section}>
+                <h3 className={styles.sectionTitle}>תצוגה</h3>
+                <button
+                  type="button"
+                  className={`${styles.panelBtn} ${hideIncomeConnectors ? styles.panelBtnActive : ''}`}
+                  onClick={onToggleHideIncomeConnectors}
+                  title="הצינורות הזהובים שמחברים את מקור ההכנסה לכל מה שהיא מממנת — נסה עם/בלי כדי לראות מה קריא יותר"
+                >
+                  {hideIncomeConnectors ? '🔗 הצג צינורות הכנסה' : '🚫 הסתר צינורות הכנסה'}
+                </button>
+              </div>
+
+              <div className={styles.section}>
                 <h3 className={styles.sectionTitle}>ייצוא</h3>
                 <button type="button" className={styles.panelBtn} onClick={onDownloadImage}>
                   ⬇️ הורדת תמונה
                 </button>
                 {canShareImage && (
+                  // 🌐 instead of the plain grey outbox-tray 📤 — per the same "too
+                  // simple/standard" feedback (2026-08-29) as the data-section icons above.
                   <button type="button" className={styles.panelBtn} onClick={onShareImage}>
-                    📤 שיתוף
+                    🌐 שיתוף
                   </button>
                 )}
               </div>

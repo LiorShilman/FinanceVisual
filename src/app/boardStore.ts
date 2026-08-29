@@ -31,6 +31,10 @@ interface BoardState {
   entityOrder: Record<string, number>;
   /** Mask displayed currency figures — for screen-sharing the board's shape without the exact numbers. */
   hideAmounts: boolean;
+  /** Hides the gold right-angle "circuit board" tubes CityIncomeLinks draws from the income source
+   * out to everything it funds — per explicit user request (2026-08-29) to compare the city with
+   * and without them and see which reads more clearly, not a data-privacy toggle like hideAmounts. */
+  hideIncomeConnectors: boolean;
   /** ₪ per $1 — user-editable, and optionally refreshed automatically from a live source. Every
    * entity is stored in ₪ regardless of its own display currency; this rate is what converts. */
   usdRate: number;
@@ -54,6 +58,7 @@ interface BoardState {
 
   setLayoutMode: (mode: LayoutMode) => void;
   toggleHideAmounts: () => void;
+  toggleHideIncomeConnectors: () => void;
   setUsdRate: (rate: number, updatedAt?: string) => void;
   toggleAutoUpdateUsdRate: () => void;
   setRiseupPat: (pat: string) => void;
@@ -82,6 +87,7 @@ export const useBoardStore = create<BoardState>()((set) => ({
   cityPositions: {},
   entityOrder: {},
   hideAmounts: false,
+  hideIncomeConnectors: false,
   usdRate: 3.7,
   usdRateUpdatedAt: null,
   autoUpdateUsdRate: false,
@@ -92,6 +98,7 @@ export const useBoardStore = create<BoardState>()((set) => ({
 
   setLayoutMode: (mode) => set({ layoutMode: mode }),
   toggleHideAmounts: () => set((state) => ({ hideAmounts: !state.hideAmounts })),
+  toggleHideIncomeConnectors: () => set((state) => ({ hideIncomeConnectors: !state.hideIncomeConnectors })),
   setUsdRate: (rate, updatedAt) => set({ usdRate: rate, usdRateUpdatedAt: updatedAt ?? new Date().toISOString() }),
   toggleAutoUpdateUsdRate: () => set((state) => ({ autoUpdateUsdRate: !state.autoUpdateUsdRate })),
   setRiseupPat: (pat) => set({ riseupPat: pat }),

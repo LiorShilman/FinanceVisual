@@ -150,6 +150,7 @@ export function CityView({
   onOpen,
 }: Props) {
   const hideAmounts = useBoardStore((s) => s.hideAmounts);
+  const hideIncomeConnectors = useBoardStore((s) => s.hideIncomeConnectors);
   const usdRate = useBoardStore((s) => s.usdRate);
   const cityPositions = useBoardStore((s) => s.cityPositions);
   const setCityPosition = useBoardStore((s) => s.setCityPosition);
@@ -619,7 +620,7 @@ export function CityView({
           history={riseupHistory}
         />
       )}
-      <CityIncomeLinks paths={incomeLinkPaths} />
+      {!hideIncomeConnectors && <CityIncomeLinks paths={incomeLinkPaths} />}
       <CityDebtChains debtPositions={debtPositions} linkPaths={debtLinkPaths} />
       {incomeFaucetTarget && (
         <CityIncomeFaucet targetX={incomeFaucetTarget.x} targetZ={incomeFaucetTarget.z} targetY={incomeFaucetTarget.y} />
