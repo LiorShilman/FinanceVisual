@@ -116,7 +116,13 @@ export function computeCashRunway(
   for (const entity of entities) {
     if (!RUNWAY_ENTITY_KINDS.has(entity.details.kind)) continue;
     const amount = amountFieldFor(entity.details);
-    if (amount === null) continue;
+    // 0 is a real, common case for a savings/investment entity with no regular transfer set up
+    // (its balance just sits there) — not a charge that's ever actually going to hit checking, so
+    // it shouldn't get a beacon on the runway at all, no matter what date a stray RiseUp
+    // transaction or a leftover manual chargeDay happens to resolve to (reported 2026-08-29: a
+    // zero-contribution rainy-day savings entity was showing up on the 1st of the month for
+    // exactly this reason).
+    if (amount === null || amount === 0) continue;
 
     const chargeDay =
       (entity.riseupLink && deriveRiseupDay(entity.riseupLink.businessNames, allTransactions, false)) ?? manualChargeDay(entity.details);
