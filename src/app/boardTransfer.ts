@@ -18,6 +18,9 @@ export const PersistedBoardStateSchema = z.object({
   cityPositions: z.record(z.string(), CityPositionSchema).default({}),
   entityOrder: z.record(z.string(), z.number()),
   hideAmounts: z.boolean(),
+  // .default(false) — an older saved board never had this toggle, and should just load as "shown",
+  // the same as before it existed.
+  hideIncomeConnectors: z.boolean().default(false),
   usdRate: z.number(),
   usdRateUpdatedAt: z.string().nullable(),
   autoUpdateUsdRate: z.boolean(),
@@ -25,6 +28,8 @@ export const PersistedBoardStateSchema = z.object({
   openaiKey: z.string().default(''),
   aiInsights: z.string().array().default([]),
   aiInsightsUpdatedAt: z.string().nullable().default(null),
+  monthlySummary: z.string().default(''),
+  monthlySummaryUpdatedAt: z.string().nullable().default(null),
 });
 
 export type PersistedBoardState = z.infer<typeof PersistedBoardStateSchema>;
@@ -42,6 +47,7 @@ export const EMPTY_BOARD_STATE: PersistedBoardState = {
   cityPositions: {},
   entityOrder: {},
   hideAmounts: false,
+  hideIncomeConnectors: false,
   usdRate: 3.7,
   usdRateUpdatedAt: null,
   autoUpdateUsdRate: false,
@@ -49,6 +55,8 @@ export const EMPTY_BOARD_STATE: PersistedBoardState = {
   openaiKey: '',
   aiInsights: [],
   aiInsightsUpdatedAt: null,
+  monthlySummary: '',
+  monthlySummaryUpdatedAt: null,
 };
 
 /** Pulls just the persisted fields out of the live store — same shape the JSON file holds. */
@@ -62,6 +70,7 @@ export function getPersistedBoardState(): PersistedBoardState {
     cityPositions: state.cityPositions,
     entityOrder: state.entityOrder,
     hideAmounts: state.hideAmounts,
+    hideIncomeConnectors: state.hideIncomeConnectors,
     usdRate: state.usdRate,
     usdRateUpdatedAt: state.usdRateUpdatedAt,
     autoUpdateUsdRate: state.autoUpdateUsdRate,
@@ -69,6 +78,8 @@ export function getPersistedBoardState(): PersistedBoardState {
     openaiKey: state.openaiKey,
     aiInsights: state.aiInsights,
     aiInsightsUpdatedAt: state.aiInsightsUpdatedAt,
+    monthlySummary: state.monthlySummary,
+    monthlySummaryUpdatedAt: state.monthlySummaryUpdatedAt,
   };
 }
 

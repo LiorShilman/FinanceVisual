@@ -107,6 +107,9 @@ export function FamilyPanel({ onClose, onOpenRiseupTransactions }: Props) {
   const aiInsights = useBoardStore((s) => s.aiInsights);
   const aiInsightsUpdatedAt = useBoardStore((s) => s.aiInsightsUpdatedAt);
   const setAiInsights = useBoardStore((s) => s.setAiInsights);
+  const monthlySummary = useBoardStore((s) => s.monthlySummary);
+  const monthlySummaryUpdatedAt = useBoardStore((s) => s.monthlySummaryUpdatedAt);
+  const setMonthlySummary = useBoardStore((s) => s.setMonthlySummary);
 
   // same draft/commit-on-blur pattern as riseupPatDraft above.
   const [openaiKeyDraft, setOpenaiKeyDraft] = useState(openaiKey);
@@ -128,6 +131,27 @@ export function FamilyPanel({ onClose, onOpenRiseupTransactions }: Props) {
     setLastFetchStatus(result.status);
     if (result.status === 'ok' && result.insights) setAiInsights(result.insights);
     setInsightsLoading(false);
+  }
+
+  // a fixed prompt (not user-typed) against the exact same summary/endpoint the free-question
+  // feature below already uses — a plain-language narrative paragraph instead of the terse
+  // 2-3-bullet automatic insights, aimed at someone who doesn't already think in financial terms.
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [summaryStatus, setSummaryStatus] = useState<InsightsFetchStatus | null>(null);
+
+  async function handleGenerateMonthlySummary() {
+    const key = openaiKey.trim();
+    if (!key || summaryLoading) return;
+    setSummaryLoading(true);
+    setSummaryStatus(null);
+    const result = await askQuestion(
+      key,
+      buildInsightsSummary(entities),
+      'כתוב סיכום חודשי קצר וברור בעברית פשוטה (4-6 משפטים רציפים, לא רשימה) על המצב הכלכלי של המשפחה, מותאם למישהו שלא בקיא במונחים פיננסיים. כלול כמה נכנס והוצא, נקודה חיובית אחת, ונקודה אחת לשיפור. סגנון חם ותומך, לא שיפוטי.',
+    );
+    setSummaryStatus(result.status);
+    if (result.status === 'ok' && result.answer) setMonthlySummary(result.answer);
+    setSummaryLoading(false);
   }
 
   // the free-question answer is deliberately not synced (unlike aiInsights) — it's a one-off
@@ -347,6 +371,24 @@ export function FamilyPanel({ onClose, onOpenRiseupTransactions }: Props) {
               </ul>
               {aiInsightsUpdatedAt && (
                 <span className={styles.aiTimestamp}>עודכן {new Date(aiInsightsUpdatedAt).toLocaleString('he-IL')}</span>
+              )}
+            </>
+          )}
+
+          <button
+            type="button"
+            className={styles.aiRefreshBtn}
+            onClick={handleGenerateMonthlySummary}
+            disabled={!openaiKey.trim() || summaryLoading}
+          >
+            {summaryLoading ? 'כותב סיכום…' : 'צור סיכום חודשי'}
+          </button>
+          {summaryStatus && summaryStatus !== 'ok' && <span className={styles.aiTimestamp}>{AI_STATUS_LABEL[summaryStatus]}</span>}
+          {monthlySummary && (
+            <>
+              <p className={styles.aiInsightItem}>{monthlySummary}</p>
+              {monthlySummaryUpdatedAt && (
+                <span className={styles.aiTimestamp}>עודכן {new Date(monthlySummaryUpdatedAt).toLocaleString('he-IL')}</span>
               )}
             </>
           )}

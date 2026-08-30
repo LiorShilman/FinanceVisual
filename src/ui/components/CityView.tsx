@@ -5,7 +5,7 @@ import { Billboard, OrbitControls, Text } from '@react-three/drei';
 import { useBoardStore } from '../../app/boardStore';
 import type { MonthHistoryPoint } from '../../app/riseupHistory';
 import { computeCityAtmosphere } from '../../domain/atmosphere';
-import { computeCashRunway } from '../../domain/cashRunway';
+import { computeCashRunway, type UpcomingCharge } from '../../domain/cashRunway';
 import {
   computeCityLayout,
   computeDistrictLayout,
@@ -101,6 +101,10 @@ interface Props {
   growthForecastEntityId: string | null;
   growthForecastPoints: GrowthProjectionPoint[] | null;
   onOpen: (id: string) => void;
+  // owned by BoardScreen (not this component), same cross-Canvas-boundary reason as controlsRef
+  // above — CityCashRunway's own day-cluster beacon (see its own doc-comment) needs to open a real
+  // 2D panel (RunwayDayDetailPanel), which can't be rendered from inside the Canvas tree itself.
+  onOpenRunwayDayDetail: (charges: UpcomingCharge[]) => void;
 }
 
 // index 0 (locked/long-term) sits farthest from the camera, index 2 (liquid/current) nearest —
@@ -148,8 +152,10 @@ export function CityView({
   growthForecastEntityId,
   growthForecastPoints,
   onOpen,
+  onOpenRunwayDayDetail,
 }: Props) {
   const hideAmounts = useBoardStore((s) => s.hideAmounts);
+  const hideIncomeConnectors = useBoardStore((s) => s.hideIncomeConnectors);
   const usdRate = useBoardStore((s) => s.usdRate);
   const cityPositions = useBoardStore((s) => s.cityPositions);
   const setCityPosition = useBoardStore((s) => s.setCityPosition);
@@ -220,10 +226,20 @@ export function CityView({
     [entities],
   );
   const checkingAvailableRatio = checkingTotal > 0 ? checkingAvailable / checkingTotal : 0;
-  // recomputed on every render (not memoized against `entities`/`riseupMonthlyTransactions` alone)
-  // — `new Date()` has to stay live so "today" advances as the day changes while the board stays
-  // open, not frozen at whatever moment the city first mounted.
-  const cashRunway = computeCashRunway(entities, riseupMonthlyTransactions, checkingTotal, new Date());
+  // A ticking `now`, not a bare `new Date()` inline — a plain inline call only re-evaluates when
+  // *something else* happens to re-render CityView (a panel opening, an entity edit...); leave the
+  // tab open and idle past midnight with no other interaction and it never re-renders at all, so
+  // "today" stays frozen at whatever moment the last render happened to land on (reported
+  // 2026-08-30: the countdown showed the same day-count on two different real days because the
+  // page had simply never re-rendered in between). Ticking every minute is far more often than the
+  // day-level precision this actually needs, but it's cheap and guarantees the day rollover is
+  // reflected within a minute of midnight without requiring a manual reload.
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 60_000);
+    return () => clearInterval(id);
+  }, []);
+  const cashRunway = computeCashRunway(entities, riseupMonthlyTransactions, checkingTotal, now);
   const firstCheckingId = useMemo(() => entities.find((e) => e.details.kind === 'checking')?.id ?? null, [entities]);
   // ground-level, same as every other water stream — the income link (gold pipe) into checking
   // also terminates at ground level (see CityIncomeLinks's own getTerrainHeight-based Y), not at
@@ -582,6 +598,7 @@ export function CityView({
           runway={cashRunway}
           hideAmounts={hideAmounts}
           formatCurrency={formatCurrency}
+          onOpenDayDetail={onOpenRunwayDayDetail}
         />
       )}
       <gridHelper
@@ -619,7 +636,7 @@ export function CityView({
           history={riseupHistory}
         />
       )}
-      <CityIncomeLinks paths={incomeLinkPaths} />
+      {!hideIncomeConnectors && <CityIncomeLinks paths={incomeLinkPaths} />}
       <CityDebtChains debtPositions={debtPositions} linkPaths={debtLinkPaths} />
       {incomeFaucetTarget && (
         <CityIncomeFaucet targetX={incomeFaucetTarget.x} targetZ={incomeFaucetTarget.z} targetY={incomeFaucetTarget.y} />

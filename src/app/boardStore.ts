@@ -31,6 +31,10 @@ interface BoardState {
   entityOrder: Record<string, number>;
   /** Mask displayed currency figures — for screen-sharing the board's shape without the exact numbers. */
   hideAmounts: boolean;
+  /** Hides the gold right-angle "circuit board" tubes CityIncomeLinks draws from the income source
+   * out to everything it funds — per explicit user request (2026-08-29) to compare the city with
+   * and without them and see which reads more clearly, not a data-privacy toggle like hideAmounts. */
+  hideIncomeConnectors: boolean;
   /** ₪ per $1 — user-editable, and optionally refreshed automatically from a live source. Every
    * entity is stored in ₪ regardless of its own display currency; this rate is what converts. */
   usdRate: number;
@@ -51,14 +55,23 @@ interface BoardState {
    * (see FamilyPanel's own "רענן תובנות" button), never fetched automatically. */
   aiInsights: string[];
   aiInsightsUpdatedAt: string | null;
+  /** A longer, plain-language narrative (a few sentences, not bullets) built via the same
+   * /api/ask endpoint the free-question feature already uses — see app/insights.ts's askQuestion
+   * and FamilyPanel's own "צור סיכום חודשי" button — with a fixed prompt instead of a user-typed
+   * question. Synced like aiInsights (survives a reload/device switch), separate field since it's
+   * a different shape (one paragraph) and refreshed independently. */
+  monthlySummary: string;
+  monthlySummaryUpdatedAt: string | null;
 
   setLayoutMode: (mode: LayoutMode) => void;
   toggleHideAmounts: () => void;
+  toggleHideIncomeConnectors: () => void;
   setUsdRate: (rate: number, updatedAt?: string) => void;
   toggleAutoUpdateUsdRate: () => void;
   setRiseupPat: (pat: string) => void;
   setOpenaiKey: (key: string) => void;
   setAiInsights: (insights: string[], updatedAt?: string) => void;
+  setMonthlySummary: (summary: string, updatedAt?: string) => void;
 
   addFamilyMember: (member: Omit<FamilyMember, 'id'>) => void;
   updateFamilyMember: (id: string, patch: Partial<Omit<FamilyMember, 'id'>>) => void;
@@ -82,6 +95,7 @@ export const useBoardStore = create<BoardState>()((set) => ({
   cityPositions: {},
   entityOrder: {},
   hideAmounts: false,
+  hideIncomeConnectors: false,
   usdRate: 3.7,
   usdRateUpdatedAt: null,
   autoUpdateUsdRate: false,
@@ -89,14 +103,18 @@ export const useBoardStore = create<BoardState>()((set) => ({
   openaiKey: '',
   aiInsights: [],
   aiInsightsUpdatedAt: null,
+  monthlySummary: '',
+  monthlySummaryUpdatedAt: null,
 
   setLayoutMode: (mode) => set({ layoutMode: mode }),
   toggleHideAmounts: () => set((state) => ({ hideAmounts: !state.hideAmounts })),
+  toggleHideIncomeConnectors: () => set((state) => ({ hideIncomeConnectors: !state.hideIncomeConnectors })),
   setUsdRate: (rate, updatedAt) => set({ usdRate: rate, usdRateUpdatedAt: updatedAt ?? new Date().toISOString() }),
   toggleAutoUpdateUsdRate: () => set((state) => ({ autoUpdateUsdRate: !state.autoUpdateUsdRate })),
   setRiseupPat: (pat) => set({ riseupPat: pat }),
   setOpenaiKey: (key) => set({ openaiKey: key }),
   setAiInsights: (insights, updatedAt) => set({ aiInsights: insights, aiInsightsUpdatedAt: updatedAt ?? new Date().toISOString() }),
+  setMonthlySummary: (summary, updatedAt) => set({ monthlySummary: summary, monthlySummaryUpdatedAt: updatedAt ?? new Date().toISOString() }),
 
   addFamilyMember: (member) =>
     set((state) => ({

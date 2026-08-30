@@ -1,0 +1,100 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  /* fully transparent, not a dimmed backdrop like the big modal panels — this is a lightweight
+     corner popup, not something that should darken/block the whole 3D city behind it. Still a
+     real full-screen element purely to catch an outside click and close. */
+  background: transparent;
+  z-index: 65;
+}
+
+.panel {
+  /* explicit physical `top`/`right` (not a flex-centered overlay, and not `inset-inline-end`,
+     which would flip sides with the page's own RTL direction) — placed in the top-right screen
+     corner specifically, regardless of reading direction, per feedback (2026-08-30) that a
+     flex-centered overlay put it dead center / on the left instead. */
+  position: fixed;
+  top: 84px;
+  right: 24px;
+  width: min(360px, 92vw);
+  max-height: 70vh;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-panel);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 18px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.title {
+  font-size: 1rem;
+  font-weight: 800;
+  margin: 0 0 3px;
+}
+
+.subtitle {
+  font-size: 0.78rem;
+  color: var(--amount-accent);
+  font-weight: 700;
+}
+
+.closeBtn {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  border-radius: var(--radius-sm);
+  width: 28px;
+  height: 28px;
+  font-size: 0.85rem;
+  flex-shrink: 0;
+}
+
+.list {
+  overflow: auto;
+  padding: 6px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.row:hover {
+  background: var(--surface-2);
+}
+
+.row + .row {
+  border-top: 1px solid var(--border);
+}
+
+.rowName {
+  font-size: 0.88rem;
+  font-weight: 600;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rowAmount {
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  font-size: 0.88rem;
+  color: var(--amount-accent);
+}

@@ -37,6 +37,11 @@ import { clearLockedCamera, loadLockedCamera, saveLockedCamera, type LockedCamer
 import { CurrencyControl } from '../components/CurrencyControl';
 import { InvestmentsTablePanel } from '../components/InvestmentsTablePanel';
 import { BudgetSplitTablePanel } from '../components/BudgetSplitTablePanel';
+import { DebtPriorityPanel } from '../components/DebtPriorityPanel';
+import { PaymentCalendarPanel } from '../components/PaymentCalendarPanel';
+import { ActionPlanPanel } from '../components/ActionPlanPanel';
+import { RunwayDayDetailPanel } from '../components/RunwayDayDetailPanel';
+import type { UpcomingCharge } from '../../domain/cashRunway';
 import { RiseupTransactionsPanel } from '../components/RiseupTransactionsPanel';
 import { RiseupSuggestionsPanel } from '../components/RiseupSuggestionsPanel';
 import { formatCurrency } from '../format';
@@ -94,6 +99,8 @@ function BoardCanvas() {
   const reorderWithinBucket = useBoardStore((s) => s.reorderWithinBucket);
   const hideAmounts = useBoardStore((s) => s.hideAmounts);
   const toggleHideAmounts = useBoardStore((s) => s.toggleHideAmounts);
+  const hideIncomeConnectors = useBoardStore((s) => s.hideIncomeConnectors);
+  const toggleHideIncomeConnectors = useBoardStore((s) => s.toggleHideIncomeConnectors);
   const { positions, regions } = useBoardLayout();
   const { fitView, setViewport } = useReactFlow();
 
@@ -110,6 +117,10 @@ function BoardCanvas() {
   const [showFamilyPanel, setShowFamilyPanel] = useState(false);
   const [showInvestmentsTable, setShowInvestmentsTable] = useState(false);
   const [showBudgetSplitTable, setShowBudgetSplitTable] = useState(false);
+  const [showDebtPriority, setShowDebtPriority] = useState(false);
+  const [showPaymentCalendar, setShowPaymentCalendar] = useState(false);
+  const [showActionPlan, setShowActionPlan] = useState(false);
+  const [runwayDayDetail, setRunwayDayDetail] = useState<UpcomingCharge[] | null>(null);
   const [showRiseupTransactions, setShowRiseupTransactions] = useState(false);
   const [showRiseupSuggestions, setShowRiseupSuggestions] = useState(false);
   const riseupPat = useBoardStore((s) => s.riseupPat);
@@ -640,6 +651,11 @@ function BoardCanvas() {
           canShareImage={canShareFiles}
           onOpenAssetTable={() => setShowInvestmentsTable(true)}
           onOpenBudgetSplitTable={() => setShowBudgetSplitTable(true)}
+          onOpenDebtPriority={() => setShowDebtPriority(true)}
+          onOpenPaymentCalendar={() => setShowPaymentCalendar(true)}
+          onOpenActionPlan={() => setShowActionPlan(true)}
+          hideIncomeConnectors={hideIncomeConnectors}
+          onToggleHideIncomeConnectors={toggleHideIncomeConnectors}
           growthForecast={growthForecastPanelData}
           onChangeForecastYears={(years) => setGrowthForecast((f) => (f ? { ...f, years } : f))}
           onChangeForecastMonthlyDeposit={(monthlyDeposit) => setGrowthForecast((f) => (f ? { ...f, monthlyDeposit } : f))}
@@ -664,6 +680,7 @@ function BoardCanvas() {
             growthForecastEntityId={growthForecast?.entityId ?? null}
             growthForecastPoints={growthForecastPoints}
             onOpen={openEditor}
+            onOpenRunwayDayDetail={setRunwayDayDetail}
           />
         ) : (
           <ReactFlow
@@ -692,6 +709,7 @@ function BoardCanvas() {
           presetName={creating?.name}
           presetRiseupLink={creating?.riseupLink}
           riseupTransactions={riseupTransactions}
+          riseupMonthlyTransactions={riseupSuggestions.monthly}
           onOpenGrowthForecast={handleOpenGrowthForecast}
           onClose={(saved) => {
             setEditingId(null);
@@ -745,6 +763,50 @@ function BoardCanvas() {
           onClose={() => setShowBudgetSplitTable(false)}
           onOpenEntity={(id) => {
             setShowBudgetSplitTable(false);
+            openEditor(id);
+          }}
+          riseupMonthlyTransactions={riseupSuggestions.monthly}
+        />
+      )}
+
+      {showDebtPriority && (
+        <DebtPriorityPanel
+          onClose={() => setShowDebtPriority(false)}
+          onOpenEntity={(id) => {
+            setShowDebtPriority(false);
+            openEditor(id);
+          }}
+        />
+      )}
+
+      {showPaymentCalendar && (
+        <PaymentCalendarPanel
+          onClose={() => setShowPaymentCalendar(false)}
+          onOpenEntity={(id) => {
+            setShowPaymentCalendar(false);
+            openEditor(id);
+          }}
+          riseupMonthlyTransactions={riseupSuggestions.monthly}
+        />
+      )}
+
+      {showActionPlan && (
+        <ActionPlanPanel
+          onClose={() => setShowActionPlan(false)}
+          onOpenEntity={(id) => {
+            setShowActionPlan(false);
+            openEditor(id);
+          }}
+          riseupMonthlyTransactions={riseupSuggestions.monthly}
+        />
+      )}
+
+      {runwayDayDetail && (
+        <RunwayDayDetailPanel
+          charges={runwayDayDetail}
+          onClose={() => setRunwayDayDetail(null)}
+          onOpenEntity={(id) => {
+            setRunwayDayDetail(null);
             openEditor(id);
           }}
         />

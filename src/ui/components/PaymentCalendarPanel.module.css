@@ -1,0 +1,259 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(4, 5, 8, 0.65);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 60;
+  padding: 24px;
+}
+
+.panel {
+  width: min(760px, 96vw);
+  max-height: 90vh;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-panel);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.title {
+  font-size: 1.15rem;
+  font-weight: 800;
+  margin: 0 0 4px;
+}
+
+.subtitle {
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+
+.closeBtn {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  border-radius: var(--radius-sm);
+  width: 32px;
+  height: 32px;
+  font-size: 0.9rem;
+  flex-shrink: 0;
+}
+
+.empty {
+  padding: 48px 24px;
+  text-align: center;
+  color: var(--text-dim);
+}
+
+.body {
+  overflow: auto;
+  flex: 1;
+  min-height: 0;
+  padding: 16px 24px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.weekdayRow,
+.grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+}
+
+.weekdayHead {
+  text-align: center;
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  font-weight: 700;
+  padding-bottom: 2px;
+}
+
+.nextMonthHeading {
+  margin-top: 4px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--border);
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.cell {
+  aspect-ratio: 1;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  cursor: pointer;
+  padding: 4px 2px;
+  min-width: 0;
+}
+
+.cellBlank {
+  border-color: transparent;
+  background: transparent;
+  cursor: default;
+}
+
+.cell:hover:not(.cellBlank) {
+  border-color: var(--accent);
+}
+
+.cellPast {
+  opacity: 0.55;
+}
+
+.cellToday {
+  border-color: var(--accent);
+  border-width: 2px;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+.cellSelected {
+  background: color-mix(in srgb, var(--accent) 20%, var(--surface-2));
+}
+
+.cellDayNum {
+  font-size: 0.82rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.cellDots {
+  display: flex;
+  gap: 3px;
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.dotIncome {
+  background: var(--health-good);
+}
+
+.dotOutflow {
+  background: var(--health-risk);
+}
+
+.cellNet {
+  font-size: 0.6rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.cellNetPositive {
+  color: var(--health-good);
+}
+
+.cellNetNegative {
+  color: var(--health-risk);
+}
+
+.detail {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  padding: 14px 18px;
+}
+
+.detailHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.detailTitle {
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.detailNet {
+  font-size: 0.9rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.detailEmpty {
+  color: var(--text-dim);
+  font-size: 0.84rem;
+  padding: 6px 0;
+}
+
+.eventRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 8px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.eventRow:hover {
+  background: var(--surface-3);
+}
+
+.eventRow + .eventRow {
+  border-top: 1px solid var(--border);
+}
+
+.eventIcon {
+  font-size: 1.3rem;
+  flex-shrink: 0;
+}
+
+.eventName {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.94rem;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.eventAmount {
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  font-size: 0.94rem;
+}
+
+.income {
+  color: var(--health-good);
+}
+
+.outflow {
+  color: var(--text);
+}
+
+.footnote {
+  padding: 12px 24px;
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  border-top: 1px solid var(--border);
+}

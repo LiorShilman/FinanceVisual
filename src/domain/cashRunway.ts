@@ -1,5 +1,5 @@
 import type { FinancialEntity } from './entity';
-import type { MonthlyTransactions } from './riseupSuggestions';
+import { deriveRiseupDay, type MonthlyTransactions } from './riseupSuggestions';
 
 export interface UpcomingCharge {
   entityId: string;
@@ -21,20 +21,9 @@ export interface CashRunway {
   ratio: number;
 }
 
-function dayOfMonth(iso: string): number {
-  return new Date(iso).getDate();
-}
-
-/** The middle value, not the mean — one early/late outlier (a salary that landed a day early over
- * a weekend, a bill charged a few days late once) shouldn't drag the whole projection off the
- * date it actually lands on every other month. */
-function medianDay(days: number[]): number {
-  const sorted = [...days].sort((a, b) => a - b);
-  const mid = Math.floor(sorted.length / 2);
-  return sorted.length % 2 === 0 ? Math.round((sorted[mid - 1] + sorted[mid]) / 2) : sorted[mid];
-}
-
-function daysInMonth(year: number, monthIndex0: number): number {
+// exported for domain/paymentCalendar.ts, which needs the same "how many days does this month
+// actually have" logic to build a whole-month view, not just the next-occurrence projection below.
+export function daysInMonth(year: number, monthIndex0: number): number {
   return new Date(year, monthIndex0 + 1, 0).getDate();
 }
 
@@ -54,7 +43,9 @@ function daysBetween(from: Date, to: Date): number {
   return Math.round((to.getTime() - from.getTime()) / (1000 * 60 * 60 * 24));
 }
 
-function amountFieldFor(details: FinancialEntity['details']): number | null {
+// exported for domain/paymentCalendar.ts — same "which field actually represents this entity's
+// recurring checking withdrawal" question, reused rather than re-decided per caller.
+export function amountFieldFor(details: FinancialEntity['details']): number | null {
   switch (details.kind) {
     case 'expense':
       return details.monthlyAmount;
@@ -79,21 +70,15 @@ function amountFieldFor(details: FinancialEntity['details']): number | null {
 /** Manually-entered fallback day (see domain/entity.ts's DAY_OF_MONTH) — only the expense/debt/
  * insurance/savings/investment kinds carry a chargeDay field, so this has to read past the
  * discriminated union the same way getLinkedFieldValue does, rather than switching on `.kind`
- * again for one field. */
-function manualChargeDay(details: FinancialEntity['details']): number | undefined {
+ * again for one field. Exported for domain/paymentCalendar.ts, same reason as amountFieldFor. */
+export function manualChargeDay(details: FinancialEntity['details']): number | undefined {
   return (details as { chargeDay?: number }).chargeDay;
 }
 
-const RUNWAY_ENTITY_KINDS = new Set(['expense', 'debt', 'insurance', 'savings', 'investment']);
-
-/** This business's own real historical day-of-month, if RiseUp has any matching transactions for
- * it — the more reliable source whenever it's available (see manualChargeDay's own doc-comment on
- * why the manual field is only ever a fallback). */
-function riseupDerivedDay(businessNames: string[], transactions: MonthlyTransactions['transactions'][number][], wantIncome: boolean): number | undefined {
-  const names = new Set(businessNames);
-  const days = transactions.filter((t) => t.isIncome === wantIncome && names.has(t.businessName)).map((t) => dayOfMonth(t.transactionDate));
-  return days.length > 0 ? medianDay(days) : undefined;
-}
+// exported for domain/paymentCalendar.ts — the whole-month calendar shows every one of these kinds
+// plus income (which it handles separately, since income's own amount/day fields live directly on
+// IncomeDetails rather than needing amountFieldFor/manualChargeDay at all).
+export const RUNWAY_ENTITY_KINDS = new Set(['expense', 'debt', 'insurance', 'savings', 'investment']);
 
 /**
  * Projects, from today, when the next salary lands and what's due to be charged before it —
@@ -101,11 +86,18 @@ function riseupDerivedDay(businessNames: string[], transactions: MonthlyTransact
  * next month's. "Charged" includes recurring savings/investment transfers, not just bills — a
  * scheduled deposit out of checking is exactly as real a withdrawal as a bill payment for this
  * purpose. Each entity's real-world day comes from its own RiseUp transaction history where
- * available (riseupDerivedDay), falling back to a manually-entered day (income's payDay,
- * expense/debt/insurance/savings/investment's chargeDay) for anyone without an active RiseUp
- * subscription, or for an obligation like alimony that never shows up as a RiseUp transaction at
- * all. Returns null when nothing at all anchors a payday date — no fabricated payday; the caller
- * (CityCashRunway) simply doesn't render anything in that case.
+ * available (deriveRiseupDay, see domain/riseupSuggestions.ts), falling back to a manually-entered
+ * day (income's payDay, expense/debt/insurance/savings/investment's chargeDay) for anyone without
+ * an active RiseUp subscription, or for an obligation like alimony that never shows up as a RiseUp
+ * transaction at all. Returns null when nothing at all anchors a payday date — no fabricated
+ * payday; the caller (CityCashRunway) simply doesn't render anything in that case.
+ *
+ * Deliberately fixed-only: an entity with no resolved date at all (no RiseUp history and no manual
+ * chargeDay/payDay) is simply left out, not folded in as a rough prorated/average guess — every
+ * number in `recommendedBalance` should trace back to a real, named, dated obligation the caller
+ * can see in `upcomingCharges`, not a silently-included estimate. Same reasoning excludes RiseUp's
+ * own `variable`-tagged transaction history entirely — a historical daily-spend average is exactly
+ * the kind of invisible, unauditable number this was kept away from.
  */
 export function computeCashRunway(
   entities: FinancialEntity[],
@@ -118,7 +110,7 @@ export function computeCashRunway(
   let payDay: number | undefined;
   for (const entity of entities) {
     if (entity.details.kind !== 'income') continue;
-    payDay = (entity.riseupLink && riseupDerivedDay(entity.riseupLink.businessNames, allTransactions, true)) ?? entity.details.payDay;
+    payDay = (entity.riseupLink && deriveRiseupDay(entity.riseupLink.businessNames, allTransactions, true)) ?? entity.details.payDay;
     if (payDay !== undefined) break;
   }
   if (payDay === undefined) return null;
@@ -127,35 +119,28 @@ export function computeCashRunway(
   const daysUntilPayday = daysBetween(today, nextPaydayDate);
 
   const upcomingCharges: UpcomingCharge[] = [];
-  let unanchoredMonthlyTotal = 0;
 
   for (const entity of entities) {
     if (!RUNWAY_ENTITY_KINDS.has(entity.details.kind)) continue;
     const amount = amountFieldFor(entity.details);
-    if (amount === null) continue;
+    // 0 is a real, common case for a savings/investment entity with no regular transfer set up
+    // (its balance just sits there) — not a charge that's ever actually going to hit checking, so
+    // it shouldn't get a beacon on the runway at all, no matter what date a stray RiseUp
+    // transaction or a leftover manual chargeDay happens to resolve to (reported 2026-08-29: a
+    // zero-contribution rainy-day savings entity was showing up on the 1st of the month for
+    // exactly this reason).
+    if (amount === null || amount === 0) continue;
 
     const chargeDay =
-      (entity.riseupLink && riseupDerivedDay(entity.riseupLink.businessNames, allTransactions, false)) ?? manualChargeDay(entity.details);
-    if (chargeDay === undefined) {
-      unanchoredMonthlyTotal += amount;
-      continue;
-    }
+      (entity.riseupLink && deriveRiseupDay(entity.riseupLink.businessNames, allTransactions, false)) ?? manualChargeDay(entity.details);
+    if (chargeDay === undefined) continue; // no known date at all — left out, not estimated
     const date = projectNextOccurrence(today, chargeDay);
     if (date > nextPaydayDate) continue;
     upcomingCharges.push({ entityId: entity.id, label: entity.name, amount, date, daysFromToday: daysBetween(today, date) });
   }
   upcomingCharges.sort((a, b) => a.date.getTime() - b.date.getTime());
 
-  const daysThisMonth = daysInMonth(today.getFullYear(), today.getMonth());
-  const unanchoredShare = unanchoredMonthlyTotal * (daysUntilPayday / daysThisMonth);
-
-  const variableAmounts = allTransactions.filter((t) => t.actualType === 'variable').map((t) => Math.abs(t.amount));
-  const totalDaysSpanned = monthly.length * daysThisMonth;
-  const variablePerDay = totalDaysSpanned > 0 ? variableAmounts.reduce((a, b) => a + b, 0) / totalDaysSpanned : 0;
-  const variableEstimate = variablePerDay * daysUntilPayday;
-
-  const fixedTotal = upcomingCharges.reduce((sum, c) => sum + c.amount, 0);
-  const recommendedBalance = fixedTotal + unanchoredShare + variableEstimate;
+  const recommendedBalance = upcomingCharges.reduce((sum, c) => sum + c.amount, 0);
   const ratio = recommendedBalance > 0 ? Math.min(1.4, checkingTotal / recommendedBalance) : 0;
 
   return { nextPaydayDate, daysUntilPayday, upcomingCharges, recommendedBalance, currentBalance: checkingTotal, ratio };

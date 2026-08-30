@@ -15,7 +15,11 @@ interface Props {
   gapLabel: string;
 }
 
-const RADIUS = 1.5;
+const RADIUS = 1.85;
+// lifts the whole gauge a bit further above the tree than `baseY` alone puts it (see the caller's
+// own comment on baseY) — per explicit feedback (2026-08-29) that it read as sitting too low/small
+// against the tree's own canopy once the tree itself grew.
+const EXTRA_LIFT = 0.6;
 // the dial reads 0–6 months — the top of the standard "3–6 months" recommended range, not some
 // arbitrary round number past it. Capping the scale exactly there means *hitting* the
 // recommendation actually pins the needle at the far end of the dial, instead of leaving it
@@ -61,7 +65,7 @@ export function CityEmergencyGauge({ x, z, baseY, monthsOfRunway, gapLabel }: Pr
   });
 
   return (
-    <group position={[x, baseY, z]}>
+    <group position={[x, baseY + EXTRA_LIFT, z]}>
       {/* the dial face — near-black base so the color zones (and the needle) are what actually
           reads, not a bright disc. */}
       <mesh frustumCulled={false}>
@@ -92,23 +96,23 @@ export function CityEmergencyGauge({ x, z, baseY, monthsOfRunway, gapLabel }: Pr
           cone's own 3D thickness for the bright one to actually show past it. */}
       <group ref={needleRef} position={[0, 0, 0.02]}>
         <mesh position={[0, RADIUS * 0.42, 0]} frustumCulled={false}>
-          <coneGeometry args={[0.1, RADIUS * 0.86, 4]} />
+          <coneGeometry args={[RADIUS * 0.067, RADIUS * 0.86, 4]} />
           <meshBasicMaterial color="#ffe08a" />
         </mesh>
       </group>
       <mesh position={[0, 0, 0.03]} rotation={[Math.PI / 2, 0, 0]} frustumCulled={false}>
-        <cylinderGeometry args={[0.14, 0.14, 0.12, 10]} />
+        <cylinderGeometry args={[RADIUS * 0.095, RADIUS * 0.095, RADIUS * 0.08, 10]} />
         <meshStandardMaterial color="#1a1c24" roughness={0.6} />
       </mesh>
 
       {/* clear of the dial's own rounded top (y=RADIUS) — sitting at 0.55×RADIUS put the text
           overlapping the dial face itself, cutting it off mid-word. */}
       <Billboard position={[0, RADIUS + 0.45, 0]}>
-        <Text fontSize={0.42} color="#f1f3f8" anchorX="center" anchorY="bottom" outlineWidth={0.02} outlineColor="#0a0c11" fontWeight="bold" frustumCulled={false}>
+        <Text fontSize={0.5} color="#f1f3f8" anchorX="center" anchorY="bottom" outlineWidth={0.022} outlineColor="#0a0c11" fontWeight="bold" frustumCulled={false}>
           {monthsOfRunway === null ? 'אין נתוני הוצאות' : `${displayMonths.toFixed(1)} חודשי שרידות`}
         </Text>
         {gapLabel !== '' && (
-          <Text position={[0, -0.55, 0]} fontSize={0.34} color="#ffe0a3" anchorX="center" anchorY="top" outlineWidth={0.016} outlineColor="#0a0c11" fontWeight="bold" frustumCulled={false}>
+          <Text position={[0, -0.6, 0]} fontSize={0.4} color="#ffe0a3" anchorX="center" anchorY="top" outlineWidth={0.018} outlineColor="#0a0c11" fontWeight="bold" frustumCulled={false}>
             {gapLabel}
           </Text>
         )}
