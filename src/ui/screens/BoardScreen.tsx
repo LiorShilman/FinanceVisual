@@ -40,6 +40,8 @@ import { BudgetSplitTablePanel } from '../components/BudgetSplitTablePanel';
 import { DebtPriorityPanel } from '../components/DebtPriorityPanel';
 import { PaymentCalendarPanel } from '../components/PaymentCalendarPanel';
 import { ActionPlanPanel } from '../components/ActionPlanPanel';
+import { RunwayDayDetailPanel } from '../components/RunwayDayDetailPanel';
+import type { UpcomingCharge } from '../../domain/cashRunway';
 import { RiseupTransactionsPanel } from '../components/RiseupTransactionsPanel';
 import { RiseupSuggestionsPanel } from '../components/RiseupSuggestionsPanel';
 import { formatCurrency } from '../format';
@@ -118,6 +120,7 @@ function BoardCanvas() {
   const [showDebtPriority, setShowDebtPriority] = useState(false);
   const [showPaymentCalendar, setShowPaymentCalendar] = useState(false);
   const [showActionPlan, setShowActionPlan] = useState(false);
+  const [runwayDayDetail, setRunwayDayDetail] = useState<UpcomingCharge[] | null>(null);
   const [showRiseupTransactions, setShowRiseupTransactions] = useState(false);
   const [showRiseupSuggestions, setShowRiseupSuggestions] = useState(false);
   const riseupPat = useBoardStore((s) => s.riseupPat);
@@ -677,6 +680,7 @@ function BoardCanvas() {
             growthForecastEntityId={growthForecast?.entityId ?? null}
             growthForecastPoints={growthForecastPoints}
             onOpen={openEditor}
+            onOpenRunwayDayDetail={setRunwayDayDetail}
           />
         ) : (
           <ReactFlow
@@ -794,6 +798,17 @@ function BoardCanvas() {
             openEditor(id);
           }}
           riseupMonthlyTransactions={riseupSuggestions.monthly}
+        />
+      )}
+
+      {runwayDayDetail && (
+        <RunwayDayDetailPanel
+          charges={runwayDayDetail}
+          onClose={() => setRunwayDayDetail(null)}
+          onOpenEntity={(id) => {
+            setRunwayDayDetail(null);
+            openEditor(id);
+          }}
         />
       )}
     </div>

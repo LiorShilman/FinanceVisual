@@ -2,7 +2,7 @@ import { useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { Billboard, Text } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
-import type { CashRunway } from '../../domain/cashRunway';
+import type { CashRunway, UpcomingCharge } from '../../domain/cashRunway';
 import { HEALTH_COLORS } from '../../domain/health';
 import { getFlowTexture } from './cityFlowTexture';
 import { computeCheckingDeckY } from './cityCheckingLayout';
@@ -15,6 +15,13 @@ interface Props {
   runway: CashRunway | null;
   hideAmounts: boolean;
   formatCurrency: (value: number) => string;
+  /** A day with more than one charge shows only a compact clickable summary on the track itself
+   * (see the day-cluster rendering below) — this opens the real detail list as a proper 2D panel
+   * (owned outside the Canvas, see CityView/BoardScreen) instead of trying to stack an unbounded
+   * number of rows in 3D space, which either overlapped (one charge per beacon, the original bug)
+   * or grew tall enough to run into a different day's own beacon (an early capped-rows attempt,
+   * replaced per feedback 2026-08-30 before shipping). */
+  onOpenDayDetail: (charges: UpcomingCharge[]) => void;
 }
 
 // a fixed physical strip, not one that stretches with however many days happen to be left until
@@ -48,6 +55,11 @@ const GOLD = '#ffd166';
 // CANOPY_PALETTE.sapling.light) — a solid pale white read as flat/generic against the city's own
 // palette; this ties the plane visually into the same "growth" green already meaningful elsewhere.
 const PLANE_COLOR = '#8fd671';
+// a visibly thicker ring for a day with more than one charge — a glanceable "there's more than one
+// thing here" signal even before reading any text, the same way a bigger badge reads as "more" at
+// a distance.
+const SINGLE_TORUS_ARGS: [number, number, number, number] = [0.4, 0.055, 8, 24];
+const CLUSTER_TORUS_ARGS: [number, number, number, number] = [0.48, 0.09, 8, 24];
 
 /** Passed as every label Text's own `onSync` below to make it always draw on top of the tube,
  * instead of getting cut off wherever the tube's own opaque geometry happens to sit nearer the
@@ -148,7 +160,7 @@ function PlaneMesh() {
  * short (red). Renders nothing when `runway` is null — no linked/manually-dated income entity
  * means there's no real payday to anchor any of this to.
  */
-export function CityCashRunway({ x, zNear, zFar, runway, hideAmounts, formatCurrency }: Props) {
+export function CityCashRunway({ x, zNear, zFar, runway, hideAmounts, formatCurrency, onOpenDayDetail }: Props) {
   const startY = computeCheckingDeckY(x, zNear, zFar);
 
   // anchored at zNear, extending toward even smaller Z — not zFar extending toward larger Z. The
@@ -242,10 +254,27 @@ export function CityCashRunway({ x, zNear, zFar, runway, hideAmounts, formatCurr
   // else that doesn't animate (the countdown label below) anchors itself to.
   const planePoint = curve.getPointAt(planeT);
 
-  const beacons = runway.upcomingCharges.map((charge) => {
-    const t = Math.min(1, Math.max(0, (runway.daysUntilPayday - charge.daysFromToday) / MAX_DAYS));
-    return { charge, point: curve.getPointAt(t) };
-  });
+  // Grouped by daysFromToday, not one beacon per charge — two charges landing on the same day
+  // resolve to the exact same point on the curve (t depends only on daysFromToday), so rendering
+  // them as independent beacons stacked every one directly on top of the last, their Billboards
+  // fully overlapping and unreadable (reported 2026-08-30). A shared day cluster instead renders
+  // one ring (see CLUSTER_TORUS_ARGS below) and stacks every charge that day as its own row inside
+  // one Billboard — see the render below's own doc-comment for the row-stacking approach.
+  const dayClusters = useMemo(() => {
+    const byDay = new Map<number, UpcomingCharge[]>();
+    for (const charge of runway.upcomingCharges) {
+      if (!byDay.has(charge.daysFromToday)) byDay.set(charge.daysFromToday, []);
+      byDay.get(charge.daysFromToday)!.push(charge);
+    }
+    return [...byDay.entries()].map(([daysFromToday, dayCharges]) => {
+      const t = Math.min(1, Math.max(0, (runway.daysUntilPayday - daysFromToday) / MAX_DAYS));
+      // biggest first — when a cluster has to be capped (see MAX_CLUSTER_ROWS below), the charges
+      // actually worth seeing individually are the large ones, not whichever happened to sort
+      // first by entity id.
+      const charges = [...dayCharges].sort((a, b) => b.amount - a.amount);
+      return { daysFromToday, charges, point: curve.getPointAt(t) };
+    });
+  }, [runway, curve]);
 
   const arrivalPoint = curve.getPointAt(0);
 
@@ -319,47 +348,85 @@ export function CityCashRunway({ x, zNear, zFar, runway, hideAmounts, formatCurr
         )}
       </Billboard>
 
-      {beacons.map(({ charge, point }) => (
-        <group key={charge.entityId} position={[point.x, point.y, point.z]}>
-          <mesh rotation={[Math.PI / 2, 0, 0]} frustumCulled={false}>
-            <torusGeometry args={[0.4, 0.055, 8, 24]} />
-            <meshStandardMaterial color={GOLD} emissive={GOLD} emissiveIntensity={0.5} roughness={0.4} metalness={0.2} />
-          </mesh>
-          <Billboard position={[0, -0.85, 0]}>
-            {!hideAmounts && (
-              <Text
-                fontSize={0.36}
-                color={GOLD}
-                anchorX="center"
-                anchorY="top"
-                outlineWidth={0.015}
-                outlineColor="#0a0c11"
-                fontWeight="bold"
-                frustumCulled={false}
-                onSync={keepLabelOnTop}
-                renderOrder={10}
-              >
-                {formatCurrency(charge.amount)}
-              </Text>
-            )}
-            <Text
-              position={[0, hideAmounts ? 0 : -0.46, 0]}
-              fontSize={0.34}
-              color="#f1f3f8"
-              anchorX="center"
-              anchorY="top"
-              outlineWidth={0.02}
-              outlineColor="#0a0c11"
-              fontWeight="bold"
+      {dayClusters.map(({ daysFromToday, charges, point }) => {
+        const isCluster = charges.length > 1;
+        const clusterTotal = charges.reduce((sum, c) => sum + c.amount, 0);
+        return (
+          <group key={daysFromToday} position={[point.x, point.y, point.z]}>
+            <mesh
+              rotation={[Math.PI / 2, 0, 0]}
               frustumCulled={false}
-              onSync={keepLabelOnTop}
-              renderOrder={10}
+              onClick={isCluster ? (e) => (e.stopPropagation(), onOpenDayDetail(charges)) : undefined}
             >
-              {`${charge.label} · ${charge.date.getDate()}/${charge.date.getMonth() + 1}`}
-            </Text>
-          </Billboard>
-        </group>
-      ))}
+              <torusGeometry args={isCluster ? CLUSTER_TORUS_ARGS : SINGLE_TORUS_ARGS} />
+              <meshStandardMaterial color={GOLD} emissive={GOLD} emissiveIntensity={0.5} roughness={0.4} metalness={0.2} />
+            </mesh>
+            {isCluster ? (
+              // two or more charges landing the same day used to render as fully independent
+              // Billboards at the identical point — every one of them facing the camera from
+              // exactly the same spot, so their text simply overlapped into an unreadable stack
+              // (reported 2026-08-30). Stacking every charge as its own row was tried next, but an
+              // unbounded stack on a genuinely busy day would grow tall enough to run into a
+              // *different* day's own beacon (feedback before that ever shipped). Settled instead
+              // on a single clickable summary line that opens the real list as a proper 2D panel
+              // (see CityView/BoardScreen's own RunwayDayDetailPanel) — 2D list layout handles "how
+              // many items" far better than stacking text meshes in 3D space ever could. A single
+              // charge that day is unaffected — still rendered directly below exactly as before.
+              <Billboard position={[0, -0.85, 0]}>
+                <Text
+                  fontSize={0.34}
+                  color={GOLD}
+                  anchorX="center"
+                  anchorY="bottom"
+                  outlineWidth={0.016}
+                  outlineColor="#0a0c11"
+                  fontWeight="bold"
+                  frustumCulled={false}
+                  onSync={keepLabelOnTop}
+                  renderOrder={10}
+                  onClick={(e) => (e.stopPropagation(), onOpenDayDetail(charges))}
+                >
+                  {hideAmounts ? `${charges.length} חיובים` : `${charges.length} חיובים · סה"כ ${formatCurrency(clusterTotal)}`}
+                </Text>
+              </Billboard>
+            ) : (
+              <Billboard position={[0, -0.85, 0]}>
+                {!hideAmounts && (
+                  <Text
+                    fontSize={0.36}
+                    color={GOLD}
+                    anchorX="center"
+                    anchorY="top"
+                    outlineWidth={0.015}
+                    outlineColor="#0a0c11"
+                    fontWeight="bold"
+                    frustumCulled={false}
+                    onSync={keepLabelOnTop}
+                    renderOrder={10}
+                  >
+                    {formatCurrency(charges[0].amount)}
+                  </Text>
+                )}
+                <Text
+                  position={[0, hideAmounts ? 0 : -0.46, 0]}
+                  fontSize={0.34}
+                  color="#f1f3f8"
+                  anchorX="center"
+                  anchorY="top"
+                  outlineWidth={0.02}
+                  outlineColor="#0a0c11"
+                  fontWeight="bold"
+                  frustumCulled={false}
+                  onSync={keepLabelOnTop}
+                  renderOrder={10}
+                >
+                  {`${charges[0].label} · ${charges[0].date.getDate()}/${charges[0].date.getMonth() + 1}`}
+                </Text>
+              </Billboard>
+            )}
+          </group>
+        );
+      })}
 
       {/* the arrival marker, right where the track meets the bridge — gently pulsing (see
           CityRiskAura.tsx's own sine pulse) so "this is where the plane lands" reads clearly even

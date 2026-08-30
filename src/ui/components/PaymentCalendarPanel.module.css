@@ -84,6 +84,15 @@
   padding-bottom: 2px;
 }
 
+.nextMonthHeading {
+  margin-top: 4px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--border);
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--accent);
+}
+
 .cell {
   aspect-ratio: 1;
   border-radius: var(--radius-sm);
