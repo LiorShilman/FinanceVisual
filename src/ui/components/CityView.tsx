@@ -52,6 +52,7 @@ import { CityFamilyAvatar } from './CityFamilyAvatar';
 import { CityFountainMesh } from './CityFountainMesh';
 import { CityGivingPillarMesh } from './CityGivingPillarMesh';
 import { CityGoalMesh } from './CityGoalMesh';
+import { CityCashFlowCurrent } from './CityCashFlowCurrent';
 import { CityGround } from './CityGround';
 import { CityGrowthRings } from './CityGrowthRings';
 import { CityIndependenceDome } from './CityIndependenceDome';
@@ -373,6 +374,17 @@ export function CityView({
     return { x, z, y };
   }, [buildings]);
   const budgetSplit = useMemo(() => computeBudgetSplit(entities), [entities]);
+  // CityCashFlowCurrent's own speed/direction input — a *ratio* of income, not a ₪ amount (see its
+  // own Props doc-comment on why a fixed ₪ threshold badly undersold a real ~28% savings rate).
+  // Positive: the real share of income reaching savings/giving. Negative: overspend's own share of
+  // income, once committed spending (needs+wants+savings) already exceeds it — the same condition
+  // budgetSplit's own `overCommitted` flags.
+  const savingsOrDeficitRatio =
+    budgetSplit.income > 0
+      ? budgetSplit.overCommitted
+        ? -(budgetSplit.needs + budgetSplit.wants + budgetSplit.savings - budgetSplit.income) / budgetSplit.income
+        : budgetSplit.savings / budgetSplit.income
+      : 0;
   // one avatar per family member, hovering above the centroid of the buildings they own — not
   // one per owned entity, which would clutter the city fast for anyone owning several things.
   // Members who own nothing yet (or aren't tied to any entity) render no avatar at all. The
@@ -509,6 +521,7 @@ export function CityView({
       <directionalLight position={[-10, 14, -10]} intensity={isTopView ? 1.4 : 0.85} color="#6c8dff" />
 
       <CityGround groundCenter={groundCenter} groundSizeX={groundSizeX} groundSizeZ={groundSizeZ} water={water} valley={valley} />
+      <CityCashFlowCurrent center={bounds.center} width={bounds.width} depth={bounds.depth} savingsOrDeficitRatio={savingsOrDeficitRatio} />
       <CityIndependenceDome
         x={bounds.center[0]}
         z={bounds.center[1]}
