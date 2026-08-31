@@ -16,6 +16,14 @@ interface Props {
    * `overCommitted` flags). A *ratio*, not a ₪ amount — a family earning 8,000 and saving 20% should
    * read exactly as "fast" as one earning 25,000 saving the same 20%. */
   savingsOrDeficitRatio: number;
+  /** 0..1 — what share of that savings rate is real growth (investment/pension at a meaningful
+   * expected return) versus just parked in something near-zero-yield (domain/savingsRate.ts's own
+   * computeSavingsGrowthShare). The same ₪ counts identically toward `savingsOrDeficitRatio` either
+   * way — this is what still lets the difference show up, as this border's own hue (teal = mostly
+   * preserved, green = mostly real growth) rather than a second speed/direction axis. Only matters
+   * while actually saving forward; a deficit stays a flat risk-red regardless — there's no "quality
+   * of savings" to weigh when there's no surplus to begin with. */
+  savingsGrowthShare: number;
 }
 
 // texture-space units/second at the slowest (near-zero flow) and fastest (a strong savings rate or
@@ -32,6 +40,14 @@ const MARGIN = 4; // how far outside the ground's own edge the border sits
 // points per edge — enough that a CatmullRom curve's own natural corner-rounding stays tight/subtle
 // rather than visibly bulging past the actual corner.
 const POINTS_PER_EDGE = 14;
+// the same teal CityGround already uses for checking's own water stream (WATER_STREAM_COLOR.checking
+// there) — "safe/liquid, not growing" is exactly the meaning checking already carries in this city,
+// so reusing it for "savings parked without real growth" is consistent rather than inventing an
+// unrelated third color. HEALTH_COLORS.good is the same green every other real-growth signal in the
+// city already uses.
+const PRESERVE_COLOR = new THREE.Color('#2fb0a0');
+const GROWTH_COLOR = new THREE.Color(HEALTH_COLORS.good);
+const RISK_COLOR = new THREE.Color(HEALTH_COLORS.risk);
 
 // A real, deliberately *separate* texture instance from cityFlowTexture.ts's own shared singleton
 // (used by every water/valley stream and the cash-runway tube): that one's speed is fixed and
@@ -71,10 +87,13 @@ function getIndependentFlowTexture(): THREE.CanvasTexture {
  * single point-to-point stream cutting across the grass toward the lake) both read badly in
  * practice (reported 2026-08-30/31 — disjointed jumping bars, then still "not good"); a perimeter
  * loop sidesteps both problems entirely: no path-finding through clutter, no risk of an odd-looking
- * diagonal crossing the whole board. Circulates faster and brighter green with a real savings rate,
- * reverses direction and turns red when spending already outpaces income.
+ * diagonal crossing the whole board. Circulates faster with a real savings rate, reverses direction
+ * and turns red when spending already outpaces income — and while saving forward, its hue itself
+ * shifts teal→green by how much of that savings rate is real growth versus just parked money (see
+ * Props.savingsGrowthShare), per explicit request (2026-08-31) that the same ₪ shouldn't read
+ * identically whether it's earning 1% or 7%.
  */
-export function CityCashFlowCurrent({ center, width, depth, savingsOrDeficitRatio }: Props) {
+export function CityCashFlowCurrent({ center, width, depth, savingsOrDeficitRatio, savingsGrowthShare }: Props) {
   const texture = getIndependentFlowTexture();
 
   const geometry = useMemo(() => {
@@ -106,7 +125,13 @@ export function CityCashFlowCurrent({ center, width, depth, savingsOrDeficitRati
   const direction = savingsOrDeficitRatio >= 0 ? 1 : -1;
   const magnitude = Math.min(1, Math.abs(savingsOrDeficitRatio) / FULL_SPEED_RATIO);
   const speed = (MIN_SPEED + magnitude * (MAX_SPEED - MIN_SPEED)) * direction;
-  const color = savingsOrDeficitRatio >= 0 ? HEALTH_COLORS.good : HEALTH_COLORS.risk;
+  // teal→green by growth share while actually saving forward; a flat risk-red for a deficit — see
+  // this component's own Props.savingsGrowthShare doc-comment on why there's no "quality" axis to
+  // weigh when there's no surplus to begin with.
+  const color = useMemo(
+    () => (savingsOrDeficitRatio >= 0 ? PRESERVE_COLOR.clone().lerp(GROWTH_COLOR, savingsGrowthShare) : RISK_COLOR),
+    [savingsOrDeficitRatio, savingsGrowthShare],
+  );
 
   useFrame((_, delta) => {
     texture.offset.x -= delta * speed;

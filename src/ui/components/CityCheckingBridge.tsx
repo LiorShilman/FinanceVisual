@@ -68,6 +68,17 @@ interface Props {
   // district's own ground label does regardless of hideAmounts.
   amountLabel: string;
   availableLabel: string;
+  // the complement of availableLabel — how much of the balance is already spoken for by the
+  // desired minimum (balance itself when the balance doesn't even reach the minimum), shown
+  // alongside it so the split the deck's own two-tone surface already shows visually has a number
+  // to match, not just "how much is free" on its own (per explicit request 2026-08-31).
+  reservedLabel: string;
+  // how much of monthly income is *already* flowing to savings/investment (domain/budgetSplit.ts's
+  // own savingsContribution) — a genuinely different question from reservedLabel/availableLabel
+  // (both plain balance-snapshot splits): this is a flow/rate, "how much is already working for
+  // you every month", shown so it's visible right next to "how much more room there still is" per
+  // explicit follow-up request (2026-08-31) that showing only the balance split wasn't enough.
+  savingsLabel: string;
   // share of the total balance that's actually free for investment (balance minus the desired
   // minimum, see getCheckingAvailableForInvestment) — splits the deck's own surface into the same
   // two zones the numbers above already describe, instead of one flat color that says nothing
@@ -93,8 +104,19 @@ const CHECKING_COLOR = '#2fb0a0';
 // (an unlit meshBasicMaterial) never had emissive to begin with. A pre-darkened structural variant
 // keeps the same hue but lands back on the same muted teal once the wireframe/highlights lighten it.
 const CHECKING_STRUCTURE_COLOR = '#1c7d70';
-// the reserved/"don't touch" portion of the deck surface.
+// the reserved/"don't touch" portion of the deck surface — dark and muted since it's a lit
+// meshStandardMaterial, reading lighter under the scene's own lights than its raw hex suggests.
 const RESERVED_COLOR = '#3a4a46';
+// the reserved *label's* own color — RESERVED_COLOR itself, shown flat/unlit exactly as authored
+// the way every text label in this city is, would read as a near-illegible dark smudge against the
+// night sky. The same amber this app's health vocabulary already uses for "caution" (see
+// domain/health.ts's HEALTH_COLORS.warning) instead — legible, and "money you shouldn't touch"
+// reads naturally as a caution color the same way an amber gauge zone already does elsewhere.
+const RESERVED_TEXT_COLOR = '#e2a33d';
+// the same growth-green domain/health.ts's own HEALTH_COLORS.good and CityCashFlowCurrent's own
+// ground border already use for "real money-building progress" — the savings-rate label is exactly
+// that same signal, just on this bridge instead of the ground.
+const SAVINGS_TEXT_COLOR = '#34b06b';
 // the available-for-investment portion — deliberately its own hue, not the same teal the rails
 // already own (a first pass used teal for both, and with the rails sitting right on top of the
 // available zone in the same hue, the two blended into one shapeless mass with no visible edge
@@ -130,6 +152,8 @@ export function CityCheckingBridge({
   zFar,
   amountLabel,
   availableLabel,
+  reservedLabel,
+  savingsLabel,
   availableRatio,
   minX,
   maxX,
@@ -305,11 +329,37 @@ export function CityCheckingBridge({
         <Text position={[0, -0.8, 0]} fontSize={0.72} color="#f1f3f8" anchorX="center" anchorY="top" outlineWidth={0.03} outlineColor="#0a0c11" fontWeight="bold" frustumCulled={false}>
           עו״ש
         </Text>
-        {availableLabel !== '' && (
-          <Text position={[0, -1.7, 0]} fontSize={0.54} color={CHECKING_COLOR} anchorX="center" anchorY="top" outlineWidth={0.022} outlineColor="#0a0c11" fontWeight="bold" frustumCulled={false}>
-            {availableLabel}
-          </Text>
-        )}
+        {/* three genuinely different questions, not one number split three ways: reserved/available
+            are a plain balance-snapshot split (what's sitting in checking right now vs. protected),
+            while savingsLabel is a flow/rate — money already leaving income for savings every
+            month regardless of what checking's own balance happens to be doing (a household can
+            show ₪0 "available" here while still genuinely saving a real amount every month, since
+            that money may never actually pile up in checking at all — confirmed with a real example
+            2026-08-31, see savingsLabel's own doc-comment). Stacked with a running offset (not
+            fixed per-line positions) so any subset of the three showing/hiding never leaves a gap
+            or an overlap. */}
+        {[
+          { text: reservedLabel, color: RESERVED_TEXT_COLOR, fontSize: 0.5 },
+          { text: availableLabel, color: CHECKING_COLOR, fontSize: 0.54 },
+          { text: savingsLabel, color: SAVINGS_TEXT_COLOR, fontSize: 0.5 },
+        ]
+          .filter((line) => line.text !== '')
+          .map((line, i) => (
+            <Text
+              key={line.text}
+              position={[0, -1.7 - i * 0.85, 0]}
+              fontSize={line.fontSize}
+              color={line.color}
+              anchorX="center"
+              anchorY="top"
+              outlineWidth={0.02}
+              outlineColor="#0a0c11"
+              fontWeight="bold"
+              frustumCulled={false}
+            >
+              {line.text}
+            </Text>
+          ))}
       </Billboard>
     </group>
   );

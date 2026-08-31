@@ -33,6 +33,7 @@ import { useBoardStore } from '../../app/boardStore';
 import type { RiseupTransaction } from '../../app/riseupConnection';
 import { sumRiseupForBusinesses } from '../../app/riseupSync';
 import { deriveRiseupDay, type MonthlyTransactions } from '../../domain/riseupSuggestions';
+import { computeBudgetSplit } from '../../domain/budgetSplit';
 import { CATEGORY_ICONS } from '../icons';
 import { formatCurrency } from '../format';
 import { MortgageScheduleModal } from './MortgageScheduleModal';
@@ -360,10 +361,18 @@ export function EntityFormPanel({
     // such field to fill, so it's left alone regardless of `derivedDay`.
     const dayField = draft.details.kind === 'income' ? 'payDay' : DAY_FIELD_KINDS.has(draft.details.kind) ? 'chargeDay' : undefined;
     const currentDay = dayField ? (draft.details as Record<string, unknown>)[dayField] : undefined;
-    const details =
+    const detailsWithDerivedDay =
       riseupLink && dayField && currentDay === undefined && derivedDay !== undefined
         ? ({ ...draft.details, [dayField]: derivedDay } as EntityDetails)
         : draft.details;
+
+    // the checking-minimum floor (see checkingWorstCaseFloor above) only ever raises the value, on
+    // save, when it's genuinely under what a real bad month could cost — never lowers a
+    // deliberately higher cushion someone already set.
+    const details =
+      detailsWithDerivedDay.kind === 'checking' && detailsWithDerivedDay.desiredMinimumBalance < checkingWorstCaseFloor
+        ? { ...detailsWithDerivedDay, desiredMinimumBalance: checkingWorstCaseFloor }
+        : detailsWithDerivedDay;
 
     const payload = {
       name: draft.name.trim(),
@@ -462,6 +471,34 @@ export function EntityFormPanel({
     const allTransactions = riseupMonthlyTransactions.flatMap((m) => m.transactions);
     return deriveRiseupDay(link.businessNames, allTransactions, d.kind === 'income');
   }, [existing, presetRiseupLink, riseupMonthlyTransactions, d.kind]);
+
+  // A real floor for checking's own desiredMinimumBalance, not just a live-shown suggestion like
+  // derivedDay above — per explicit user judgment call (2026-08-31): unlike a charge date (where
+  // any real value beats a guess), a *low* minimum-balance number is actively risky, so this one
+  // is worth genuinely correcting up, not just suggesting, whenever it falls under what a real bad
+  // month could actually cost. A value already at or above the floor is left completely alone —
+  // this only ever raises the number, never lowers a deliberately higher cushion someone set.
+  //
+  // "Worst case" here is needs + wants + donations — deliberately *not* budgetSplit's own
+  // savingsContribution slice, despite an earlier version of this folding in the whole "savings"
+  // bucket (which domain/budgetSplit.ts itself defines as savingsContribution + donations
+  // combined). That was a real bug, not a judgment call: money earmarked for savings/investment is
+  // money that's *supposed* to leave checking, not money that has to stay — folding it into "must
+  // stay" created a circular bind an actual example caught immediately (income 20,000, needs+wants
+  // 15,000, savings 3,000 → the old formula demanded 18,900+ stay in checking, consuming the very
+  // 3,000 surplus the household was trying to move into savings in the first place).
+  //
+  // Donations don't have that same problem, so they're back in (2026-08-31 follow-up): a standing
+  // donation is a real scheduled debit exactly like rent or a bill — it fires whether or not the
+  // money's been manually moved anywhere first, unlike an investment/savings transfer someone
+  // initiates themselves out of whatever's left over. If it isn't sitting in checking when it's
+  // charged, it bounces the same way an essential expense would. needs+wants+donations is every
+  // real recurring debit that genuinely has to still be sitting in checking when its own day comes
+  // — not a transfer the household chooses to make. +5% is a plain safety margin, not derived from
+  // anything more precise.
+  const budgetSplit = useMemo(() => computeBudgetSplit(entities), [entities]);
+  const CHECKING_MIN_BALANCE_SAFETY_MARGIN = 1.05;
+  const checkingWorstCaseFloor = Math.round((budgetSplit.needs + budgetSplit.wants + budgetSplit.donations) * CHECKING_MIN_BALANCE_SAFETY_MARGIN);
 
   // read-only comparison against this month's real RiseUp data for whichever field is linked
   // (see domain/entity.ts's riseupLink) — never written back automatically; the entity's own
@@ -608,6 +645,12 @@ export function EntityFormPanel({
                 value={toDisplay(d.desiredMinimumBalance)}
                 onChange={(v) => updateDetail({ desiredMinimumBalance: fromDisplay(v) })}
               />
+              {d.desiredMinimumBalance < checkingWorstCaseFloor && (
+                <p className={styles.hint}>
+                  לפי כל ההוצאות/חובות/ביטוחים/תרומות החודשיים שלך (לא כולל חיסכון/השקעה, שאמורים לצאת מהעו"ש ולא להישאר בו), + 5% מרווח
+                  בטיחות — מומלץ לפחות {formatCurrency(checkingWorstCaseFloor)}. הערך יעודכן לזה אוטומטית בשמירה אם יישאר נמוך יותר.
+                </p>
+              )}
             </label>
           </div>
         )}

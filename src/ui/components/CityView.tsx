@@ -20,6 +20,7 @@ import type { GrowthProjectionPoint } from '../../domain/compoundInterest';
 import { computeDebtLinkPaths } from '../../domain/debtLinks';
 import { computeEmergencyRunway } from '../../domain/emergencyFund';
 import { computeBudgetSplit } from '../../domain/budgetSplit';
+import { computeSavingsGrowthShare } from '../../domain/savingsRate';
 import {
   CATEGORY_LABELS,
   ENTITY_CATEGORIES,
@@ -385,6 +386,10 @@ export function CityView({
         ? -(budgetSplit.needs + budgetSplit.wants + budgetSplit.savings - budgetSplit.income) / budgetSplit.income
         : budgetSplit.savings / budgetSplit.income
       : 0;
+  // hue input, not another speed/direction axis — see CityCashFlowCurrent's own doc-comment on why
+  // the same ₪ counts identically toward the rate above whether it's parked in a 1%-return savings
+  // account or a 7%-return investment, and why that distinction still deserves to show up somehow.
+  const savingsGrowthShare = useMemo(() => computeSavingsGrowthShare(entities), [entities]);
   // one avatar per family member, hovering above the centroid of the buildings they own — not
   // one per owned entity, which would clutter the city fast for anyone owning several things.
   // Members who own nothing yet (or aren't tied to any entity) render no avatar at all. The
@@ -521,7 +526,13 @@ export function CityView({
       <directionalLight position={[-10, 14, -10]} intensity={isTopView ? 1.4 : 0.85} color="#6c8dff" />
 
       <CityGround groundCenter={groundCenter} groundSizeX={groundSizeX} groundSizeZ={groundSizeZ} water={water} valley={valley} />
-      <CityCashFlowCurrent center={bounds.center} width={bounds.width} depth={bounds.depth} savingsOrDeficitRatio={savingsOrDeficitRatio} />
+      <CityCashFlowCurrent
+        center={bounds.center}
+        width={bounds.width}
+        depth={bounds.depth}
+        savingsOrDeficitRatio={savingsOrDeficitRatio}
+        savingsGrowthShare={savingsGrowthShare}
+      />
       <CityIndependenceDome
         x={bounds.center[0]}
         z={bounds.center[1]}
@@ -594,6 +605,12 @@ export function CityView({
           zNear={checkingBridgeZNear}
           zFar={checkingBridgeZFar}
           amountLabel={hideAmounts ? '' : formatCurrency(checkingTotal)}
+          reservedLabel={hideAmounts || checkingTotal - checkingAvailable <= 0 ? '' : `שמור (מינימום): ${formatCurrency(checkingTotal - checkingAvailable)}`}
+          savingsLabel={
+            hideAmounts || budgetSplit.savingsContribution <= 0
+              ? ''
+              : `כבר חוסך/משקיע: ${formatCurrency(budgetSplit.savingsContribution)}${budgetSplit.income > 0 ? ` (${Math.round((budgetSplit.savingsContribution / budgetSplit.income) * 100)}%)` : ''}`
+          }
           availableLabel={hideAmounts || checkingAvailable <= 0 ? '' : `פנוי להשקעה: ${formatCurrency(checkingAvailable)}`}
           availableRatio={checkingAvailableRatio}
           minX={checkingDefaultX - checkingBridgeMaxOffset}
