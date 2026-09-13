@@ -24,6 +24,17 @@ const MAX_BAR_HEIGHT = 5.2;
 const GRAPH_LIFT = 4.4;
 const POSITIVE_COLOR = '#2f9e58';
 const NEGATIVE_COLOR = '#d64545';
+// how far in front of each bar's own footprint (BAR_WIDTH=0.68 deep) its month label sits —
+// clearing the box only needs a modest pull, not the 5.5 an earlier version used. This city's own
+// default camera looks at the scene from an angle (not straight down -Z — see CityView.tsx's own
+// initialCameraPosition/orbitTarget), so pulling a Billboard forward along world Z while its X stays
+// fixed doesn't just bring it "closer" on screen, it visibly shifts it *sideways* too (real
+// parallax, not a bug in the Billboard itself) — verified numerically (2026-09-13) by projecting a
+// bar's and its label's own world position through the real camera: at the old 5.5 pull, the
+// farthest bar's label drifted ~0.15 in NDC X (a real, visible fraction of the screen) off its own
+// bar; at 1.4 that drops to ~0.04, small enough to read as attached to the bar it labels instead of
+// floating off to the side.
+const MONTH_LABEL_Z = 1.4;
 
 function formatMonthShort(monthKey: string): string {
   const [year, month] = monthKey.split('-').map(Number);
@@ -61,12 +72,12 @@ export function CityRiseupTrend({ x, y, z, history }: Props) {
 
   return (
     <group position={[x, y + GRAPH_LIFT, z]}>
-      {/* pulled forward to roughly split the gap between the bars (z=0) and the now much-further-
-          forward month labels (z=5.5) — both are Billboards, so both always face the camera dead-
-          on regardless of z, but sitting at very different camera distances still makes them scale
-          and sit on screen so differently that the title reads as disconnected from the rest of
-          the chart, not part of the same composition. */}
-      <Billboard position={[totalWidth / 2, MAX_BAR_HEIGHT + 1, 2.5]}>
+      {/* z matches the month labels' own MONTH_LABEL_Z below (see that constant's own doc-comment
+          for why it's small, not the 5.5 an earlier version used) — both are Billboards, so both
+          always face the camera dead-on regardless of z, but sitting at very different camera
+          distances still makes them scale and sit on screen so differently that the title read as
+          disconnected from the rest of the chart, not part of the same composition. */}
+      <Billboard position={[totalWidth / 2, MAX_BAR_HEIGHT + 1, MONTH_LABEL_Z]}>
         <Text
           fontSize={0.52}
           color="#c3cadb"
@@ -139,12 +150,16 @@ export function CityRiseupTrend({ x, y, z, history }: Props) {
                 {formatCurrency(h.net)}
               </Text>
             </Billboard>
-            {/* well above ground (not just barely, y=0.15) — same fix as CityView's own
-                DEPTH_LABELS: a near-ground Billboard reads as "under/blending with the ground"
-                from this city's shallow camera angle even when its Z is already correct, since
-                closer-to-camera near-ground content exaggerates that perspective artifact. Pulled
-                forward in front of the bar's own footprint so it doesn't clip into the box. */}
-            <Billboard position={[0, 1, 5.5]}>
+            {/* lowered from y=1 toward the bar's own base (2026-09-13, explicit request: sitting
+                right at the foot of the bar it labels reads more clearly as "belongs to this
+                column" than floating higher up) — not all the way down to a bare y=0.15 though,
+                which is what originally read as "under/blending with the ground" from this city's
+                shallow camera angle (same issue CityView's own DEPTH_LABELS hit); with
+                MONTH_LABEL_Z now much smaller than the old 5.5 (see that constant's own doc-
+                comment), the label sits much less "pulled toward camera" than before, so that
+                ground-blending exaggeration is far less of a risk at this height than it would
+                have been at the old z. */}
+            <Billboard position={[0, 0.55, MONTH_LABEL_Z]}>
               <Text
                 fontSize={0.62}
                 color="#ffffff"

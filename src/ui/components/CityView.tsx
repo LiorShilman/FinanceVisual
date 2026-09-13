@@ -432,14 +432,31 @@ export function CityView({
   // constant depth requirement, leaving wide empty margins on both sides of the content.
   const groundSizeX = width + 20;
   const groundSizeZ = depthSpan + 20;
-  const groundCenter: [number, number] = [width / 2, (minDepthZ + maxDepthZ) / 2];
-  // the grid has to cover exactly what the textured ground plane covers — the lake and the valley
-  // both sit right at (and past) the district rectangle's own corners, so a grid sized to the
-  // district alone would stop short of them.
-  const bounds = computeGroundBounds(groundCenter, groundSizeX, groundSizeZ, [
-    { center: water.lakeCenter, radius: water.outerRingRadius } satisfies CircularExtent,
-    { center: valley.center, radius: valley.radius } satisfies CircularExtent,
-  ]);
+  // memoized, not a bare array literal — a fresh `[x, z]` tuple on every render (even when x/z's
+  // own *values* haven't changed) breaks reference-equality memoization for everything downstream
+  // that takes it as a useMemo/prop dependency (CityGround's own groundGeometry among them — see
+  // its own doc-comment). Found 2026-09-01 chasing a real "page unresponsive" freeze during RiseUp
+  // loading: any unrelated state update elsewhere in BoardScreen re-renders CityView, which handed
+  // CityGround a "new" groundCenter/bounds every time even though nothing about the ground had
+  // actually changed, forcing a full ~8,000-vertex terrain-sampling geometry rebuild (real
+  // per-vertex getTerrainHeight calls, then computeVertexNormals) on every single one of those
+  // renders — repeated many times over a loading sequence lasting several seconds, this is exactly
+  // the kind of sustained synchronous work that blocks the main thread badly enough for the browser
+  // to consider the tab unresponsive.
+  const groundCenter: [number, number] = useMemo(() => [width / 2, (minDepthZ + maxDepthZ) / 2], [width, minDepthZ, maxDepthZ]);
+  // same reasoning, same fix — this was a bare computeGroundBounds() call, recomputed (with a fresh
+  // `.center` array every time) on every render regardless of whether groundCenter/water/valley
+  // actually changed. The grid has to cover exactly what the textured ground plane covers — the
+  // lake and the valley both sit right at (and past) the district rectangle's own corners, so a
+  // grid sized to the district alone would stop short of them.
+  const bounds = useMemo(
+    () =>
+      computeGroundBounds(groundCenter, groundSizeX, groundSizeZ, [
+        { center: water.lakeCenter, radius: water.outerRingRadius } satisfies CircularExtent,
+        { center: valley.center, radius: valley.radius } satisfies CircularExtent,
+      ]),
+    [groundCenter, groundSizeX, groundSizeZ, water.lakeCenter, water.outerRingRadius, valley.center, valley.radius],
+  );
   // "top view" button (CityControlPanel) — a toggle, not a one-shot snap. First click: camera
   // jumps straight above the real ground center, at its own maximum zoom-out
   // (MAX_CAMERA_DISTANCE, not a smaller "fit the content" guess — the point is to see everything

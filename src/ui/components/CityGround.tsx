@@ -485,10 +485,21 @@ export function CityGround({ groundCenter, groundSizeX, groundSizeZ, water, vall
     getValleyTexture().rotation += delta * RIPPLE_SPEED * 0.85;
   });
 
-  const bounds = computeGroundBounds(groundCenter, groundSizeX, groundSizeZ, [
-    { center: water.lakeCenter, radius: water.outerRingRadius } satisfies CircularExtent,
-    { center: valley.center, radius: valley.radius } satisfies CircularExtent,
-  ]);
+  // memoized — a bare computeGroundBounds() call here builds a fresh `.center` array every render
+  // regardless of whether groundCenter/water/valley actually changed, which broke groundGeometry's
+  // own useMemo below (it depends on bounds.center) — real per-vertex getTerrainHeight calls across
+  // ~8,000 vertices plus computeVertexNormals() re-running on every single unrelated re-render of
+  // this component. Found 2026-09-01 chasing a real "page unresponsive" freeze during RiseUp
+  // loading, where many state updates elsewhere in the tree each re-rendered this component in
+  // quick succession over several seconds.
+  const bounds = useMemo(
+    () =>
+      computeGroundBounds(groundCenter, groundSizeX, groundSizeZ, [
+        { center: water.lakeCenter, radius: water.outerRingRadius } satisfies CircularExtent,
+        { center: valley.center, radius: valley.radius } satisfies CircularExtent,
+      ]),
+    [groundCenter, groundSizeX, groundSizeZ, water.lakeCenter, water.outerRingRadius, valley.center, valley.radius],
+  );
 
   // Real hills/valleys, not a flat plane: subdivide and displace each vertex by the same
   // deterministic height field every other ground-level object samples, so the grass and
